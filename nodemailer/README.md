@@ -1,6 +1,6 @@
-# Nodemailer Service
+# Hoodz Backend Nodemailer Service
 
-The `nodemailer` service exposes a small HTTP API for sending emails through SMTP.
+The Hoodz Backend nodemailer service exposes a small HTTP API for sending emails through SMTP.
 
 > [!WARNING]
 > **This project is strictly Docker-centric.**
@@ -39,12 +39,12 @@ Create `nodemailer/.env` with:
 ```bash
 PORT=3000
 CORS_ORIGIN=*
-NODEMAILLER_SMTP_HOST=smtp.gmail.com
-NODEMAILLER_SMTP_PORT=587
-NODEMAILLER_SMTP_SECURE=false
-NODEMAILLER_HOST_MAIL=your-mail@example.com
-NODEMAILLER_HOST_PASS=your-app-password
-NODEMAILLER_FROM_MAIL=your-mail@example.com
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-mail@example.com
+SMTP_PASS=your-app-password
+SMTP_FROM=your-mail@example.com
 ```
 
 ## Development Notes
