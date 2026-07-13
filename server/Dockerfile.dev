@@ -1,0 +1,13 @@
+FROM node:22.14.0
+
+WORKDIR /usr/src/app
+
+COPY package.json pnpm-lock.yaml* ./
+RUN corepack enable && pnpm install
+
+# Copy server sources after pnpm install
+COPY . ./
+
+EXPOSE 5027
+
+CMD ["pnpm", "run", "dev"]

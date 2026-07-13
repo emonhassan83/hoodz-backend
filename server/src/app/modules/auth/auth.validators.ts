@@ -1,0 +1,229 @@
+import { z } from 'zod';
+
+import { USER_ROLE } from '@/app/modules/user/user.constant';
+
+const signupWithEmailSchema = z.object({
+  body: z.object({
+    name: z
+      .string({ error: 'name is required and must be text' })
+      .trim()
+      .min(1, { message: 'name cannot be empty' })
+      .max(100, { message: 'name cannot exceed 100 characters' }),
+
+    email: z
+      .email({ error: 'Invalid email format' })
+      .trim()
+      .toLowerCase(),
+
+    countryCode: z
+      .string({ error: 'Invalid country code format' })
+      .trim()
+      .toUpperCase(),
+
+    phone: z
+      .string({ message: 'Phone number is required!' })
+      .min(6, { message: 'Contact number must be at least 6 digits long' })
+      .max(15, { message: 'Contact number must be at most 15 digits long' }),
+
+    address: z
+      .string({ error: 'address is required and must be text' })
+      .trim()
+      .min(1, { message: 'address cannot be empty' })
+      .max(100, { message: 'address cannot exceed 100 characters' }).optional(),
+
+    password: z
+      .string({ error: 'Password is required' })
+      .min(8, { message: 'Password must be at least 8 characters long' })
+      .max(100, { message: 'Password is too long for hashing performance' }),
+
+    isLegalTermsAccepted: z
+      .boolean({
+        error: 'Terms flag must be a true/false value',
+      })
+      .refine((val) => val === true, {
+        message:
+          'You must accept the Terms and Conditions to create an account',
+      }),
+  }),
+});
+
+const signupWithPhoneSchema = z.object({
+  body: z.object({
+    name: z
+      .string({ error: 'Last name is required and must be text' })
+      .trim()
+      .min(1, { message: 'Last name cannot be empty' })
+      .max(100, { message: 'Last name cannot exceed 100 characters' }),
+
+    countryCode: z
+      .string({ error: 'Invalid country code format' })
+      .trim()
+      .toUpperCase(),
+
+    phone: z
+      .string({ message: 'Phone number is required!' })
+      .min(6, { message: 'Contact number must be at least 6 digits long' })
+      .max(15, { message: 'Contact number must be at most 15 digits long' }),
+
+    isLegalTermsAccepted: z
+      .boolean({
+        error: 'Terms flag must be a true/false value',
+      })
+      .refine((val) => val === true, {
+        message:
+          'You must accept the Terms and Conditions to create an account',
+      }),
+  }),
+});
+
+const loginValidationSchema = z.object({
+  body: z.object({
+    email: z.string({
+      message: 'Email is required.',
+    })
+      .email({ message: 'Invalid email address.' }),
+    password: z
+      .string({
+        message: 'Password is required.',
+      })
+      .min(8, { message: 'Password must be at least 8 characters long.' }),
+  }),
+});
+
+const loginWithPhoneValidationSchema = z.object({
+  body: z.object({
+    phone: z
+      .string({ message: 'Phone number is required!' })
+      .min(6, { message: 'Contact number must be at least 6 digits long' })
+      .max(15, { message: 'Contact number must be at most 15 digits long' }),
+    countryCode: z
+      .string({ message: 'Country code is required!' })
+      .min(1, { message: 'Country code cannot be empty.' }),
+  }),
+});
+
+const verifyEmailValidationSchema = z.object({
+  body: z.object({
+    otp: z
+      .string({
+        message: 'One time code is required.',
+      })
+      .min(6, { message: 'One time code must be at least 6 characters long.' }),
+    email: z
+      .string({
+        message: 'Email is required.',
+      })
+      .email({ message: 'Invalid email address.' }),
+    token: z.string({
+      message: 'Token is required.',
+    }),
+  }),
+});
+
+const forgotPasswordValidationSchema = z.object({
+  body: z.object({
+    email: z
+      .string({
+        message: 'Email is required.',
+      })
+      .email({ message: 'Invalid email address.' }),
+  }),
+});
+
+const resetPasswordValidationSchema = z.object({
+  body: z.object({
+    password: z
+      .string({
+        message: 'Password is required.'
+      })
+      .min(8, { message: 'Password must be at least 8 characters long.' }),
+    confirmPassword: z
+      .string({
+        message: 'Confirm Password is required.'
+      })
+      .min(8, { message: 'Password must be at least 8 characters long.' }),
+  }),
+});
+
+const changePasswordValidationSchema = z.object({
+  body: z.object({
+    currentPassword: z
+      .string({
+        message: 'Old password is required.'
+      })
+      .min(8, { message: 'Old password must be at least 8 characters long.' }),
+    password: z
+      .string({
+        message: 'New password is required.'
+      })
+      .min(8, { message: 'New password must be at least 8 characters long.' }),
+    confirmPassword: z
+      .string({
+        message: 'Confirm Password is required.'
+      })
+      .min(8, { message: 'Confirm password must be at least 8 characters long.' }),
+  }),
+});
+
+const googleZodValidationSchema = z.object({
+  body: z.object({
+    name: z
+      .string({
+        message: 'Name is required.'
+      })
+      .min(1, { message: 'Name cannot be empty.' }),
+    email: z
+      .string({
+        message: 'Email is required.'
+      })
+      .email({ message: 'Invalid email address.' }),
+    token: z.string({
+      message: 'token is required!',
+    }),
+    fcmToken: z.string().optional(),
+    profileImage: z.string().optional(),
+    isLegalTermsAccepted: z.boolean({
+      error: 'Terms flag must be a true/false value',
+    }).refine((val) => val === true, {
+      message: 'You must accept the legal terms to proceed.',
+    }),
+  }),
+});
+
+const appleZodValidationSchema = z.object({
+  body: z.object({
+    name: z
+      .string({
+        message: 'Name is required.'
+      })
+      .min(1, { message: 'Name cannot be empty.' }),
+    email: z
+      .string({
+        message: 'Email is required.'
+      })
+      .email({ message: 'Invalid email address.' }),
+    token: z.string({
+      message: 'token is required!',
+    }),
+    fcmToken: z.string().optional(),
+    profileImage: z.string().optional(),
+    isLegalTermsAccepted: z.boolean({
+      error: 'Terms flag must be a true/false value',
+    }).refine((val) => val === true, {
+      message: 'You must accept the legal terms to proceed.',
+    }),
+  }),
+});
+
+export const AuthValidation = {
+  signupWithEmailSchema,
+  signupWithPhoneSchema,
+  loginValidationSchema,
+  loginWithPhoneValidationSchema,
+  verifyEmailValidationSchema,
+  forgotPasswordValidationSchema,
+  resetPasswordValidationSchema,
+  changePasswordValidationSchema,
+  googleZodValidationSchema,
+  appleZodValidationSchema
+};
