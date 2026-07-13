@@ -78,7 +78,7 @@ Below is a bird's-eye view of the current project directory structure:
 |   |       |-- errors/         # Custom/global error handling
 |   |       |-- jobs/           # Scheduled background jobs
 |   |       |-- middlewares/    # Auth, multer, trace, global error middleware
-|   |       |-- modules/        # Domain modules: auth, user, otp, notification, settings, support, upload
+|   |       |-- modules/        # Domain modules: auth, user, otp, notification, settings, upload
 |   |       |-- queues/         # BullMQ queue definitions
 |   |       |-- redis/          # Redis client and cache helpers
 |   |       |-- routes/         # Versioned API route registry

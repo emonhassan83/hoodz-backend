@@ -41,38 +41,6 @@ export const initializeEmailWorker = () => {
           break;
         }
 
-        case 'send-support-email': {
-          const { to, subject, html } = job.data;
-          console.log(`[Email Worker] Processing send-support-email to ${to}`);
-
-          if (!to || !subject || !html) {
-            throw new Error(
-              'Invalid support email job payload: to, subject and html are required'
-            );
-          }
-
-          const mailOptions = {
-            from: env.SMTP_USER,
-            to,
-            subject,
-            html,
-          };
-
-          try {
-            await sendEmail(mailOptions);
-            console.log(
-              `[Email Worker] Successfully sent Support email to ${to}`
-            );
-          } catch (error) {
-            console.error(
-              `[Email Worker] Error sending Support email to ${to}:`,
-              error
-            );
-            throw error;
-          }
-          break;
-        }
-
         default:
           console.warn(`[Email Worker] Unknown job name: ${job.name}`);
           break;

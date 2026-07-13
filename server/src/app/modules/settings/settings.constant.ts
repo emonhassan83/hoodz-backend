@@ -1,6 +1,4 @@
 export const GENERAL_KEYS = [
-  'supportContract',
-  'supportEmail',
   'weekendSettings',
   'fualPricing',
   'deliveryCharge',

@@ -7,7 +7,7 @@ import {
   incrementUnreadCount,
   incrementUnreadCountForUsers,
 } from '@/app/redis/helpers/notification';
-import { sendPushNotification } from '@/app/utils/expoNotification';
+import { sendNotification } from '@/app/utils/sentPushNotification';
 
 export const initializeNotificationWorker = () => {
   const connection = getRedisClient();
@@ -50,19 +50,18 @@ export const initializeNotificationWorker = () => {
           // 2. Push notification (FCM)
           if (channel === 'push' || channel === 'both') {
             if (fcmToken) {
-              await sendPushNotification({
-                userIds: [userId],
-                title,
-                body: message,
-                data: data as Record<string, unknown> | undefined,
+              await sendNotification([fcmToken], {
+                message: title,
+                description: message,
+                data,
               }).catch((error) => {
                 console.warn(
-                  `[Notification Worker] Expo send failed:`,
+                  `[Notification Worker] Firebase send failed:`,
                   error instanceof Error ? error.message : error
                 );
               });
               console.log(
-                `[Notification Worker] Push notification sent via Expo for user ${userId}`
+                `[Notification Worker] Push notification sent via Firebase for user ${userId}`
               );
             } else {
               console.log(
@@ -100,26 +99,25 @@ export const initializeNotificationWorker = () => {
             );
           }
 
-          // 2. Batch Push notification (fcmTokens from job data is no longer needed)
+          // 2. Batch Push notification (FCM tokens are resolved before enqueue)
           if (channel === 'push' || channel === 'both') {
-            if (userIds && userIds.length > 0) {
-              await sendPushNotification({
-                userIds,
-                title,
-                body: message,
-                data: data as Record<string, unknown> | undefined,
+            if (fcmTokens && fcmTokens.length > 0) {
+              await sendNotification(fcmTokens, {
+                message: title,
+                description: message,
+                data,
               }).catch((error) => {
                 console.warn(
-                  `[Notification Worker] Expo multicast send failed:`,
+                  `[Notification Worker] Firebase multicast send failed:`,
                   error instanceof Error ? error.message : error
                 );
               });
               console.log(
-                `[Notification Worker] Batch push notification sent to ${userIds.length} users via Expo`
+                `[Notification Worker] Batch push notification sent to ${fcmTokens.length} devices via Firebase`
               );
             } else {
               console.log(
-                `[Notification Worker] User IDs missing/empty, skipped batch push notification`
+                `[Notification Worker] FCM tokens missing/empty, skipped batch push notification`
               );
             }
           }

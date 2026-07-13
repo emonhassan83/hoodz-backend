@@ -1,6 +1,7 @@
 import { IBatchNotificationPayload, INotificationPayload } from '@/app/@types/system.types';
 import { getTraceId } from '@/app/configs/requestContext.configs';
 import { getNotificationQueue } from '@/app/queues/queues';
+import { User } from '@/app/modules/user/user.model';
 
 /**
  * Send Notification via Queue
@@ -10,9 +11,16 @@ export const sendNotificationViaQueue = async (payload: INotificationPayload) =>
   const traceId = getTraceId();
   const queue = getNotificationQueue();
 
+  const fcmToken =
+    payload.fcmToken ??
+    (
+      await User.findById(payload.userId).select('fcmToken').lean()
+    )?.fcmToken;
+
   const jobData = {
     traceId,
     ...payload,
+    fcmToken,
   };
 
   await queue.add('send-notification', jobData, {
@@ -34,10 +42,21 @@ export const sendNotificationViaQueue = async (payload: INotificationPayload) =>
 export const sendBatchNotificationViaQueue = async (payload: IBatchNotificationPayload) => {
   const traceId = getTraceId();
   const queue = getNotificationQueue();
+  const fcmTokens =
+    payload.fcmTokens ??
+    (
+      await User.find({
+        _id: { $in: payload.userIds },
+        fcmToken: { $exists: true, $ne: null },
+      })
+        .select('fcmToken')
+        .lean()
+    ).map((user) => user.fcmToken).filter(Boolean);
 
   const jobData = {
     traceId,
     ...payload,
+    fcmTokens,
   };
 
   await queue.add('send-batch-notification', jobData, {

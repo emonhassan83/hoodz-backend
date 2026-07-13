@@ -21,8 +21,8 @@ graph LR
 
 ### Network Isolation
 All containers communicate through the dedicated bridge network `hoodz_backend_net`. External port access is limited:
-- **Server**: Exposes port `5027` to direct hosts.
-- **Redis**: Exposed on port `6406` localhost.
+- **Server**: Exposes port `5029` to direct hosts.
+- **Redis**: Exposed on port `6408` localhost.
 
 ---
 

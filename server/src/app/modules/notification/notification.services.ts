@@ -1,18 +1,18 @@
 import { HttpStatusCode } from 'axios';
 
-import { emitSocketNotification } from '@/app/modules/notification/notification.helpers';
-
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import {
   decrementUnreadCount,
-  incrementUnreadCount,
-  incrementUnreadCountForUsers,
   setUnreadCountInRedis,
 } from '@/app/redis/helpers/notification';
 import { INotification } from '@/app/modules/notification/notification.interface';
 import { Notification } from '@/app/modules/notification/notification.model';
 import { User } from '@/app/modules/user/user.model';
+import {
+  sendBatchNotificationViaQueue,
+  sendNotificationViaQueue,
+} from '@/app/utils/notification-queue.service';
 
 // ─── Create ────────────────────────────────────────────────────────────────
 
@@ -20,21 +20,18 @@ const createNotificationIntoDB = async (
   traceId: string,
   payload: INotification
 ) => {
-  const notification = await Notification.create(payload);
-  if (!notification) {
-    throw new ApiError(
-      HttpStatusCode.Conflict,
-      'Notification not created!',
-      traceId
-    );
-  }
+  await sendNotificationViaQueue({
+    userId: payload.receiver.toString(),
+    channel: 'both',
+    title: payload.message,
+    message: payload.description,
+    data: {
+      modelType: payload.modelType,
+      reference: payload.reference,
+    },
+  });
 
-  if (notification.receiver) {
-    await incrementUnreadCount(notification.receiver.toString());
-  }
-
-  emitSocketNotification(traceId, payload);
-  return notification;
+  return { queued: true, traceId };
 };
 
 const sendGeneralNotificationIntoDB = async (
@@ -53,28 +50,18 @@ const sendGeneralNotificationIntoDB = async (
     (id: any) => id.toString()
   );
 
-  const notifications = userIds.map((userId: string) => ({
-    ...rest,
-    receiver: userId,
-    message,
-    description,
-  }));
+  await sendBatchNotificationViaQueue({
+    userIds,
+    channel: 'both',
+    title: message,
+    message: description,
+    data: {
+      modelType: rest.modelType,
+      reference: rest.reference,
+    },
+  });
 
-  const result = await Notification.insertMany(notifications);
-  if (!result?.length) {
-    throw new ApiError(
-      HttpStatusCode.Conflict,
-      'Notifications not created!',
-      traceId
-    );
-  }
-
-  await incrementUnreadCountForUsers(userIds);
-
-  // Emit to all receivers in parallel (fire and forget)
-  userIds.forEach((userId: string) =>
-    emitSocketNotification(traceId, { ...payload, receiver: userId })
-  );
+  return { queued: true, totalUsers: userIds.length, traceId };
 };
 
 // ─── Read ──────────────────────────────────────────────────────────────────

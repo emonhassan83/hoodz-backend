@@ -4,7 +4,6 @@ import { AuthRoutes } from '@/app/modules/auth/auth.routes';
 import { NotificationRoutes } from '@/app/modules/notification/notification.routes';
 import { OtpRoutes } from '@/app/modules/otp/otp.routes';
 import { SettingsRoutes } from '@/app/modules/settings/settings.routes';
-import { SupportRoutes } from '@/app/modules/support/support.routes';
 import { UploadRoutes } from '@/app/modules/upload/upload.routes';
 import { UserRoutes } from '@/app/modules/user/user.routes';
 
@@ -38,10 +37,6 @@ const apiRoutes = [
   {
     path: '/settings',
     route: SettingsRoutes,
-  },
-  {
-    path: '/support',
-    route: SupportRoutes,
   },
 ];
 

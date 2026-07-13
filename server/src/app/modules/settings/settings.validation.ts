@@ -75,10 +75,6 @@ export const createOrUpdateSettingZodSchema = z
 export const updateGeneralsZodSchema = z.object({
   body: z
     .object({
-      // platform info
-      supportContract: z.string().optional(),
-      supportEmail: z.string().email({ message: 'Invalid email' }).optional(),
-
       platformLocation: platformLocationSchema.optional(),
       platformLocationAddress: platformLocationAddressSchema.optional(),
       deliveryCharge: z.number().nonnegative().optional(),
