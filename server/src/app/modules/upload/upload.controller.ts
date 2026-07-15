@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 
-import { UploadService } from '@/app/modules/upload/upload.service';
-
 import { getTraceId } from '@/app/configs/requestContext.configs';
+import { UploadService } from '@/app/modules/upload/upload.service';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
 const single = asyncHandler(async (req: Request, res: Response) => {

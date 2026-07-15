@@ -1,5 +1,6 @@
 import { HttpStatusCode } from 'axios';
 
+import ApiError from '@/app/errors/ApiError';
 import {
   categorizeFile,
   generateS3Key,
@@ -7,8 +8,6 @@ import {
   normalizeMulterFiles,
   toMB,
 } from '@/app/modules/upload/upload.helpers';
-
-import ApiError from '@/app/errors/ApiError';
 import { uploadManyToS3, uploadToS3 } from '@/app/utils/s3.utils';
 
 const multiple = async (traceId: string, files: any): Promise<object[]> => {

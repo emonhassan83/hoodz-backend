@@ -12,10 +12,6 @@ const settingsSchema = new Schema<ISetting>({
     type: Schema.Types.Mixed,
     required: [true, "Value is required"],
   },
-  name: {
-    type: String,
-    trim: true,
-  },
   vendor: {
     type: Schema.Types.ObjectId,
     ref: "User",

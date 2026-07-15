@@ -90,7 +90,7 @@ const createOrUpdate = async (traceId: string, key: string, payload: any) => {
   const settingValue = payload.value ?? payload;
   const setting = await Setting.findOneAndUpdate(
     { key, vendor: null },
-    { key, value: settingValue, name: payload.name, vendor: null },
+    { key, value: settingValue, vendor: null },
     { returnDocument: 'after', upsert: true }
   ).select('-__v');
 

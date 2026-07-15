@@ -19,7 +19,6 @@ export const createOrUpdateSettingZodSchema = z
     }),
     body: z.object({
       value: z.any(),
-      name: z.string().trim().optional(),
     }),
   })
   .superRefine(({ body }, context) => {

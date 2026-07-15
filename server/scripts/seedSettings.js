@@ -12,7 +12,6 @@ const SettingSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
-    name: { type: String },
   },
   { timestamps: true }
 );
@@ -25,49 +24,41 @@ const settingsData = [
   {
     key: 'userTermsAndConditions',
     value: 'User terms and conditions content goes here...',
-    name: 'User Terms & Conditions',
     vendor: null,
   },
   {
     key: 'userPrivacyAndPolicy',
     value: 'User privacy and policy content goes here...',
-    name: 'User Privacy & Policy',
     vendor: null,
   },
   {
     key: 'riderTermsAndConditions',
     value: 'Rider terms and conditions content goes here...',
-    name: 'Rider Terms & Conditions',
     vendor: null,
   },
   {
     key: 'riderPrivacyAndPolicy',
     value: 'Rider privacy and policy content goes here...',
-    name: 'Rider Privacy & Policy',
     vendor: null,
   },
   {
     key: 'vendorTermsAndConditions',
     value: 'Vendor terms and conditions content goes here...',
-    name: 'Vendor Terms & Conditions',
     vendor: null,
   },
   {
     key: 'vendorPrivacyAndPolicy',
     value: 'Vendor privacy and policy content goes here...',
-    name: 'Vendor Privacy & Policy',
     vendor: null,
   },
   {
     key: 'agentTermsAndConditions',
     value: 'Agent terms and conditions content goes here...',
-    name: 'Agent Terms & Conditions',
     vendor: null,
   },
   {
     key: 'agentPrivacyAndPolicy',
     value: 'Agent privacy and policy content goes here...',
-    name: 'Agent Privacy & Policy',
     vendor: null,
   },
 ];
