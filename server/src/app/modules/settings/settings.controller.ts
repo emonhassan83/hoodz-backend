@@ -20,7 +20,8 @@ const getSetting = asyncHandler(async (req: Request, res: Response) => {
 
 const getSettingGenerals = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await SettingService.getSettingGenerals(traceId);
+  const vendorId = (req.query.vendorId as string) || req.user?.userId;
+  const data = await SettingService.getSettingGenerals(traceId, vendorId);
 
   sendResponse(res, {
     success: true,
@@ -46,7 +47,7 @@ const createOrUpdate = asyncHandler(async (req: Request, res: Response) => {
 
 const updateGenerals = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  await SettingService.updateGenerals(traceId, req.body);
+  await SettingService.updateGenerals(traceId, req.user.userId, req.body);
 
   sendResponse(res, {
     success: true,

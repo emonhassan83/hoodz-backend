@@ -1,9 +1,26 @@
-export const GENERAL_KEYS = [
-  'weekendSettings',
-  'fualPricing',
-  'deliveryCharge',
-  'platformLocation',
-  'platformLocationAddress',
+export const VENDOR_GENERAL_KEYS = [
+  'returnPolicyDays',
+  'deliveryMinDays',
+  'deliveryMaxDays',
+  'instantDeliveryMaxDays',
+  'instantDeliveryMinDays',
+  'isInstantDeliveryAvailable'
 ] as const;
 
-export const ALLOWED_KEYS = [...GENERAL_KEYS, 'privacyAndPolicy'] as const;
+export const ADMIN_SETTING_KEYS = [
+  'userTermsAndConditions',
+  'userPrivacyAndPolicy',
+  'riderTermsAndConditions',
+  'riderPrivacyAndPolicy',
+  'vendorTermsAndConditions',
+  'vendorPrivacyAndPolicy',
+  'agentTermsAndConditions',
+  'agentPrivacyAndPolicy',
+] as const;
+
+export const GENERAL_KEYS = VENDOR_GENERAL_KEYS;
+
+export const ALLOWED_KEYS = [
+  ...VENDOR_GENERAL_KEYS,
+  ...ADMIN_SETTING_KEYS,
+] as const;

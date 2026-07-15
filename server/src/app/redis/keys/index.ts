@@ -9,6 +9,8 @@ export const REDIS_KEYS = {
   REGISTER_OTP: (email: string) => createRedisKey(REDIS_PREFIXES.otp, email),
   RESET_OTP: (email: string) => createRedisKey(REDIS_PREFIXES.otp, 'reset', email),
 
-  SETTINGS_SINGLE: (key: string) => createRedisKey(REDIS_PREFIXES.settings, key),
-  SETTINGS_GENERALS: createRedisKey(REDIS_PREFIXES.settings, 'generals')
+  SETTINGS_SINGLE: (key: string, vendorId = 'platform') =>
+    createRedisKey(REDIS_PREFIXES.settings, vendorId, key),
+  SETTINGS_GENERALS: (vendorId: string) =>
+    createRedisKey(REDIS_PREFIXES.settings, vendorId, 'generals')
 } as const;

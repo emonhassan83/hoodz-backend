@@ -8,7 +8,10 @@ import {
   setCache,
 } from '@/app/redis/helpers';
 import { REDIS_KEYS } from '@/app/redis/keys';
-import { GENERAL_KEYS } from '@/app/modules/settings/settings.constant';
+import {
+  ADMIN_SETTING_KEYS,
+  GENERAL_KEYS,
+} from '@/app/modules/settings/settings.constant';
 import { Setting } from '@/app/modules/settings/settings.model';
 
 type TGeneralSettings = Record<(typeof GENERAL_KEYS)[number], unknown | null>;
@@ -23,7 +26,7 @@ const getSetting = async (traceId: string, key: string) => {
   const cached = await getCache<any>(cacheKey);
   if (cached) return cached;
 
-  const setting = await Setting.findOne({ key }).select('-__v').lean();
+  const setting = await Setting.findOne({ key, vendor: null }).select('-__v').lean();
   if (!setting) {
     throw new ApiError(
       HttpStatusCode.NotFound,
@@ -36,8 +39,12 @@ const getSetting = async (traceId: string, key: string) => {
   return setting;
 };
 
-const getSettingGenerals = async (_traceId: string) => {
-  const cacheKey = REDIS_KEYS.SETTINGS_GENERALS;
+const getSettingGenerals = async (traceId: string, vendorId: string) => {
+  if (!vendorId) {
+    throw new ApiError(HttpStatusCode.BadRequest, 'Vendor id is required', traceId);
+  }
+
+  const cacheKey = REDIS_KEYS.SETTINGS_GENERALS(vendorId);
   const cached = await getCache<TGeneralSettings>(cacheKey);
   const hasCurrentGeneralKeys =
     cached &&
@@ -46,7 +53,7 @@ const getSettingGenerals = async (_traceId: string) => {
     GENERAL_KEYS.every((key) => Object.hasOwn(cached, key));
   if (hasCurrentGeneralKeys) return cached;
 
-  const settings = await Setting.find({ key: { $in: GENERAL_KEYS } })
+  const settings = await Setting.find({ key: { $in: GENERAL_KEYS }, vendor: vendorId })
     .select('key value -_id')
     .lean();
 
@@ -72,17 +79,24 @@ const createOrUpdate = async (traceId: string, key: string, payload: any) => {
     );
   }
 
+  if (!ADMIN_SETTING_KEYS.includes(key as any)) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Only admin setting keys can be updated from this endpoint',
+      traceId
+    );
+  }
+
   const settingValue = payload.value ?? payload;
   const setting = await Setting.findOneAndUpdate(
-    { key },
-    { key, value: settingValue, name: payload.name },
+    { key, vendor: null },
+    { key, value: settingValue, name: payload.name, vendor: null },
     { returnDocument: 'after', upsert: true }
   ).select('-__v');
 
   // Invalidate single + generals + pattern in parallel
   await Promise.all([
     deleteCache(REDIS_KEYS.SETTINGS_SINGLE(key)),
-    deleteCache(REDIS_KEYS.SETTINGS_GENERALS),
     deleteCachePattern('setting:*'),
   ]);
 
@@ -91,8 +105,13 @@ const createOrUpdate = async (traceId: string, key: string, payload: any) => {
 
 const updateGenerals = async (
   traceId: string,
+  vendorId: string,
   payload: Record<string, any>
 ) => {
+  if (!vendorId) {
+    throw new ApiError(HttpStatusCode.BadRequest, 'Vendor id is required', traceId);
+  }
+
   const validKeys = GENERAL_KEYS.filter((key) => payload[key] !== undefined);
 
   if (validKeys.length === 0) {
@@ -107,8 +126,8 @@ const updateGenerals = async (
   await Promise.all(
     validKeys.map((key) =>
       Setting.findOneAndUpdate(
-        { key },
-        { value: payload[key] },
+        { key, vendor: vendorId },
+        { key, value: payload[key], vendor: vendorId },
         { upsert: true, returnDocument: 'after' }
       ).select('-__v')
     )
@@ -116,9 +135,11 @@ const updateGenerals = async (
 
   // Invalidate all affected caches in parallel
   await Promise.all([
-    deleteCache(REDIS_KEYS.SETTINGS_GENERALS),
+    deleteCache(REDIS_KEYS.SETTINGS_GENERALS(vendorId)),
     deleteCachePattern('setting:*'),
-    ...validKeys.map((key) => deleteCache(REDIS_KEYS.SETTINGS_SINGLE(key))),
+    ...validKeys.map((key) =>
+      deleteCache(REDIS_KEYS.SETTINGS_SINGLE(key, vendorId))
+    ),
   ]);
 };
 

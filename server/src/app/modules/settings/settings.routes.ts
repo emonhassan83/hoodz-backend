@@ -1,9 +1,8 @@
 import { Router } from 'express';
 
+import auth from '@/app/middlewares/auth';
 import { SettingController } from '@/app/modules/settings/settings.controller';
 import { SettingValidation } from '@/app/modules/settings/settings.validation';
-
-import auth from '@/app/middlewares/auth';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import validateRequest from '@/app/utils/validateRequest';
 
@@ -12,7 +11,7 @@ const router = Router();
 router
   .route('/generals')
   .post(
-    auth(USER_ROLE.admin),
+    auth(USER_ROLE.vendor),
     validateRequest(SettingValidation.updateGeneralsZodSchema),
     SettingController.updateGenerals
   )
@@ -26,7 +25,6 @@ router
     SettingController.createOrUpdate
   );
 
-router.route('/generals').get(SettingController.getSettingGenerals);
 router.route('/').get(SettingController.getSetting);
 
 export const SettingsRoutes = router;

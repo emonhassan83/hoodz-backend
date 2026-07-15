@@ -1,31 +1,19 @@
 import { z } from 'zod';
 
 import {
-  ALLOWED_KEYS,
+  ADMIN_SETTING_KEYS,
   GENERAL_KEYS,
 } from '@/app/modules/settings/settings.constant';
 
 export type TGeneralKey = (typeof GENERAL_KEYS)[number];
 
-const latitudeSchema = z.number().min(-90).max(90);
-const longitudeSchema = z.number().min(-180).max(180);
-
-const platformLocationSchema = z.object({
-  address: z.string().trim().min(1, 'Platform address is required').optional(),
-  latitude: latitudeSchema,
-  longitude: longitudeSchema,
-});
-
-const platformLocationAddressSchema = z
-  .string()
-  .trim()
-  .min(1, 'Platform location address is required');
+const positiveIntegerSchema = z.number().int().nonnegative();
 
 // Create or Update Single Setting
 export const createOrUpdateSettingZodSchema = z
   .object({
     params: z.object({
-      key: z.enum(ALLOWED_KEYS as unknown as [string, ...string[]], {
+      key: z.enum(ADMIN_SETTING_KEYS as unknown as [string, ...string[]], {
         message: 'Invalid setting key provided',
       }),
     }),
@@ -34,55 +22,55 @@ export const createOrUpdateSettingZodSchema = z
       name: z.string().trim().optional(),
     }),
   })
-  .superRefine(({ params, body }, context) => {
-    if (params.key === 'platformLocation') {
-      const result = platformLocationSchema.safeParse(body.value);
-      if (!result.success) {
-        result.error.issues.forEach((issue) =>
-          context.addIssue({ ...issue, path: ['body', 'value', ...issue.path] })
-        );
-      }
+  .superRefine(({ body }, context) => {
+    if (typeof body.value !== 'string') {
+      context.addIssue({
+        code: 'custom',
+        path: ['body', 'value'],
+        message: 'Admin legal setting value must be a string',
+      });
     }
-
-    if (params.key === 'platformLocationAddress') {
-      const result = platformLocationAddressSchema.safeParse(body.value);
-      if (!result.success) {
-        result.error.issues.forEach((issue) =>
-          context.addIssue({ ...issue, path: ['body', 'value', ...issue.path] })
-        );
-      }
-    }
-
-    if (params.key === 'deliveryCharge') {
-      const result = z
-        .union([
-          z.number().nonnegative(),
-          z.object({ ratePerKm: z.number().nonnegative() }),
-        ])
-        .safeParse(body.value);
-      if (!result.success) {
-        context.addIssue({
-          code: 'custom',
-          path: ['body', 'value'],
-          message: 'Delivery charge must be a non-negative per-kilometre rate',
-        });
-      }
-    }
-
   });
 
 // Update Multiple General Settings
 export const updateGeneralsZodSchema = z.object({
   body: z
     .object({
-      platformLocation: platformLocationSchema.optional(),
-      platformLocationAddress: platformLocationAddressSchema.optional(),
-      deliveryCharge: z.number().nonnegative().optional(),
-
-      privacyAndPolicy: z.string().optional(),
+      returnPolicyDays: positiveIntegerSchema.optional(),
+      deliveryMinDays: positiveIntegerSchema.optional(),
+      deliveryMaxDays: positiveIntegerSchema.optional(),
+      instantDeliveryMaxDays: positiveIntegerSchema.optional(),
+      instantDeliveryMinDays: positiveIntegerSchema.optional(),
+      isInstantDeliveryAvailable: z.boolean().optional(),
     })
     .refine((data) => Object.keys(data).length > 0, {
       message: 'At least one general setting value must be provided',
+    })
+    .superRefine((data, context) => {
+      if (
+        data.deliveryMinDays !== undefined &&
+        data.deliveryMaxDays !== undefined &&
+        data.deliveryMinDays > data.deliveryMaxDays
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['deliveryMaxDays'],
+          message: 'deliveryMaxDays must be greater than or equal to deliveryMinDays',
+        });
+      }
+
+      if (
+        data.instantDeliveryMinDays !== undefined &&
+        data.instantDeliveryMaxDays !== undefined &&
+        data.instantDeliveryMinDays > data.instantDeliveryMaxDays
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['instantDeliveryMaxDays'],
+          message:
+            'instantDeliveryMaxDays must be greater than or equal to instantDeliveryMinDays',
+        });
+      }
     }),
 });
 
