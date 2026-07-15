@@ -1,22 +1,24 @@
 import { HttpStatusCode } from 'axios';
+import { hash } from 'bcrypt';
+import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 
+import QueryBuilder from '@/app/builder/QueryBuilder';
+import { env } from '@/app/configs/env.configs';
+import { SALT_ROUNDS } from '@/app/constant';
+import ApiError from '@/app/errors/ApiError';
+import { generateTokens } from '@/app/modules/auth/auth.helpers';
+import { IUserStatus, USER_ROLE } from '@/app/modules/user/user.constant';
 import {
   assertEmailNotTaken,
   assertPhoneNotTaken,
   buildGeoLocation,
   findActiveUserOrThrow,
-  getEmptyUserOrderStats,
-  getUserOrderStats,
   sendUserStatusNotifYToUser,
 } from '@/app/modules/user/user.helpers';
-
-import QueryBuilder from '@/app/builder/QueryBuilder';
-import ApiError from '@/app/errors/ApiError';
-import { generateTokens } from '@/app/modules/auth/auth.helpers';
-import { IUserStatus, USER_ROLE } from '@/app/modules/user/user.constant';
 import { IUser } from '@/app/modules/user/user.interface';
 import { User } from '@/app/modules/user/user.model';
+import { getEmailQueueInstance } from '@/app/utils/queueHelper';
 
 // ─── Read ──────────────────────────────────────────────────────────────────
 
@@ -26,7 +28,7 @@ const getAllUsersFromDB = async (
 ) => {
   const usersQuery = new QueryBuilder(
     User.find({ isDeleted: false, role: { $ne: USER_ROLE.admin } }).select(
-      '_id id name email profileAvatar role address status createdAt'
+      '_id id name email profileAvatar role address deliveryAddress deliveryZone status isProfileSetUp createdAt'
     ),
     query
   )
@@ -41,13 +43,7 @@ const getAllUsersFromDB = async (
     usersQuery.countTotal(),
   ]);
 
-  const orderStats = await getUserOrderStats(users.map((user) => user._id));
-  const usersWithOrderStats = users.map((user) => ({
-    ...user.toObject(),
-    ...(orderStats.get(user._id.toString()) ?? getEmptyUserOrderStats()),
-  }));
-
-  return { meta, users: usersWithOrderStats };
+  return { meta, users };
 };
 
 const getSingleUser = async (traceId: string, userId: string) => {
@@ -57,11 +53,7 @@ const getSingleUser = async (traceId: string, userId: string) => {
   if (!user || user.isDeleted) {
     throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
   }
-  const orderStats = await getUserOrderStats([user._id]);
-  return {
-    ...user,
-    ...(orderStats.get(user._id.toString()) ?? getEmptyUserOrderStats()),
-  };
+  return user;
 };
 
 // ─── Update ────────────────────────────────────────────────────────────────
@@ -124,10 +116,10 @@ const updateUserProfile = async (
 
   const result = await User.findByIdAndUpdate(
     userId,
-    { ...updateData, isProfileComplete: true },
+    { ...updateData, isProfileSetUp: true },
     { returnDocument: 'after' }
   )
-    .select('-expireAt -createdAt -updatedAt')
+    .select('-password -expireAt -createdAt -updatedAt')
     .lean();
 
   if (!result)
@@ -160,18 +152,227 @@ const updateUserStatus = async (
 const updateLocationFromDB = async (
   traceId: string,
   userId: string,
-  payload: { longitude: number; latitude: number; address: string }
+  payload: {
+    longitude: number;
+    latitude: number;
+    address: string;
+    timeZone?: string;
+  }
 ) => {
-  const { longitude, latitude, address } = payload;
+  const { longitude, latitude, address, timeZone } = payload;
 
   await findActiveUserOrThrow(userId, traceId);
 
   return User.findByIdAndUpdate(
     userId,
-    { location: buildGeoLocation(longitude, latitude), address },
+    {
+      location: buildGeoLocation(longitude, latitude),
+      address,
+      ...(timeZone ? { timeZone } : {}),
+    },
     { returnDocument: 'after' }
   );
 };
+
+const updateDeliveryLocationFromDB = async (
+  traceId: string,
+  userId: string,
+  payload: {
+    longitude: number;
+    latitude: number;
+    deliveryAddress: string;
+  }
+) => {
+  const { longitude, latitude, deliveryAddress } = payload;
+
+  await findActiveUserOrThrow(userId, traceId);
+
+  return User.findByIdAndUpdate(
+    userId,
+    {
+      deliveryLocation: buildGeoLocation(longitude, latitude),
+      deliveryAddress,
+    },
+    { returnDocument: 'after' }
+  );
+};
+
+const setOrUpdateSecurityCode = async (
+  traceId: string,
+  userId: string,
+  payload: { password: string; securityCode: string }
+) => {
+  const user = await User.findById(userId).select('+password +securityCode');
+
+  if (!user || user.isDeleted) {
+    throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
+  }
+
+  if (user.role !== USER_ROLE.rider) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'Only riders can set a security code',
+      traceId
+    );
+  }
+
+  if (!user.password) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Password login is required to set a security code',
+      traceId
+    );
+  }
+
+  const isPasswordMatched = await User.isPasswordMatched(
+    payload.password,
+    user.password
+  );
+  if (!isPasswordMatched) {
+    throw new ApiError(HttpStatusCode.Forbidden, 'Password is incorrect', traceId);
+  }
+
+  const hashedSecurityCode = await hash(payload.securityCode, SALT_ROUNDS);
+  await User.findByIdAndUpdate(userId, { securityCode: hashedSecurityCode });
+
+  return { securityCodeSet: true };
+};
+
+const verifySecurityCode = async (
+  traceId: string,
+  userId: string,
+  payload: { securityCode: string }
+) => {
+  const user = await User.findById(userId).select('+securityCode');
+
+  if (!user || user.isDeleted) {
+    throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
+  }
+
+  if (user.role !== USER_ROLE.rider) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'Only riders can verify a security code',
+      traceId
+    );
+  }
+
+  if (!user.securityCode) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Security code has not been set',
+      traceId
+    );
+  }
+
+  const isMatched = await User.isSecurityCodeMatched(
+    payload.securityCode,
+    user.securityCode
+  );
+  if (!isMatched) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'Security code is incorrect',
+      traceId
+    );
+  }
+
+  return { verified: true };
+};
+
+const generateTemporaryPassword = () => {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower = 'abcdefghijkmnopqrstuvwxyz';
+  const numbers = '23456789';
+  const symbols = '@#$%';
+  const all = `${upper}${lower}${numbers}${symbols}`;
+
+  const required = [
+    upper[crypto.randomInt(upper.length)],
+    lower[crypto.randomInt(lower.length)],
+    numbers[crypto.randomInt(numbers.length)],
+    symbols[crypto.randomInt(symbols.length)],
+  ];
+
+  while (required.length < 12) {
+    required.push(all[crypto.randomInt(all.length)]);
+  }
+
+  return required.sort(() => crypto.randomInt(3) - 1).join('');
+};
+
+type TInvitePlatformUserPayload = {
+  name: string;
+  email: string;
+  countryCode: string;
+  phone: string;
+};
+
+const createInvitedPlatformUser = async (
+  traceId: string,
+  payload: TInvitePlatformUserPayload,
+  role: typeof USER_ROLE.vendor | typeof USER_ROLE.agent,
+  emailJobName: 'send-vendor-invite-email' | 'send-agent-invite-email'
+) => {
+  const exists = await User.findOne({
+    $or: [{ email: payload.email }, { phone: payload.phone }],
+  });
+  if (exists) {
+    throw new ApiError(
+      HttpStatusCode.Conflict,
+      'A user with this email or phone already exists',
+      traceId
+    );
+  }
+
+  const password = generateTemporaryPassword();
+  const user = await User.create({
+    ...payload,
+    role,
+    password,
+    isLegalTermsAccepted: true,
+    isSignUpOtpVerified: true,
+    isProfileSetUp: true,
+    needsPasswordChange: true,
+    expireAt: null as unknown as Date,
+  });
+
+  const emailQueue = await getEmailQueueInstance();
+  await emailQueue.add(
+    emailJobName,
+    {
+      email: payload.email,
+      name: payload.name,
+      password,
+      dashboardUrl: env.DASHBOARD_URL,
+    },
+    { priority: 1, attempts: 3, backoff: { type: 'exponential', delay: 2000 } }
+  );
+
+  return user;
+};
+
+const inviteVendor = async (
+  traceId: string,
+  payload: TInvitePlatformUserPayload
+) =>
+  createInvitedPlatformUser(
+    traceId,
+    payload,
+    USER_ROLE.vendor,
+    'send-vendor-invite-email'
+  );
+
+const inviteAgent = async (
+  traceId: string,
+  payload: TInvitePlatformUserPayload
+) =>
+  createInvitedPlatformUser(
+    traceId,
+    payload,
+    USER_ROLE.agent,
+    'send-agent-invite-email'
+  );
 
 // ─── Delete ────────────────────────────────────────────────────────────────
 
@@ -223,5 +424,10 @@ export const UserService = {
   updateUserProfile,
   updateUserStatus,
   updateLocationFromDB,
+  updateDeliveryLocationFromDB,
+  setOrUpdateSecurityCode,
+  verifySecurityCode,
+  inviteVendor,
+  inviteAgent,
   deleteUserProfile,
 };

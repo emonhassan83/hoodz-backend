@@ -13,7 +13,25 @@ const router = Router();
 
 // ─── Admin ─────────────────────────────────────────────────────────────────
 
-router.route('/').get(auth(USER_ROLE.admin), UserControllers.getAllUsers);
+router
+  .route('/')
+  .get(auth(USER_ROLE.admin), UserControllers.getAllUsers);
+
+router
+  .route('/vendors/invite')
+  .post(
+    auth(USER_ROLE.admin),
+    validateRequest(UserValidation.inviteVendorValidationSchema),
+    UserControllers.inviteVendor
+  );
+
+router
+  .route('/agents/invite')
+  .post(
+    auth(USER_ROLE.admin),
+    validateRequest(UserValidation.inviteAgentValidationSchema),
+    UserControllers.inviteAgent
+  );
 
 // ─── Profile ───────────────────────────────────────────────────────────────
 
@@ -31,6 +49,30 @@ router
     auth(...AUTHENTICATED_ROLES),
     validateRequest(UserValidation.updateLocationValidationSchema),
     UserControllers.updateMyLocation
+  );
+
+router
+  .route('/delivery-location')
+  .put(
+    auth(...AUTHENTICATED_ROLES),
+    validateRequest(UserValidation.updateDeliveryLocationValidationSchema),
+    UserControllers.updateMyDeliveryLocation
+  );
+
+router
+  .route('/security-code')
+  .put(
+    auth(USER_ROLE.rider),
+    validateRequest(UserValidation.securityCodeValidationSchema),
+    UserControllers.setOrUpdateSecurityCode
+  );
+
+router
+  .route('/security-code/verify')
+  .post(
+    auth(USER_ROLE.rider),
+    validateRequest(UserValidation.verifySecurityCodeValidationSchema),
+    UserControllers.verifySecurityCode
   );
 
 // ─── User by ID ────────────────────────────────────────────────────────────

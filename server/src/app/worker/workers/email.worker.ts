@@ -1,6 +1,8 @@
 import { Worker, Job } from 'bullmq';
 
+import { getAgentInviteEmailTemplate } from '@/app/worker/templates/agent-invite-email.template';
 import { getOtpEmailTemplate } from '@/app/worker/templates/otp-email.template';
+import { getVendorInviteEmailTemplate } from '@/app/worker/templates/vendor-invite-email.template';
 
 import { env } from '@/app/configs/env.configs';
 import { sendEmail } from '@/app/configs/nodemailer.config';
@@ -36,6 +38,58 @@ export const initializeEmailWorker = () => {
               `[Email Worker] Error sending OTP email to ${email}:`,
               error
             );
+            throw error;
+          }
+          break;
+        }
+
+        case 'send-vendor-invite-email': {
+          const { email, name, password, dashboardUrl } = job.data;
+          console.log(`[Email Worker] Processing vendor invite email for ${email}`);
+
+          const mailOptions = {
+            from: env.SMTP_USER,
+            to: email,
+            subject: 'Your Hoodz Backend vendor account',
+            html: getVendorInviteEmailTemplate({
+              name,
+              email,
+              password,
+              dashboardUrl,
+            }),
+          };
+
+          try {
+            await sendEmail(mailOptions);
+            console.log(`[Email Worker] Successfully sent vendor invite email to ${email}`);
+          } catch (error) {
+            console.error(`[Email Worker] Error sending vendor invite email to ${email}:`, error);
+            throw error;
+          }
+          break;
+        }
+
+        case 'send-agent-invite-email': {
+          const { email, name, password, dashboardUrl } = job.data;
+          console.log(`[Email Worker] Processing agent invite email for ${email}`);
+
+          const mailOptions = {
+            from: env.SMTP_USER,
+            to: email,
+            subject: 'Your Hoodz Backend agent account',
+            html: getAgentInviteEmailTemplate({
+              name,
+              email,
+              password,
+              dashboardUrl,
+            }),
+          };
+
+          try {
+            await sendEmail(mailOptions);
+            console.log(`[Email Worker] Successfully sent agent invite email to ${email}`);
+          } catch (error) {
+            console.error(`[Email Worker] Error sending agent invite email to ${email}:`, error);
             throw error;
           }
           break;

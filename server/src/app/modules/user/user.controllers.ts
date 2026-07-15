@@ -32,6 +32,32 @@ const getAUser = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const inviteVendor = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await UserService.inviteVendor(traceId, req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 201,
+    message: 'Vendor invited successfully',
+    data,
+    traceId,
+  });
+});
+
+const inviteAgent = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await UserService.inviteAgent(traceId, req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 201,
+    message: 'Agent invited successfully',
+    data,
+    traceId,
+  });
+});
+
 // ─── Update ────────────────────────────────────────────────────────────────
 
 const changedEmail = asyncHandler(async (req: Request, res: Response) => {
@@ -86,6 +112,61 @@ const updateMyLocation = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const updateMyDeliveryLocation = asyncHandler(
+  async (req: Request, res: Response) => {
+    const traceId = getTraceId();
+    const data = await UserService.updateDeliveryLocationFromDB(
+      traceId,
+      req.user.userId,
+      req.body
+    );
+
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: 'Delivery location updated successfully',
+      data,
+      traceId,
+    });
+  }
+);
+
+const setOrUpdateSecurityCode = asyncHandler(
+  async (req: Request, res: Response) => {
+    const traceId = getTraceId();
+    const data = await UserService.setOrUpdateSecurityCode(
+      traceId,
+      req.user.userId,
+      req.body
+    );
+
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: 'Security code saved successfully',
+      data,
+      traceId,
+    });
+  }
+);
+
+const verifySecurityCode = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await UserService.verifySecurityCode(
+    traceId,
+    req.user.userId,
+    req.body
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Security code verified successfully',
+    data,
+    traceId,
+  });
+});
+
 // ─── Delete ────────────────────────────────────────────────────────────────
 
 const deleteUserProfile = asyncHandler(async (req: Request, res: Response) => {
@@ -104,9 +185,14 @@ const deleteUserProfile = asyncHandler(async (req: Request, res: Response) => {
 export const UserControllers = {
   getAllUsers,
   getAUser,
+  inviteVendor,
+  inviteAgent,
   changedEmail,
   updateUserProfile,
   updateUserStatus,
   updateMyLocation,
+  updateMyDeliveryLocation,
+  setOrUpdateSecurityCode,
+  verifySecurityCode,
   deleteUserProfile,
 };

@@ -19,10 +19,6 @@ const apiRoutes = [
     route: OtpRoutes,
   },
   {
-    path: '/user',
-    route: UserRoutes,
-  },
-  {
     path: '/users',
     route: UserRoutes,
   },

@@ -13,12 +13,20 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
+  securityCode?: string | null;
   fcmToken: string
   profileAvatar: string
+  description?: string | null;
+  gender?: string | null;
+  dob?: Date | null;
   countryCode?: string
   phone: string | null;
   address: string;
   location: IGeoLocation | null;
+  deliveryAddress?: string | null;
+  deliveryLocation?: IGeoLocation | null;
+  deliveryTime?: string | null;
+  deliveryZone?: string[];
   timeZone: string;
   role: IUserRole;
 
@@ -33,6 +41,7 @@ export interface IUser extends Document {
   isChangeEmailOtpVerified: boolean;
   isChangePhoneOtpVerified: boolean;
   status: IUserStatus;
+  isProfileSetUp: boolean;
   isLegalTermsAccepted: boolean;
   expireAt: Date
   isDeleted: boolean
@@ -46,6 +55,11 @@ export interface IUserModal extends Model<IUser> {
   isPasswordMatched(
     plainTextPassword: string,
     hashedPassword: string,
+  ): Promise<boolean>
+
+  isSecurityCodeMatched(
+    plainTextSecurityCode: string,
+    hashedSecurityCode: string,
   ): Promise<boolean>
 }
 

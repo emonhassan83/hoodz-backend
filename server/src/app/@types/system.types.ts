@@ -24,6 +24,7 @@ export type TEnv = {
   S3_BUCKET_NAME: string;
   STRIPE_API_SECRET_KEY: string;
   SERVER_URL: string;
+  DASHBOARD_URL: string;
 
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;

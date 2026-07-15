@@ -8,10 +8,8 @@ import twilio from 'twilio';
 import { env } from '@/app/configs/env.configs';
 import { OTP_GENERATE_CONFIG } from '@/app/constant';
 import ApiError from '@/app/errors/ApiError';
-import { createToken } from '@/app/modules/auth/auth.helpers';
-import { TExpiresIn } from '@/app/modules/auth/auth.interface';
-import { OtpRedisService } from '@/app/redis/helpers/otp';
 import { User } from '@/app/modules/user/user.model';
+import { OtpRedisService } from '@/app/redis/helpers/otp';
 import { getEmailQueueInstance } from '@/app/utils/queueHelper';
 
 const OTP_EXPIRE = 60 * 5; // 5 minutes

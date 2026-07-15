@@ -47,8 +47,8 @@ const getAdminData = async () => {
   }
 
   return {
-    name: 'Renko ReFuel',
-    email: 'admin@jmrenko.gmail.com',
+    name: 'HOODZ',
+    email: 'admin@hoodz.gmail.com',
     password: await bcrypt.hash(plainPassword, 12),
     role: USER_ROLE.admin,
     status: USER_STATUS.active,

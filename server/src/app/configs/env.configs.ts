@@ -28,4 +28,5 @@ export const env: TEnv = {
   TWILIO_PHONE_NUMBER: getEnv('TWILIO_PHONE_NUMBER'),
   STRIPE_API_SECRET_KEY: getEnv('STRIPE_API_SECRET_KEY'),
   SERVER_URL: process.env.SERVER_URL || 'http://localhost:5029/api/v1',
+  DASHBOARD_URL: process.env.DASHBOARD_URL || 'http://localhost:3000',
 };

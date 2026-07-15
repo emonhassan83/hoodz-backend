@@ -1,9 +1,9 @@
 import { Router } from 'express';
 
+import auth from '@/app/middlewares/auth';
 import { OtpControllers } from '@/app/modules/otp/otp.controllers';
 import { OtpMiddlewares } from '@/app/modules/otp/otp.middlewares';
 import { OtpValidations } from '@/app/modules/otp/otp.validation';
-import auth from '@/app/middlewares/auth';
 import { AUTHENTICATED_ROLES } from '@/app/modules/user/user.constant';
 import validateRequest from '@/app/utils/validateRequest';
 
@@ -22,6 +22,7 @@ router
 router
   .route('/send-otp-in-email')
   .post(
+    auth(...AUTHENTICATED_ROLES),
     OtpMiddlewares.otpRateLimit(5, 60000), // 5 requests per minute
     OtpMiddlewares.validateEmail,
     validateRequest(OtpValidations.sentOtpInEmail),

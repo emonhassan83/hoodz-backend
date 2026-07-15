@@ -20,9 +20,13 @@ const userSchema = new Schema<IUser, IUserModal>(
     },
     name: { type: String, required: true },
     email: { type: String, required: true, index: true },
-    password: { type: String, required: false },
+    password: { type: String, required: false, select: false },
+    securityCode: { type: String, default: null, select: false },
     fcmToken: { type: String, default: null },
     profileAvatar: { type: String, default: null },
+    description: { type: String, default: null },
+    gender: { type: String, default: null },
+    dob: { type: Date, default: null },
 
     countryCode: { type: String, default: null },
     phone: { type: String, default: null },
@@ -38,6 +42,20 @@ const userSchema = new Schema<IUser, IUserModal>(
         default: [0, 0],
       },
     },
+    deliveryAddress: { type: String, default: null },
+    deliveryLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number],
+        default: [0, 0],
+      },
+    },
+    deliveryTime: { type: String, default: null },
+    deliveryZone: { type: [String], default: [] },
     timeZone: { type: String, default: 'UTC' },
     role: {
       type: String,
@@ -62,6 +80,7 @@ const userSchema = new Schema<IUser, IUserModal>(
       default: USER_STATUS.active,
       index: true,
     },
+    isProfileSetUp: { type: Boolean, default: false },
     needsPasswordChange: { type: Boolean },
     passwordChangedAt: { type: Date },
     isSignUpOtpVerified: {
@@ -97,6 +116,20 @@ const userSchema = new Schema<IUser, IUserModal>(
   },
   {
     timestamps: true,
+    toJSON: {
+      transform: (_doc, ret) => {
+        delete (ret as Record<string, unknown>).password;
+        delete (ret as Record<string, unknown>).securityCode;
+        return ret;
+      },
+    },
+    toObject: {
+      transform: (_doc, ret) => {
+        delete (ret as Record<string, unknown>).password;
+        delete (ret as Record<string, unknown>).securityCode;
+        return ret;
+      },
+    },
   }
 );
 
@@ -110,6 +143,13 @@ userSchema.statics.isPasswordMatched = async function (
   hashedPassword: string
 ): Promise<boolean> {
   return await compare(plainTextPassword, hashedPassword);
+};
+
+userSchema.statics.isSecurityCodeMatched = async function (
+  plainTextSecurityCode: string,
+  hashedSecurityCode: string
+): Promise<boolean> {
+  return await compare(plainTextSecurityCode, hashedSecurityCode);
 };
 
 // for location and auto expire inactive users

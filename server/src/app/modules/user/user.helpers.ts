@@ -10,28 +10,6 @@ import {
 import { User } from '@/app/modules/user/user.model';
 import { sendBothNotificationViaQueue } from '@/app/utils/notification-queue.service';
 
-export interface IUserOrderStats {
-  totalOrder: number;
-  totalAmount: number;
-  lastOrder: Date | null;
-}
-
-const EMPTY_ORDER_STATS: IUserOrderStats = {
-  totalOrder: 0,
-  totalAmount: 0,
-  lastOrder: null,
-};
-
-export const getUserOrderStats = (userIds: { toString(): string }[]) => {
-  return new Map<string, IUserOrderStats>(
-    userIds.map((userId) => [userId.toString(), getEmptyUserOrderStats()])
-  );
-};
-
-export const getEmptyUserOrderStats = (): IUserOrderStats => ({
-  ...EMPTY_ORDER_STATS,
-});
-
 // ─── Lean lookups — no throw, callers decide ───────────────────────────────
 
 export const findUserById = async (userId: string) =>
