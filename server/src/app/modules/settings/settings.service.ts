@@ -26,7 +26,9 @@ const getSetting = async (traceId: string, key: string) => {
   const cached = await getCache<any>(cacheKey);
   if (cached) return cached;
 
-  const setting = await Setting.findOne({ key, vendor: null }).select('-__v').lean();
+  const setting = await Setting.findOne({ key, vendor: null })
+    .select('key value -_id')
+    .lean();
   if (!setting) {
     throw new ApiError(
       HttpStatusCode.NotFound,
@@ -92,7 +94,7 @@ const createOrUpdate = async (traceId: string, key: string, payload: any) => {
     { key, vendor: null },
     { key, value: settingValue, vendor: null },
     { returnDocument: 'after', upsert: true }
-  ).select('-__v');
+  ).select('key value -_id');
 
   // Invalidate single + generals + pattern in parallel
   await Promise.all([

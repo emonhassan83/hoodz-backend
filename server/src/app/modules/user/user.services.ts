@@ -294,7 +294,7 @@ const generateTemporaryPassword = () => {
     symbols[crypto.randomInt(symbols.length)],
   ];
 
-  while (required.length < 12) {
+  while (required.length < 8) {
     required.push(all[crypto.randomInt(all.length)]);
   }
 
@@ -332,7 +332,7 @@ const createInvitedPlatformUser = async (
     password,
     isLegalTermsAccepted: true,
     isSignUpOtpVerified: true,
-    isProfileSetUp: true,
+    isProfileSetUp: false,
     needsPasswordChange: true,
     expireAt: null as unknown as Date,
   });
