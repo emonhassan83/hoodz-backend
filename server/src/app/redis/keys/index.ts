@@ -7,6 +7,7 @@ export const REDIS_KEYS = {
   UNREAD_NOTIFICATION: (userId: string) => createRedisKey(REDIS_PREFIXES.unreadNotification, userId),
   RECENTLY_VIEWED_PRODUCTS: (userId: string) =>
     createRedisKey(REDIS_PREFIXES.recentlyViewedProducts, userId),
+  CART: (userId: string) => createRedisKey(REDIS_PREFIXES.cart, userId),
 
   REGISTER_OTP: (email: string) => createRedisKey(REDIS_PREFIXES.otp, email),
   RESET_OTP: (email: string) => createRedisKey(REDIS_PREFIXES.otp, 'reset', email),

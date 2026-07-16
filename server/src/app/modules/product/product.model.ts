@@ -17,7 +17,7 @@ const variantSchema = new Schema(
     color: { type: colorSchema, required: true },
     quantity: { type: Number, required: true, min: 0 },
   },
-  { _id: false }
+  { _id: true }
 );
 
 const seoSchema = new Schema(

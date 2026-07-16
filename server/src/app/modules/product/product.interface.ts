@@ -8,6 +8,7 @@ export type TProductColor = {
 };
 
 export type TProductVariant = {
+  _id?: Types.ObjectId;
   size: string;
   color: TProductColor;
   quantity: number;

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { AuthRoutes } from '@/app/modules/auth/auth.routes';
+import { CartRoutes } from '@/app/modules/cart/cart.routes';
 import { CategoryRoutes } from '@/app/modules/category/category.routes';
 import { KycRoutes } from '@/app/modules/kyc/kyc.routes';
 import { NotificationRoutes } from '@/app/modules/notification/notification.routes';
@@ -48,6 +49,10 @@ const apiRoutes = [
   {
     path: '/products',
     route: ProductRoutes,
+  },
+  {
+    path: '/cart',
+    route: CartRoutes,
   },
 ];
 
