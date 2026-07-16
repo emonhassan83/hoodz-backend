@@ -10,6 +10,7 @@ import { ProductRoutes } from '@/app/modules/product/product.routes';
 import { SettingsRoutes } from '@/app/modules/settings/settings.routes';
 import { UploadRoutes } from '@/app/modules/upload/upload.routes';
 import { UserRoutes } from '@/app/modules/user/user.routes';
+import { WishlistRoutes } from '@/app/modules/wishlist/wishlist.routes';
 
 const router = Router();
 
@@ -53,6 +54,10 @@ const apiRoutes = [
   {
     path: '/cart',
     route: CartRoutes,
+  },
+  {
+    path: '/wishlist',
+    route: WishlistRoutes,
   },
 ];
 

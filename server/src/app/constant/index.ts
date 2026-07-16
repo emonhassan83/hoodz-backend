@@ -44,6 +44,7 @@ export const REDIS_PREFIXES = {
   notification: 'notification',
   unreadNotification: 'user:unread:notification',
   recentlyViewedProducts: 'user:recently-viewed:products',
+  wishlist: 'user:wishlist',
   cart: 'user:cart',
   session: 'session',
   rateLimit: 'rate:limit',
