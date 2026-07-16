@@ -5,6 +5,7 @@ import { CategoryRoutes } from '@/app/modules/category/category.routes';
 import { KycRoutes } from '@/app/modules/kyc/kyc.routes';
 import { NotificationRoutes } from '@/app/modules/notification/notification.routes';
 import { OtpRoutes } from '@/app/modules/otp/otp.routes';
+import { ProductRoutes } from '@/app/modules/product/product.routes';
 import { SettingsRoutes } from '@/app/modules/settings/settings.routes';
 import { UploadRoutes } from '@/app/modules/upload/upload.routes';
 import { UserRoutes } from '@/app/modules/user/user.routes';
@@ -43,6 +44,10 @@ const apiRoutes = [
   {
     path: '/category',
     route: CategoryRoutes,
+  },
+  {
+    path: '/products',
+    route: ProductRoutes,
   },
 ];
 
