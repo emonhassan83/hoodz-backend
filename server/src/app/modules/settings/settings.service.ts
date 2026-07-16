@@ -89,7 +89,7 @@ const createOrUpdate = async (traceId: string, key: string, payload: any) => {
     );
   }
 
-  const settingValue = payload.value ?? payload;
+  const settingValue = payload.value ?? payload[key] ?? payload;
   const setting = await Setting.findOneAndUpdate(
     { key, vendor: null },
     { key, value: settingValue, vendor: null },

@@ -61,6 +61,22 @@ const settingsData = [
     value: 'Agent privacy and policy content goes here...',
     vendor: null,
   },
+  {
+    key: 'deliveryCharge',
+    value: [
+      {
+        state: 'Cairo',
+        regularDeliveryCharge: 70,
+        instantDeliveryCharge: 120,
+      },
+      {
+        state: 'Alexandria',
+        regularDeliveryCharge: 85,
+        instantDeliveryCharge: 140,
+      },
+    ],
+    vendor: null,
+  },
 ];
 
 const run = async () => {

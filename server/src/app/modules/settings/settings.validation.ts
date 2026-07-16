@@ -9,6 +9,16 @@ export type TGeneralKey = (typeof GENERAL_KEYS)[number];
 
 const positiveIntegerSchema = z.number().int().nonnegative();
 
+const deliveryChargeSchema = z
+  .array(
+    z.object({
+      state: z.string().trim().min(1, 'State is required'),
+      regularDeliveryCharge: z.number().nonnegative(),
+      instantDeliveryCharge: z.number().nonnegative(),
+    })
+  )
+  .min(1, 'At least one delivery charge is required');
+
 // Create or Update Single Setting
 export const createOrUpdateSettingZodSchema = z
   .object({
@@ -21,11 +31,24 @@ export const createOrUpdateSettingZodSchema = z
       value: z.any(),
     }),
   })
-  .superRefine(({ body }, context) => {
-    if (typeof body.value !== 'string') {
+  .superRefine(({ params, body }, context) => {
+    const dynamicBody = body as Record<string, unknown>;
+    const value = body.value ?? dynamicBody[params.key];
+
+    if (params.key === 'deliveryCharge') {
+      const result = deliveryChargeSchema.safeParse(value);
+      if (!result.success) {
+        result.error.issues.forEach((issue) =>
+          context.addIssue({ ...issue, path: ['body', ...issue.path] })
+        );
+      }
+      return;
+    }
+
+    if (typeof value !== 'string') {
       context.addIssue({
         code: 'custom',
-        path: ['body', 'value'],
+        path: ['body', body.value === undefined ? params.key : 'value'],
         message: 'Admin legal setting value must be a string',
       });
     }

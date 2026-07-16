@@ -1,0 +1,1 @@
+// Middlewares for category module

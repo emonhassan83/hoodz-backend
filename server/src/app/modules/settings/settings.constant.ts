@@ -16,6 +16,7 @@ export const ADMIN_SETTING_KEYS = [
   'vendorPrivacyAndPolicy',
   'agentTermsAndConditions',
   'agentPrivacyAndPolicy',
+  'deliveryCharge',
 ] as const;
 
 export const GENERAL_KEYS = VENDOR_GENERAL_KEYS;

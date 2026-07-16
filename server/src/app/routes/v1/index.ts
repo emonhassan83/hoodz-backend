@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { AuthRoutes } from '@/app/modules/auth/auth.routes';
+import { CategoryRoutes } from '@/app/modules/category/category.routes';
 import { KycRoutes } from '@/app/modules/kyc/kyc.routes';
 import { NotificationRoutes } from '@/app/modules/notification/notification.routes';
 import { OtpRoutes } from '@/app/modules/otp/otp.routes';
@@ -38,6 +39,10 @@ const apiRoutes = [
   {
     path: '/kyc',
     route: KycRoutes,
+  },
+  {
+    path: '/category',
+    route: CategoryRoutes,
   },
 ];
 
