@@ -70,6 +70,8 @@ export interface ISignUpWithEmail {
   countryCode: string
   phone: string
   password: string
+  role?: IUserRole
+  fcmToken?: string
   isLegalTermsAccepted: boolean
 }
 
@@ -78,5 +80,7 @@ export interface ISignUpWithPhone {
   email: string
   countryCode: string
   phone: string
+  role?: IUserRole
+  fcmToken?: string
   isLegalTermsAccepted: boolean
 }

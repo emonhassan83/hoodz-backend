@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 
+const registerRoleSchema = z.enum([USER_ROLE.user, USER_ROLE.rider]).optional();
+
 const signupWithEmailSchema = z.object({
   body: z.object({
     name: z
@@ -36,6 +38,9 @@ const signupWithEmailSchema = z.object({
       .min(8, { message: 'Password must be at least 8 characters long' })
       .max(100, { message: 'Password is too long for hashing performance' }),
 
+    role: registerRoleSchema,
+    fcmToken: z.string().optional(),
+
     isLegalTermsAccepted: z
       .boolean({
         error: 'Terms flag must be a true/false value',
@@ -65,6 +70,9 @@ const signupWithPhoneSchema = z.object({
       .min(6, { message: 'Contact number must be at least 6 digits long' })
       .max(15, { message: 'Contact number must be at most 15 digits long' }),
 
+    role: registerRoleSchema,
+    fcmToken: z.string().optional(),
+
     isLegalTermsAccepted: z
       .boolean({
         error: 'Terms flag must be a true/false value',
@@ -87,6 +95,7 @@ const loginValidationSchema = z.object({
         message: 'Password is required.',
       })
       .min(8, { message: 'Password must be at least 8 characters long.' }),
+    fcmToken: z.string().optional(),
   }),
 });
 
@@ -99,6 +108,7 @@ const loginWithPhoneValidationSchema = z.object({
     countryCode: z
       .string({ message: 'Country code is required!' })
       .min(1, { message: 'Country code cannot be empty.' }),
+    fcmToken: z.string().optional(),
   }),
 });
 
@@ -181,6 +191,7 @@ const googleZodValidationSchema = z.object({
       message: 'token is required!',
     }),
     fcmToken: z.string().optional(),
+    role: registerRoleSchema,
     profileImage: z.string().optional(),
     isLegalTermsAccepted: z.boolean({
       error: 'Terms flag must be a true/false value',
@@ -206,6 +217,7 @@ const appleZodValidationSchema = z.object({
       message: 'token is required!',
     }),
     fcmToken: z.string().optional(),
+    role: registerRoleSchema,
     profileImage: z.string().optional(),
     isLegalTermsAccepted: z.boolean({
       error: 'Terms flag must be a true/false value',

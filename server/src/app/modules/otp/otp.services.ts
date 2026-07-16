@@ -8,6 +8,7 @@ import {
   generateOtp,
   getOtpFromRedis,
   hashOtp,
+  notifyRiderSignupVerified,
   saveOtpToRedis,
   sendOtpEmail,
   sendOtpSms,
@@ -61,6 +62,10 @@ export const verifyOTP = async (
   );
 
   await deleteOtpFromRedis(email);
+
+  if (type === 'signup') {
+    await notifyRiderSignupVerified(user);
+  }
 
   if (['login', 'signup', 'forgot'].includes(type as string)) {
     return generateTokens(user);

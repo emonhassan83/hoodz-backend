@@ -1,10 +1,8 @@
 import { HttpStatusCode } from 'axios';
 import { hash } from 'bcrypt';
-import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
-import { env } from '@/app/configs/env.configs';
 import { SALT_ROUNDS } from '@/app/constant';
 import ApiError from '@/app/errors/ApiError';
 import { generateTokens } from '@/app/modules/auth/auth.helpers';
@@ -13,12 +11,13 @@ import {
   assertEmailNotTaken,
   assertPhoneNotTaken,
   buildGeoLocation,
+  enqueuePlatformInviteEmail,
   findActiveUserOrThrow,
+  generateTemporaryPassword,
   sendUserStatusNotifYToUser,
 } from '@/app/modules/user/user.helpers';
 import { IUser } from '@/app/modules/user/user.interface';
 import { User } from '@/app/modules/user/user.model';
-import { getEmailQueueInstance } from '@/app/utils/queueHelper';
 
 // ─── Read ──────────────────────────────────────────────────────────────────
 
@@ -280,27 +279,6 @@ const verifySecurityCode = async (
   return { verified: true };
 };
 
-const generateTemporaryPassword = () => {
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lower = 'abcdefghijkmnopqrstuvwxyz';
-  const numbers = '23456789';
-  const symbols = '@#$%';
-  const all = `${upper}${lower}${numbers}${symbols}`;
-
-  const required = [
-    upper[crypto.randomInt(upper.length)],
-    lower[crypto.randomInt(lower.length)],
-    numbers[crypto.randomInt(numbers.length)],
-    symbols[crypto.randomInt(symbols.length)],
-  ];
-
-  while (required.length < 8) {
-    required.push(all[crypto.randomInt(all.length)]);
-  }
-
-  return required.sort(() => crypto.randomInt(3) - 1).join('');
-};
-
 type TInvitePlatformUserPayload = {
   name: string;
   email: string;
@@ -337,16 +315,13 @@ const createInvitedPlatformUser = async (
     expireAt: null as unknown as Date,
   });
 
-  const emailQueue = await getEmailQueueInstance();
-  await emailQueue.add(
+  await enqueuePlatformInviteEmail(
     emailJobName,
     {
       email: payload.email,
       name: payload.name,
       password,
-      dashboardUrl: env.DASHBOARD_URL,
-    },
-    { priority: 1, attempts: 3, backoff: { type: 'exponential', delay: 2000 } }
+    }
   );
 
   return user;

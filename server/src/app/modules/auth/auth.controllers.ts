@@ -22,14 +22,14 @@ const signupWithEmail = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await AuthService.signupWithEmail(traceId, req.body);
   const sendOtp = await OtpServices.sendOtpInEmail(traceId, data._id.toString(), data?.email);
-  const { _id, id, name, email, countryCode, phone, status } = data
+  const { _id, id, name, email, countryCode, phone, role, status, isProfileSetUp } = data
 
   sendResponse(res, {
     success: true,
     statusCode: 200,
     message: 'User created successfully, please verify your otp',
      data: {
-      user: { _id, id, name, email, countryCode, phone, status },
+      user: { _id, id, name, email, countryCode, phone, role, status, isProfileSetUp },
       otpToken: sendOtp,
     },
     traceId,

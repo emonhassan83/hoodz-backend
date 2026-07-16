@@ -13,7 +13,7 @@ import {
   TLoginWithPhone,
 } from '@/app/modules/auth/auth.interface';
 import { OtpServices } from '@/app/modules/otp/otp.services';
-import { REGISTER_WITH } from '@/app/modules/user/user.constant';
+import { REGISTER_WITH, USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { ISignUpWithEmail, ISignUpWithPhone } from '@/app/modules/user/user.interface';
 import { User } from '@/app/modules/user/user.model';
 
@@ -33,8 +33,13 @@ const registerWithSocialAuth = async (
   provider: typeof REGISTER_WITH.google | typeof REGISTER_WITH.apple,
   payload: TGoogleLoginPayload | TAppleLoginPayload
 ) => {
-  if (payload.role === 'admin') {
-    throw new ApiError(HttpStatusCode.Forbidden, 'You cannot directly assign admin role', traceId);
+  const role = payload.role ?? USER_ROLE.user;
+  if (![USER_ROLE.user, USER_ROLE.rider].includes(role as any)) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'Only user and rider can register directly',
+      traceId
+    );
   }
 
   const profileData = {
@@ -45,7 +50,7 @@ const registerWithSocialAuth = async (
     profileAvatar: payload.profileAvatar,
     countryCode: payload.countryCode,
     phone: payload.phone,
-    isLegalTermsAccepted: payload.isLegalTermsAccepted
+    isLegalTermsAccepted: payload.isLegalTermsAccepted,
   };
 
   const user = await User.isUserExistsByEmail(payload.email as string);
@@ -80,7 +85,8 @@ const registerWithSocialAuth = async (
 
   const newUser = await User.create({
     ...profileData,
-    role: payload.role,
+    role,
+    status: role === USER_ROLE.rider ? USER_STATUS.pending : USER_STATUS.active,
     registerWith: provider,
     expireAt: null as any,
   });
@@ -140,7 +146,22 @@ export const loginWithPhone = async (traceId: string, payload: TLoginWithPhone) 
     await User.findByIdAndUpdate(user._id, { fcmToken, isLoginOTPVerified: false });
   }
 
-  return OtpServices.sendOtpViaDirectPhone(traceId, { phone });
+  const otpData = await OtpServices.sendOtpViaDirectPhone(traceId, { phone });
+
+  return {
+    ...otpData,
+    user: {
+      _id: user._id,
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      countryCode: user.countryCode,
+      phone: user.phone,
+      role: user.role,
+      status: user.status,
+      isProfileSetUp: user.isProfileSetUp,
+    },
+  };
 };
 
 // ─── Password ──────────────────────────────────────────────────────────────

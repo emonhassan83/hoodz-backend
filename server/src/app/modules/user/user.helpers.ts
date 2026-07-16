@@ -1,5 +1,7 @@
 import { HttpStatusCode } from 'axios';
+import crypto from 'node:crypto';
 
+import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
 import {
@@ -9,6 +11,7 @@ import {
 } from '@/app/modules/user/user.interface';
 import { User } from '@/app/modules/user/user.model';
 import { sendBothNotificationViaQueue } from '@/app/utils/notification-queue.service';
+import { getEmailQueueInstance } from '@/app/utils/queueHelper';
 
 // ─── Lean lookups — no throw, callers decide ───────────────────────────────
 
@@ -131,6 +134,47 @@ export const buildGeoLocation = (
   type: 'Point',
   coordinates: [longitude, latitude],
 });
+
+export const generateTemporaryPassword = () => {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower = 'abcdefghijkmnopqrstuvwxyz';
+  const numbers = '23456789';
+  const symbols = '@#$%';
+  const all = `${upper}${lower}${numbers}${symbols}`;
+
+  const required = [
+    upper[crypto.randomInt(upper.length)],
+    lower[crypto.randomInt(lower.length)],
+    numbers[crypto.randomInt(numbers.length)],
+    symbols[crypto.randomInt(symbols.length)],
+  ];
+
+  while (required.length < 8) {
+    required.push(all[crypto.randomInt(all.length)]);
+  }
+
+  return required.sort(() => crypto.randomInt(3) - 1).join('');
+};
+
+export const enqueuePlatformInviteEmail = async (
+  emailJobName: 'send-vendor-invite-email' | 'send-agent-invite-email',
+  payload: {
+    email: string;
+    name: string;
+    password: string;
+  }
+) => {
+  const emailQueue = await getEmailQueueInstance();
+
+  await emailQueue.add(
+    emailJobName,
+    {
+      ...payload,
+      dashboardUrl: env.DASHBOARD_URL,
+    },
+    { priority: 1, attempts: 3, backoff: { type: 'exponential', delay: 2000 } }
+  );
+};
 
 // ─── Firebase Push Notification Helpers ──────────────────────────────────────
 

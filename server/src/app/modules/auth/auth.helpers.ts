@@ -13,6 +13,7 @@ import {
   validateUserCreation,
 } from '@/app/modules/user/user.helpers';
 import { ISignUpWithEmail, IUser } from '@/app/modules/user/user.interface';
+import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 
 // ─── JWT ───────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ export const generateTokens = (user: IUser) => {
     role: user.role,
     status: user.status,
     registerWith: user.registerWith,
+    isProfileSetUp: user.isProfileSetUp
   };
 
   const accessToken = createToken(
@@ -65,6 +67,21 @@ export const handleDuplicateUser = async (
   payload: Partial<ISignUpWithEmail>,
   traceId: string
 ) => {
+  const role = payload.role ?? USER_ROLE.user;
+  if (![USER_ROLE.user, USER_ROLE.rider].includes(role as any)) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'Only user and rider can register directly',
+      traceId
+    );
+  }
+
+  const nextPayload = {
+    ...payload,
+    role,
+    status: role === USER_ROLE.rider ? USER_STATUS.pending : USER_STATUS.active,
+  };
+
   const existingUser = await checkUserExists(email, phone);
 
   if (!existingUser) {
@@ -83,13 +100,13 @@ export const handleDuplicateUser = async (
   if (existingUser.isDeleted) {
     await restoreUser(
       existingUser._id.toString(),
-      { email, phone, ...payload },
+      { email, phone, ...nextPayload },
       traceId
     );
   } else {
     await updateUnverifiedUser(
       existingUser._id.toString(),
-      { email, phone, ...payload },
+      { email, phone, ...nextPayload },
       traceId
     );
   }
@@ -102,6 +119,20 @@ export const processSignup = async (
   traceId: string
 ) => {
   const { email, phone } = payload;
+  const role = payload.role ?? USER_ROLE.user;
+  if (![USER_ROLE.user, USER_ROLE.rider].includes(role as any)) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'Only user and rider can register directly',
+      traceId
+    );
+  }
+
+  const signupPayload = {
+    ...payload,
+    role,
+    status: role === USER_ROLE.rider ? USER_STATUS.pending : USER_STATUS.active,
+  };
 
   const existingUser = await checkUserExists(email, phone);
 
@@ -116,15 +147,13 @@ export const processSignup = async (
 
     // Soft-deleted → restore; unverified → update fields
     if (existingUser.isDeleted) {
-      await restoreUser(existingUser._id.toString(), payload, traceId);
-    } else {
-      await updateUnverifiedUser(existingUser._id.toString(), payload, traceId);
+      return restoreUser(existingUser._id.toString(), signupPayload, traceId);
     }
 
-    return existingUser;
+    return updateUnverifiedUser(existingUser._id.toString(), signupPayload, traceId);
   }
 
-  const user = await createUser(payload);
+  const user = await createUser(signupPayload);
   validateUserCreation(user, traceId);
   return user;
 };

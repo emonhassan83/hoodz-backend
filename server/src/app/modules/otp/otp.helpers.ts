@@ -8,8 +8,11 @@ import twilio from 'twilio';
 import { env } from '@/app/configs/env.configs';
 import { OTP_GENERATE_CONFIG } from '@/app/constant';
 import ApiError from '@/app/errors/ApiError';
+import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import { OtpRedisService } from '@/app/redis/helpers/otp';
+import { sendBothNotificationViaQueue } from '@/app/utils/notification-queue.service';
 import { getEmailQueueInstance } from '@/app/utils/queueHelper';
 
 const OTP_EXPIRE = 60 * 5; // 5 minutes
@@ -166,6 +169,38 @@ export const sendOtpEmail = async (
     { email, name: userName, otp, expiresAt: expiresAt.format('LT') },
     { priority: 1, attempts: 3, backoff: { type: 'exponential', delay: 2000 } }
   );
+};
+
+export const notifyRiderSignupVerified = async (user: any) => {
+  if (user.role !== USER_ROLE.rider) return;
+
+  const title = 'Rider Account Pending KYC';
+  const message =
+    'Your signup verification is complete. Please submit KYC for admin approval.';
+
+  const emailQueue = await getEmailQueueInstance();
+
+  await Promise.all([
+    emailQueue.add(
+      'send-rider-signup-verified-email',
+      { email: user.email, name: user.name },
+      {
+        priority: 1,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+      }
+    ),
+    sendBothNotificationViaQueue(
+      user._id.toString(),
+      user.fcmToken,
+      title,
+      message,
+      {
+        modelType: NOTIFICATION_MODEL_TYPE.User,
+        reference: user._id.toString(),
+      }
+    ),
+  ]);
 };
 
 export const sendOtpSms = async (
