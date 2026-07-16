@@ -75,6 +75,14 @@ router
     UserControllers.verifySecurityCode
   );
 
+router
+  .route('/nearby-shops')
+  .get(
+    auth(...AUTHENTICATED_ROLES),
+    validateRequest(UserValidation.nearbyShopsValidationSchema),
+    UserControllers.getNearbyShops
+  );
+
 // ─── User by ID ────────────────────────────────────────────────────────────
 
 router

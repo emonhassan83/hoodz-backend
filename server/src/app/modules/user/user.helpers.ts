@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-import { HttpStatusCode } from 'axios';
+import axios, { HttpStatusCode } from 'axios';
 
 import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
@@ -13,6 +13,11 @@ import {
 import { User } from '@/app/modules/user/user.model';
 import { sendBothNotificationViaQueue } from '@/app/utils/notification-queue.service';
 import { getEmailQueueInstance } from '@/app/utils/queueHelper';
+
+type TCoordinate = {
+  latitude: number;
+  longitude: number;
+};
 
 // ─── Lean lookups — no throw, callers decide ───────────────────────────────
 
@@ -135,6 +140,53 @@ export const buildGeoLocation = (
   type: 'Point',
   coordinates: [longitude, latitude],
 });
+
+export const calculateDistanceKm = (
+  origin: TCoordinate,
+  destination: TCoordinate
+) => {
+  const earthRadiusKm = 6371;
+  const toRadians = (degree: number) => (degree * Math.PI) / 180;
+  const dLat = toRadians(destination.latitude - origin.latitude);
+  const dLon = toRadians(destination.longitude - origin.longitude);
+  const lat1 = toRadians(origin.latitude);
+  const lat2 = toRadians(destination.latitude);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+export const getGoogleDistanceMatrix = async (
+  origin: TCoordinate,
+  destinations: TCoordinate[]
+) => {
+  if (destinations.length === 0) return [];
+
+  const response = await axios.get(
+    'https://maps.googleapis.com/maps/api/distancematrix/json',
+    {
+      params: {
+        origins: `${origin.latitude},${origin.longitude}`,
+        destinations: destinations
+          .map((destination) => `${destination.latitude},${destination.longitude}`)
+          .join('|'),
+        mode: 'driving',
+        units: 'metric',
+        key: env.GOOGLE_MAPS_API_KEY,
+      },
+      timeout: 8000,
+    }
+  );
+
+  if (response.data?.status !== 'OK') {
+    throw new Error(response.data?.error_message || 'Google Maps request failed');
+  }
+
+  return response.data.rows?.[0]?.elements ?? [];
+};
 
 export const generateTemporaryPassword = () => {
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';

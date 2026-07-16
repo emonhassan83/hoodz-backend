@@ -9,6 +9,10 @@ import {
   TProductPayload,
 } from '@/app/modules/product/product.helpers';
 import { Product } from '@/app/modules/product/product.model';
+import {
+  addRecentlyViewedProduct,
+  getRecentlyViewedProductIds,
+} from '@/app/redis/helpers/recentlyViewedProducts';
 
 const productPopulate = [
   { path: 'vendorId', select: 'name email phone profileAvatar' },
@@ -34,6 +38,37 @@ const createProduct = async (
 const generateSku = async () => ({
   sku: await generateUniqueSku(),
 });
+
+const markProductViewed = async (
+  traceId: string,
+  userId: string,
+  productId: string
+) => {
+  await getProductByIdOrThrow(traceId, productId);
+  await addRecentlyViewedProduct(userId, productId);
+
+  return { viewed: true };
+};
+
+const getRecentlyViewedProducts = async (userId: string) => {
+  const productIds = await getRecentlyViewedProductIds(userId);
+  if (productIds.length === 0) return [];
+
+  const products = await Product.find({
+    _id: { $in: productIds },
+    isDeleted: false,
+  })
+    .select('title price discountPrice images stock')
+    .lean();
+
+  const productById = new Map(
+    products.map((product) => [product._id.toString(), product])
+  );
+
+  return productIds
+    .map((productId) => productById.get(productId))
+    .filter(Boolean);
+};
 
 const getAllProduct = async (query: Record<string, unknown>) => {
   const filter: Record<string, unknown> = { isDeleted: false };
@@ -116,6 +151,8 @@ const deleteProduct = async (
 
 export const ProductService = {
   generateSku,
+  markProductViewed,
+  getRecentlyViewedProducts,
   createProduct,
   getAllProduct,
   getMyProducts,

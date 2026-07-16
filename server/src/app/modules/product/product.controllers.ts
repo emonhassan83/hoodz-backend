@@ -34,6 +34,38 @@ const createProduct = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const markProductViewed = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await ProductService.markProductViewed(
+    traceId,
+    req.user.userId,
+    req.body.productId
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Product view saved successfully',
+    data,
+    traceId,
+  });
+});
+
+const getRecentlyViewedProducts = asyncHandler(
+  async (req: Request, res: Response) => {
+    const traceId = getTraceId();
+    const data = await ProductService.getRecentlyViewedProducts(req.user.userId);
+
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: 'Recently viewed products fetched successfully',
+      data,
+      traceId,
+    });
+  }
+);
+
 const getAllProduct = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await ProductService.getAllProduct(req.query);
@@ -126,6 +158,8 @@ const deleteProduct = asyncHandler(async (req: Request, res: Response) => {
 
 export const ProductController = {
   generateSku,
+  markProductViewed,
+  getRecentlyViewedProducts,
   createProduct,
   getAllProduct,
   getMyProducts,

@@ -26,6 +26,21 @@ router
   .get(auth(USER_ROLE.vendor), ProductController.generateSku);
 
 router
+  .route('/viewed')
+  .post(
+    auth(USER_ROLE.user, USER_ROLE.rider, USER_ROLE.vendor, USER_ROLE.agent),
+    validateRequest(ProductValidation.markProductViewedValidationSchema),
+    ProductController.markProductViewed
+  );
+
+router
+  .route('/recently-viewed')
+  .get(
+    auth(USER_ROLE.user, USER_ROLE.rider, USER_ROLE.vendor, USER_ROLE.agent),
+    ProductController.getRecentlyViewedProducts
+  );
+
+router
   .route('/shop/:vendorId')
   .get(ProductController.getShopProducts);
 

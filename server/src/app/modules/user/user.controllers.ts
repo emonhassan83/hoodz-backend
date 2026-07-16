@@ -45,6 +45,19 @@ const inviteVendor = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const getNearbyShops = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await UserService.getNearbyShops(traceId, req.query as any);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Nearby shops fetched successfully',
+    data,
+    traceId,
+  });
+});
+
 const inviteAgent = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await UserService.inviteAgent(traceId, req.body);
@@ -185,6 +198,7 @@ const deleteUserProfile = asyncHandler(async (req: Request, res: Response) => {
 export const UserControllers = {
   getAllUsers,
   getAUser,
+  getNearbyShops,
   inviteVendor,
   inviteAgent,
   changedEmail,

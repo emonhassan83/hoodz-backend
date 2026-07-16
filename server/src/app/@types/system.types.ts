@@ -25,6 +25,7 @@ export type TEnv = {
   STRIPE_API_SECRET_KEY: string;
   SERVER_URL: string;
   DASHBOARD_URL: string;
+  GOOGLE_MAPS_API_KEY: string;
 
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;

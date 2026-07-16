@@ -11,9 +11,11 @@ import {
   assertEmailNotTaken,
   assertPhoneNotTaken,
   buildGeoLocation,
+  calculateDistanceKm,
   enqueuePlatformInviteEmail,
   findActiveUserOrThrow,
   generateTemporaryPassword,
+  getGoogleDistanceMatrix,
   sendUserStatusNotifYToUser,
 } from '@/app/modules/user/user.helpers';
 import { IUser } from '@/app/modules/user/user.interface';
@@ -53,6 +55,93 @@ const getSingleUser = async (traceId: string, userId: string) => {
     throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
   }
   return user;
+};
+
+const getNearbyShops = async (
+  _traceId: string,
+  query: {
+    latitude: number;
+    longitude: number;
+    limit?: number;
+    radiusKm?: number;
+  }
+) => {
+  const origin = {
+    latitude: query.latitude,
+    longitude: query.longitude,
+  };
+  const limit = query.limit ?? 10;
+  const radiusKm = query.radiusKm ?? 50;
+
+  const vendors = await User.find({
+    role: USER_ROLE.vendor,
+    status: 'active',
+    isDeleted: false,
+    'location.coordinates.0': { $ne: 0 },
+    'location.coordinates.1': { $ne: 0 },
+  })
+    .select('name email phone profileAvatar address location')
+    .lean();
+
+  const nearbyVendors = vendors
+    .map((vendor) => {
+      const [longitude, latitude] = vendor.location?.coordinates ?? [0, 0];
+      const distanceKm = calculateDistanceKm(origin, { latitude, longitude });
+
+      return {
+        ...vendor,
+        distanceKm,
+        coordinate: { latitude, longitude },
+      };
+    })
+    .filter((vendor) => vendor.distanceKm <= radiusKm)
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, limit);
+
+  let googleElements: any[] = [];
+  try {
+    googleElements = await getGoogleDistanceMatrix(
+      origin,
+      nearbyVendors.map((vendor) => vendor.coordinate)
+    );
+  } catch (error) {
+    console.warn(
+      '[Nearby Shops] Google Maps distance lookup failed:',
+      error instanceof Error ? error.message : error
+    );
+  }
+
+  return nearbyVendors.map((vendor, index) => {
+    const element = googleElements[index];
+    const googleDistanceKm =
+      element?.status === 'OK' && element.distance?.value !== undefined
+        ? Number((element.distance.value / 1000).toFixed(2))
+        : Number(vendor.distanceKm.toFixed(2));
+    const durationMinutes =
+      element?.status === 'OK' && element.duration?.value !== undefined
+        ? Math.ceil(element.duration.value / 60)
+        : null;
+
+    return {
+      _id: vendor._id,
+      name: vendor.name,
+      email: vendor.email,
+      phone: vendor.phone,
+      profileAvatar: vendor.profileAvatar,
+      address: vendor.address,
+      location: vendor.location,
+      distanceKm: googleDistanceKm,
+      distanceText:
+        element?.status === 'OK' && element.distance?.text
+          ? element.distance.text
+          : `${googleDistanceKm} km`,
+      durationMinutes,
+      durationText:
+        element?.status === 'OK' && element.duration?.text
+          ? element.duration.text
+          : null,
+    };
+  });
 };
 
 // ─── Update ────────────────────────────────────────────────────────────────
@@ -395,6 +484,7 @@ const deleteUserProfile = async (
 export const UserService = {
   getAllUsersFromDB,
   getSingleUser,
+  getNearbyShops,
   changeEmail,
   updateUserProfile,
   updateUserStatus,

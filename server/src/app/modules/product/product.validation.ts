@@ -63,7 +63,14 @@ const updateProductValidationSchema = z.object({
     }),
 });
 
+const markProductViewedValidationSchema = z.object({
+  body: z.object({
+    productId: objectIdSchema,
+  }),
+});
+
 export const ProductValidation = {
   createProductValidationSchema,
   updateProductValidationSchema,
+  markProductViewedValidationSchema,
 };

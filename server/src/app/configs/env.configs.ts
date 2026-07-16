@@ -29,4 +29,5 @@ export const env: TEnv = {
   STRIPE_API_SECRET_KEY: getEnv('STRIPE_API_SECRET_KEY'),
   SERVER_URL: process.env.SERVER_URL || 'http://localhost:5029/api/v1',
   DASHBOARD_URL: process.env.DASHBOARD_URL || 'http://localhost:3000',
+  GOOGLE_MAPS_API_KEY: getEnv('GOOGLE_MAPS_API_KEY'),
 };

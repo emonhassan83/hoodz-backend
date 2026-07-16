@@ -100,6 +100,15 @@ const changeEmailZodSchema = z.object({
   }),
 });
 
+const nearbyShopsValidationSchema = z.object({
+  query: z.object({
+    latitude: z.coerce.number().min(-90).max(90),
+    longitude: z.coerce.number().min(-180).max(180),
+    limit: z.coerce.number().int().positive().max(50).optional(),
+    radiusKm: z.coerce.number().positive().max(1000).optional(),
+  }),
+});
+
 export const UserValidation = {
   updateUserValidationSchema,
   changeStatusValidationSchema,
@@ -110,4 +119,5 @@ export const UserValidation = {
   inviteVendorValidationSchema: invitePlatformUserValidationSchema,
   inviteAgentValidationSchema: invitePlatformUserValidationSchema,
   changeEmailZodSchema,
+  nearbyShopsValidationSchema,
 };
