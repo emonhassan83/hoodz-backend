@@ -2,10 +2,7 @@ import { z } from 'zod';
 
 import {
   ADMIN_SETTING_KEYS,
-  GENERAL_KEYS,
 } from '@/app/modules/settings/settings.constant';
-
-export type TGeneralKey = (typeof GENERAL_KEYS)[number];
 
 const positiveIntegerSchema = z.number().int().nonnegative();
 

@@ -2,19 +2,18 @@ import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
 import {
+  ADMIN_SETTING_KEYS,
+  GENERAL_KEYS,
+} from '@/app/modules/settings/settings.constant';
+import { Setting } from '@/app/modules/settings/settings.model';
+import { TGeneralSettings } from '@/app/modules/settings/settings.types';
+import {
   deleteCache,
   deleteCachePattern,
   getCache,
   setCache,
 } from '@/app/redis/helpers';
 import { REDIS_KEYS } from '@/app/redis/keys';
-import {
-  ADMIN_SETTING_KEYS,
-  GENERAL_KEYS,
-} from '@/app/modules/settings/settings.constant';
-import { Setting } from '@/app/modules/settings/settings.model';
-
-type TGeneralSettings = Record<(typeof GENERAL_KEYS)[number], unknown | null>;
 
 // ─── Read ──────────────────────────────────────────────────────────────────
 
@@ -43,7 +42,11 @@ const getSetting = async (traceId: string, key: string) => {
 
 const getSettingGenerals = async (traceId: string, vendorId: string) => {
   if (!vendorId) {
-    throw new ApiError(HttpStatusCode.BadRequest, 'Vendor id is required', traceId);
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Vendor id is required',
+      traceId
+    );
   }
 
   const cacheKey = REDIS_KEYS.SETTINGS_GENERALS(vendorId);
@@ -55,7 +58,10 @@ const getSettingGenerals = async (traceId: string, vendorId: string) => {
     GENERAL_KEYS.every((key) => Object.hasOwn(cached, key));
   if (hasCurrentGeneralKeys) return cached;
 
-  const settings = await Setting.find({ key: { $in: GENERAL_KEYS }, vendor: vendorId })
+  const settings = await Setting.find({
+    key: { $in: GENERAL_KEYS },
+    vendor: vendorId,
+  })
     .select('key value -_id')
     .lean();
 
@@ -111,7 +117,11 @@ const updateGenerals = async (
   payload: Record<string, any>
 ) => {
   if (!vendorId) {
-    throw new ApiError(HttpStatusCode.BadRequest, 'Vendor id is required', traceId);
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Vendor id is required',
+      traceId
+    );
   }
 
   const validKeys = GENERAL_KEYS.filter((key) => payload[key] !== undefined);

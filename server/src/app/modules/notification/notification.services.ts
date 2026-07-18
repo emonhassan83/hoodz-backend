@@ -2,13 +2,13 @@ import { HttpStatusCode } from 'axios';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
+import { INotification } from '@/app/modules/notification/notification.interface';
+import { Notification } from '@/app/modules/notification/notification.model';
+import { User } from '@/app/modules/user/user.model';
 import {
   decrementUnreadCount,
   setUnreadCountInRedis,
 } from '@/app/redis/helpers/notification';
-import { INotification } from '@/app/modules/notification/notification.interface';
-import { Notification } from '@/app/modules/notification/notification.model';
-import { User } from '@/app/modules/user/user.model';
 import {
   sendBatchNotificationViaQueue,
   sendNotificationViaQueue,
@@ -70,7 +70,10 @@ const getAllNotificationFromDB = async (
   _traceId: string,
   query: Record<string, unknown>
 ) => {
-  const notificationQuery = new QueryBuilder(Notification.find().select("-receiver -createdAt -updatedAt -__v"), query)
+  const notificationQuery = new QueryBuilder(
+    Notification.find().select('-receiver -createdAt -updatedAt -__v'),
+    query
+  )
     .filter()
     .sort()
     .paginate()

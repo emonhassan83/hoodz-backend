@@ -1,4 +1,4 @@
-// Pure utility functions for file processing — no side effects, no I/O
+import { TFileCategory } from '@/app/modules/upload/upload.types';
 
 export const getExtension = (file: Express.Multer.File): string => {
   if (!file.originalname) return '';
@@ -20,19 +20,15 @@ export const sanitizeFileName = (name: string): string => {
 export const generateS3Key = (file: Express.Multer.File): string => {
   const ext = getExtension(file);
   const baseName = file.originalname
-    ? sanitizeFileName(file.originalname.replace(new RegExp(`\\.${ext}$`, 'i'), ''))
+    ? sanitizeFileName(
+        file.originalname.replace(new RegExp(`\\.${ext}$`, 'i'), '')
+      )
     : 'file';
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 8);
   return `${baseName}-${timestamp}-${random}${ext ? `.${ext}` : ''}`;
 };
 
-export type TFileCategory = {
-  folder: string;
-  type: string;
-};
-
-// DRY: single source of truth for mime → category mapping
 export const categorizeFile = (file: Express.Multer.File): TFileCategory => {
   const mimetype = file.mimetype?.toLowerCase() || '';
   const ext = getExtension(file);
@@ -40,19 +36,31 @@ export const categorizeFile = (file: Express.Multer.File): TFileCategory => {
   if (mimetype.startsWith('image/')) return { folder: 'images', type: 'image' };
   if (mimetype.startsWith('video/')) return { folder: 'videos', type: 'video' };
   if (mimetype.startsWith('audio/')) return { folder: 'audios', type: 'audio' };
-  if (mimetype === 'application/pdf' || ext === 'pdf') return { folder: 'documents', type: 'document_pdf' };
+  if (mimetype === 'application/pdf' || ext === 'pdf') {
+    return { folder: 'documents', type: 'document_pdf' };
+  }
   if (
     mimetype.startsWith('application/vnd.') ||
-    ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp'].includes(ext)
-  ) return { folder: 'documents', type: 'document_office' };
+    ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp'].includes(
+      ext
+    )
+  ) {
+    return { folder: 'documents', type: 'document_office' };
+  }
   if (
-    mimetype === 'text/plain' || mimetype === 'text/csv' ||
+    mimetype === 'text/plain' ||
+    mimetype === 'text/csv' ||
     ['txt', 'csv', 'md', 'log', 'json', 'xml', 'yaml', 'yml'].includes(ext)
-  ) return { folder: 'documents', type: 'document_text' };
+  ) {
+    return { folder: 'documents', type: 'document_text' };
+  }
   if (
     ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext) ||
-    mimetype.includes('zip') || mimetype.includes('rar')
-  ) return { folder: 'archives', type: 'archive' };
+    mimetype.includes('zip') ||
+    mimetype.includes('rar')
+  ) {
+    return { folder: 'archives', type: 'archive' };
+  }
 
   return { folder: 'others', type: 'unknown' };
 };

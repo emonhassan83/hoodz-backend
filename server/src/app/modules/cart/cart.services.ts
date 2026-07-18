@@ -11,18 +11,20 @@ import {
   syncCartCacheFromMongo,
 } from '@/app/modules/cart/cart.helpers';
 import { Cart } from '@/app/modules/cart/cart.model';
+import {
+  TAddCartItemPayload,
+  TEnrichedCartItem,
+  TRemoveCartItemPayload,
+  TUpdateCartItemPayload,
+} from '@/app/modules/cart/cart.types';
 import { Product } from '@/app/modules/product/product.model';
 import { getCartItemsFromCache } from '@/app/redis/helpers/cart';
 
+/** Adds a product variant to cart or increments quantity if it already exists. */
 const add = async (
   traceId: string,
   userId: string,
-  payload: {
-    productId: string;
-    size: string;
-    color: { code: string; name: string };
-    quantity: number;
-  }
+  payload: TAddCartItemPayload
 ) => {
   const { product, variant } = await findProductVariantOrThrow(
     traceId,
@@ -71,15 +73,11 @@ const add = async (
   return getCart(userId);
 };
 
+/** Updates the quantity of an existing cart item. */
 const update = async (
   traceId: string,
   userId: string,
-  payload: {
-    productId: string;
-    size: string;
-    color: { code: string; name: string };
-    quantity: number;
-  }
+  payload: TUpdateCartItemPayload
 ) => {
   const cart = await Cart.findOne({ userId });
   const item = cart?.items.find((cartItem) => isSameCartItem(cartItem, payload));
@@ -112,14 +110,11 @@ const update = async (
   return getCart(userId);
 };
 
+/** Removes a product variant from the user's cart. */
 const remove = async (
   _traceId: string,
   userId: string,
-  payload: {
-    productId: string;
-    size: string;
-    color: { code: string; name: string };
-  }
+  payload: TRemoveCartItemPayload
 ) => {
   await Cart.updateOne(
     { userId },
@@ -138,6 +133,7 @@ const remove = async (
   return getCart(userId);
 };
 
+/** Returns cart items enriched with latest product price and media details. */
 const getCart = async (userId: string) => {
   let items = await getCartItemsFromCache(userId);
   if (items.length === 0) {
@@ -186,20 +182,21 @@ const getCart = async (userId: string) => {
         totalPrice: Number((unitPrice * item.quantity).toFixed(2)),
       };
     })
-    .filter(Boolean);
+    .filter((item): item is TEnrichedCartItem => Boolean(item));
 
   const subTotal = enrichedItems.reduce(
-    (total, item: any) => total + item.totalPrice,
+    (total, item) => total + item.totalPrice,
     0
   );
 
   return {
     items: enrichedItems,
-    totalItems: enrichedItems.reduce((total, item: any) => total + item.quantity, 0),
+    totalItems: enrichedItems.reduce((total, item) => total + item.quantity, 0),
     subTotal: Number(subTotal.toFixed(2)),
   };
 };
 
+/** Clears all items from the user's cart. */
 const clear = async (userId: string) => {
   await clearCart(userId);
   return {

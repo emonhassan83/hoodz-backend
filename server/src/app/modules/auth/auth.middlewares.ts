@@ -4,6 +4,9 @@ import { Request, Response, NextFunction } from 'express';
 import { getTraceId } from '@/app/configs/requestContext.configs';
 import ApiError from '@/app/errors/ApiError';
 import { handleDuplicateUser } from '@/app/modules/auth/auth.helpers';
+import { USER_STATUS } from '@/app/modules/user/user.constant';
+import { User } from '@/app/modules/user/user.model';
+import { IUserRole } from '@/app/modules/user/user.types';
 import { asyncHandler } from '@/app/utils/system.utils';
 
 /**
@@ -30,11 +33,31 @@ export const checkDuplicateUser = asyncHandler(
 export const validateUserStatus = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     const traceId = getTraceId();
-    const { userId } = req.params;
+    const userId = req.user?.userId || req.params.userId;
 
-    // This middleware can be extended to check user status
-    // For now, it's a placeholder for future implementation
-    // You can add logic here to check if user is active, verified, etc.
+    if (!userId) {
+      throw new ApiError(
+        HttpStatusCode.Unauthorized,
+        'User not authenticated',
+        traceId
+      );
+    }
+
+    const user = await User.findOne({ _id: userId, isDeleted: false })
+      .select('status')
+      .lean();
+
+    if (!user) {
+      throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
+    }
+
+    if (user.status !== USER_STATUS.active) {
+      throw new ApiError(
+        HttpStatusCode.Forbidden,
+        'Your account is not active',
+        traceId
+      );
+    }
 
     next();
   }
@@ -44,7 +67,7 @@ export const validateUserStatus = asyncHandler(
  * Check User Role Middleware
  * Validates user has required role
  */
-export const checkUserRole = (allowedRoles: string[]) => {
+export const checkUserRole = (allowedRoles: IUserRole[]) => {
   return asyncHandler(
     async (req: Request, res: Response, next: NextFunction) => {
       const traceId = getTraceId();
@@ -58,7 +81,7 @@ export const checkUserRole = (allowedRoles: string[]) => {
         );
       }
 
-      if (!allowedRoles.includes(user.role)) {
+      if (!allowedRoles.includes(user.role as IUserRole)) {
         throw new ApiError(
           HttpStatusCode.Forbidden,
           'You do not have permission to access this resource',

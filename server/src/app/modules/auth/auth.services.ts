@@ -11,7 +11,10 @@ import {
   TAppleLoginPayload,
   TLoginWithEmail,
   TLoginWithPhone,
-} from '@/app/modules/auth/auth.interface';
+  TForgotPasswordPayload,
+  TResetPasswordPayload,
+  TChangePasswordPayload,
+} from '@/app/modules/auth/auth.types';
 import { OtpServices } from '@/app/modules/otp/otp.services';
 import { REGISTER_WITH, USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { ISignUpWithEmail, ISignUpWithPhone } from '@/app/modules/user/user.interface';
@@ -19,15 +22,17 @@ import { User } from '@/app/modules/user/user.model';
 
 // ─── Signup ────────────────────────────────────────────────────────────────
 
+/** Registers a user with email credentials. */
 export const signupWithEmail = (traceId: string, payload: ISignUpWithEmail) =>
   processSignup(payload, traceId);
 
+/** Registers a user with phone credentials. */
 export const signupWithPhone = (traceId: string, payload: ISignUpWithPhone) =>
   processSignup(payload as ISignUpWithEmail, traceId);
 
 // ─── Social Auth ───────────────────────────────────────────────────────────
 
-// DRY core shared by Google + Apple — only provider string differs
+/** Registers or logs in a social auth user for the selected provider. */
 const registerWithSocialAuth = async (
   traceId: string,
   provider: typeof REGISTER_WITH.google | typeof REGISTER_WITH.apple,
@@ -98,14 +103,17 @@ const registerWithSocialAuth = async (
   return generateTokens(newUser);
 };
 
+/** Registers or logs in a user with Google auth. */
 export const registerWithGoogle = (traceId: string, payload: TGoogleLoginPayload) =>
   registerWithSocialAuth(traceId, REGISTER_WITH.google, payload);
 
+/** Registers or logs in a user with Apple auth. */
 export const registerWithApple = (traceId: string, payload: TAppleLoginPayload) =>
   registerWithSocialAuth(traceId, REGISTER_WITH.apple, payload);
 
 // ─── Login ─────────────────────────────────────────────────────────────────
 
+/** Logs in a user with email and password. */
 export const loginWithEmail = async (traceId: string, payload: TLoginWithEmail) => {
   const { email, password, fcmToken } = payload;
 
@@ -129,7 +137,7 @@ export const loginWithEmail = async (traceId: string, payload: TLoginWithEmail) 
   return generateTokens(user as any);
 };
 
-// Phone login delegates OTP generation + SMS to OTP service (DRY — no duplicate logic here)
+/** Starts phone login by sending an OTP to the user's phone. */
 export const loginWithPhone = async (traceId: string, payload: TLoginWithPhone) => {
   const { phone, fcmToken } = payload;
 
@@ -166,8 +174,11 @@ export const loginWithPhone = async (traceId: string, payload: TLoginWithPhone) 
 
 // ─── Password ──────────────────────────────────────────────────────────────
 
-// Delegates OTP email to OTP service (DRY — no duplicate OTP logic here)
-export const forgotPassword = async (traceId: string, payload: { email: string }) => {
+/** Sends password reset OTP to the user's email. */
+export const forgotPassword = async (
+  traceId: string,
+  payload: TForgotPasswordPayload
+) => {
   const { email } = payload;
 
   const user = await User.isUserExistsByEmail(email);
@@ -183,7 +194,7 @@ export const forgotPassword = async (traceId: string, payload: { email: string }
 export const resetPassword = async (
   traceId: string,
   userId: string,
-  payload: { password: string; confirmPassword: string }
+  payload: TResetPasswordPayload
 ) => {
   const { password, confirmPassword } = payload;
 
@@ -228,7 +239,7 @@ export const resetPassword = async (
 export const changePassword = async (
   traceId: string,
   userId: string,
-  payload: { currentPassword: string; password: string; confirmPassword: string }
+  payload: TChangePasswordPayload
 ) => {
   const { currentPassword, password, confirmPassword } = payload;
 
@@ -258,6 +269,7 @@ export const changePassword = async (
 
 // ─── Session ───────────────────────────────────────────────────────────────
 
+/** Logs out a user by clearing the login OTP verification state. */
 export const logoutUser = async (traceId: string, userId: string) => {
   const user = await User.findById(userId);
   if (!user || user.isDeleted) {
@@ -267,6 +279,7 @@ export const logoutUser = async (traceId: string, userId: string) => {
   await User.findByIdAndUpdate(userId, { isLoginOTPVerified: false });
 };
 
+/** Issues a new access token from a valid refresh token. */
 export const refreshToken = async (traceId: string, token: string) => {
   if (!token) {
     throw new ApiError(HttpStatusCode.Unauthorized, 'Refresh token is missing', traceId);

@@ -1,25 +1,11 @@
 import { Model, Types } from 'mongoose';
 
-import { ICollectionType } from '@/app/modules/product/product.constant';
-
-export type TProductColor = {
-  code: string;
-  name: string;
-};
-
-export type TProductVariant = {
-  _id?: Types.ObjectId;
-  size: string;
-  color: TProductColor;
-  quantity: number;
-};
-
-export type TProductSeo = {
-  metaTitle?: string;
-  metaDescription?: string;
-  metaKeywords?: string[];
-  ratingValue?: number;
-};
+import {
+  ICollectionType,
+  TProductColor,
+  TProductSeo,
+  TProductVariant,
+} from '@/app/modules/product/product.types';
 
 export interface IProduct {
   _id: Types.ObjectId;

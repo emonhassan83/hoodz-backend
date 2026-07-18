@@ -1,6 +1,6 @@
 import { Model, Types } from 'mongoose';
 
-import { IKYCStatus, IVehicle } from '@/app/modules/kyc/kyc.constant';
+import { IKYCStatus, IVehicle } from '@/app/modules/kyc/kyc.types';
 
 export interface IKyc {
   _id: Types.ObjectId;

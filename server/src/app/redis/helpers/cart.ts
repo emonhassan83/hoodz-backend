@@ -1,5 +1,5 @@
 import { getRedisClient } from '@/app/configs/redis.config';
-import { TCartItem } from '@/app/modules/cart/cart.interface';
+import { TCartItem } from '@/app/modules/cart/cart.types';
 import { REDIS_KEYS } from '@/app/redis/keys';
 
 const CART_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7;

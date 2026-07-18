@@ -5,7 +5,8 @@ import { JwtPayload, verify } from 'jsonwebtoken';
 import { env } from '@/app/configs/env.configs';
 import { getTraceId } from '@/app/configs/requestContext.configs';
 import ApiError from '@/app/errors/ApiError';
-import { IUserRole, USER_ROLE } from '@/app/modules/user/user.constant';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
+import { IUserRole } from '@/app/modules/user/user.types';
 import { User } from '@/app/modules/user/user.model';
 import { asyncHandler } from '@/app/utils/system.utils';
 

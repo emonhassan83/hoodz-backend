@@ -1,0 +1,42 @@
+import { COLLECTION_TYPE } from '@/app/modules/product/product.constant';
+
+export type ICollectionType = keyof typeof COLLECTION_TYPE;
+
+export type TProductColor = {
+  code: string;
+  name: string;
+};
+
+export type TProductVariant = {
+  _id?: import('mongoose').Types.ObjectId;
+  size: string;
+  color: TProductColor;
+  quantity: number;
+};
+
+export type TProductSeo = {
+  metaTitle?: string;
+  metaDescription?: string;
+  metaKeywords?: string[];
+  ratingValue?: number;
+};
+
+export type TProductPayload = {
+  category: string;
+  sku: string;
+  collectionType: ICollectionType;
+  brand: string;
+  title: string;
+  description: string;
+  images: string[];
+  price: number;
+  discount?: number;
+  variants: TProductVariant[];
+  seo?: TProductSeo;
+};
+
+export type TProductVariantSummary = {
+  sizes: string[];
+  colors: TProductColor[];
+  stock: number;
+};

@@ -11,13 +11,13 @@ import {
   IUser,
 } from '@/app/modules/user/user.interface';
 import { User } from '@/app/modules/user/user.model';
+import {
+  TCoordinate,
+  TPlatformInviteEmailJobName,
+  TPlatformInviteEmailPayload,
+} from '@/app/modules/user/user.types';
 import { sendBothNotificationViaQueue } from '@/app/utils/notification-queue.service';
 import { getEmailQueueInstance } from '@/app/utils/queueHelper';
-
-type TCoordinate = {
-  latitude: number;
-  longitude: number;
-};
 
 // ─── Lean lookups — no throw, callers decide ───────────────────────────────
 
@@ -210,12 +210,8 @@ export const generateTemporaryPassword = () => {
 };
 
 export const enqueuePlatformInviteEmail = async (
-  emailJobName: 'send-vendor-invite-email' | 'send-agent-invite-email',
-  payload: {
-    email: string;
-    name: string;
-    password: string;
-  }
+  emailJobName: TPlatformInviteEmailJobName,
+  payload: TPlatformInviteEmailPayload
 ) => {
   const emailQueue = await getEmailQueueInstance();
 

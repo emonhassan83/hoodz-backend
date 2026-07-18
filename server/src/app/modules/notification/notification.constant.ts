@@ -2,6 +2,5 @@ export const NOTIFICATION_MODEL_TYPE = {
   Auth: 'Auth',
   User : 'User',
   Kyc: 'Kyc',
+  Product: 'Product',
 } as const
-
-export type INotificationModelType = keyof typeof NOTIFICATION_MODEL_TYPE

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer, { memoryStorage } from 'multer';
 
 import auth from '@/app/middlewares/auth';
-import { UploadController } from '@/app/modules/upload/upload.controller';
+import { UploadController } from '@/app/modules/upload/upload.controllers';
 import { AUTHENTICATED_ROLES } from '@/app/modules/user/user.constant';
 
 const router = Router();

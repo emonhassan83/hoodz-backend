@@ -10,13 +10,19 @@ import {
   sendKycStatusNotification,
 } from '@/app/modules/kyc/kyc.helpers';
 import { Kyc } from '@/app/modules/kyc/kyc.model';
+import {
+  TAddKycPayload,
+  TChangeKycStatusPayload,
+  TKycRequester,
+} from '@/app/modules/kyc/kyc.types';
 import { USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 
+/** Creates or replaces a rider KYC request in pending state. */
 const addKycRequest = async (
   traceId: string,
   riderId: string,
-  payload: { vehicle: string; license: string[]; nationalId: string[] }
+  payload: TAddKycPayload
 ) => {
   const rider = await User.findById(riderId).select('role status');
   assertRiderCanSubmitKyc(rider, traceId);
@@ -40,13 +46,15 @@ const addKycRequest = async (
   return kyc;
 };
 
+/** Returns all KYC requests for admin review. */
 const getAll = async () =>
   Kyc.find()
     .populate('user', 'name email countryCode phone status profileAvatar')
     .sort({ createdAt: -1 })
     .select('-__v');
 
-const getA = async (traceId: string, kycId: string, requester: any) => {
+/** Returns one KYC request after requester ownership/access check. */
+const getA = async (traceId: string, kycId: string, requester: TKycRequester) => {
   const kyc = await Kyc.findById(kycId)
     .populate('user', 'name email countryCode phone status profileAvatar')
     .select('-__v');
@@ -60,10 +68,11 @@ const getA = async (traceId: string, kycId: string, requester: any) => {
   return kyc;
 };
 
+/** Updates KYC status and notifies the rider by push and email. */
 const changeStatus = async (
   traceId: string,
   kycId: string,
-  payload: { status: string; rejectedReason?: string }
+  payload: TChangeKycStatusPayload
 ) => {
   const kyc = await Kyc.findById(kycId);
   if (!kyc) {

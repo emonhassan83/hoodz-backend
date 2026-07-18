@@ -1,6 +1,5 @@
-import { NotificationService } from '@/app/modules/notification/notification.services';
-
 import { getTraceId } from '@/app/configs/requestContext.configs';
+import { NotificationService } from '@/app/modules/notification/notification.services';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
 const createNotification = asyncHandler(async (req, res) => {

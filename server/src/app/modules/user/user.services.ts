@@ -6,7 +6,7 @@ import QueryBuilder from '@/app/builder/QueryBuilder';
 import { SALT_ROUNDS } from '@/app/constant';
 import ApiError from '@/app/errors/ApiError';
 import { generateTokens } from '@/app/modules/auth/auth.helpers';
-import { IUserStatus, USER_ROLE } from '@/app/modules/user/user.constant';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
 import {
   assertEmailNotTaken,
   assertPhoneNotTaken,
@@ -20,9 +20,22 @@ import {
 } from '@/app/modules/user/user.helpers';
 import { IUser } from '@/app/modules/user/user.interface';
 import { User } from '@/app/modules/user/user.model';
+import {
+  TChangeEmailPayload,
+  TGoogleDistanceElement,
+  TInvitePlatformUserPayload,
+  TNearbyShopsQuery,
+  TPlatformInviteEmailJobName,
+  TSetSecurityCodePayload,
+  TUpdateDeliveryLocationPayload,
+  TUpdateLocationPayload,
+  TUpdateUserStatusPayload,
+  TVerifySecurityCodePayload,
+} from '@/app/modules/user/user.types';
 
 // ─── Read ──────────────────────────────────────────────────────────────────
 
+/** Returns paginated non-admin users with query builder filters. */
 const getAllUsersFromDB = async (
   _traceId: string,
   query: Record<string, unknown>
@@ -47,6 +60,7 @@ const getAllUsersFromDB = async (
   return { meta, users };
 };
 
+/** Returns a single non-deleted user without private fields. */
 const getSingleUser = async (traceId: string, userId: string) => {
   const user = await User.findById(userId)
     .select('-password -expireAt -updatedAt -__v')
@@ -57,14 +71,10 @@ const getSingleUser = async (traceId: string, userId: string) => {
   return user;
 };
 
+/** Lists nearby vendor shops with distance and optional Google duration data. */
 const getNearbyShops = async (
   _traceId: string,
-  query: {
-    latitude: number;
-    longitude: number;
-    limit?: number;
-    radiusKm?: number;
-  }
+  query: TNearbyShopsQuery
 ) => {
   const origin = {
     latitude: query.latitude,
@@ -98,7 +108,7 @@ const getNearbyShops = async (
     .sort((a, b) => a.distanceKm - b.distanceKm)
     .slice(0, limit);
 
-  let googleElements: any[] = [];
+  let googleElements: TGoogleDistanceElement[] = [];
   try {
     googleElements = await getGoogleDistanceMatrix(
       origin,
@@ -146,10 +156,11 @@ const getNearbyShops = async (
 
 // ─── Update ────────────────────────────────────────────────────────────────
 
+/** Changes a user's email after OTP verification. */
 const changeEmail = async (
   traceId: string,
   userId: string,
-  payload: { email: string }
+  payload: TChangeEmailPayload
 ) => {
   const { email: newEmail } = payload;
 
@@ -172,6 +183,7 @@ const changeEmail = async (
   return generateTokens(user as any);
 };
 
+/** Updates profile fields and maps latitude/longitude into GeoJSON location. */
 const updateUserProfile = async (
   traceId: string,
   userId: string,
@@ -215,10 +227,11 @@ const updateUserProfile = async (
   return result;
 };
 
+/** Updates a user's platform status and queues status notification. */
 const updateUserStatus = async (
   traceId: string,
   userId: string,
-  payload: { status: IUserStatus }
+  payload: TUpdateUserStatusPayload
 ): Promise<IUser | null> => {
   await findActiveUserOrThrow(userId, traceId);
 
@@ -237,15 +250,11 @@ const updateUserStatus = async (
   return result;
 };
 
+/** Updates user's primary address, location, and optional timezone. */
 const updateLocationFromDB = async (
   traceId: string,
   userId: string,
-  payload: {
-    longitude: number;
-    latitude: number;
-    address: string;
-    timeZone?: string;
-  }
+  payload: TUpdateLocationPayload
 ) => {
   const { longitude, latitude, address, timeZone } = payload;
 
@@ -262,16 +271,13 @@ const updateLocationFromDB = async (
   );
 };
 
+/** Updates user's delivery address, location, and optional timezone. */
 const updateDeliveryLocationFromDB = async (
   traceId: string,
   userId: string,
-  payload: {
-    longitude: number;
-    latitude: number;
-    deliveryAddress: string;
-  }
+  payload: TUpdateDeliveryLocationPayload
 ) => {
-  const { longitude, latitude, deliveryAddress } = payload;
+  const { longitude, latitude, deliveryAddress, timeZone } = payload;
 
   await findActiveUserOrThrow(userId, traceId);
 
@@ -280,15 +286,17 @@ const updateDeliveryLocationFromDB = async (
     {
       deliveryLocation: buildGeoLocation(longitude, latitude),
       deliveryAddress,
+      ...(timeZone ? { timeZone } : {}),
     },
     { returnDocument: 'after' }
   );
 };
 
+/** Sets or updates rider security code after password verification. */
 const setOrUpdateSecurityCode = async (
   traceId: string,
   userId: string,
-  payload: { password: string; securityCode: string }
+  payload: TSetSecurityCodePayload
 ) => {
   const user = await User.findById(userId).select('+password +securityCode');
 
@@ -326,10 +334,11 @@ const setOrUpdateSecurityCode = async (
   return { securityCodeSet: true };
 };
 
+/** Verifies a rider security code against the stored hash. */
 const verifySecurityCode = async (
   traceId: string,
   userId: string,
-  payload: { securityCode: string }
+  payload: TVerifySecurityCodePayload
 ) => {
   const user = await User.findById(userId).select('+securityCode');
 
@@ -368,18 +377,12 @@ const verifySecurityCode = async (
   return { verified: true };
 };
 
-type TInvitePlatformUserPayload = {
-  name: string;
-  email: string;
-  countryCode: string;
-  phone: string;
-};
-
+/** Creates an invited vendor or agent and queues their invite email. */
 const createInvitedPlatformUser = async (
   traceId: string,
   payload: TInvitePlatformUserPayload,
   role: typeof USER_ROLE.vendor | typeof USER_ROLE.agent,
-  emailJobName: 'send-vendor-invite-email' | 'send-agent-invite-email'
+  emailJobName: TPlatformInviteEmailJobName
 ) => {
   const exists = await User.findOne({
     $or: [{ email: payload.email }, { phone: payload.phone }],
@@ -416,6 +419,7 @@ const createInvitedPlatformUser = async (
   return user;
 };
 
+/** Invites a vendor with the vendor-specific email template. */
 const inviteVendor = async (
   traceId: string,
   payload: TInvitePlatformUserPayload
@@ -427,6 +431,7 @@ const inviteVendor = async (
     'send-vendor-invite-email'
   );
 
+/** Invites an agent with the agent-specific email template. */
 const inviteAgent = async (
   traceId: string,
   payload: TInvitePlatformUserPayload
@@ -440,6 +445,7 @@ const inviteAgent = async (
 
 // ─── Delete ────────────────────────────────────────────────────────────────
 
+/** Soft-deletes a user profile inside a transaction. */
 const deleteUserProfile = async (
   traceId: string,
   userId: string

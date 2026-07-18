@@ -24,8 +24,6 @@ export const USER_ROLE = {
   user: 'user',
 } as const
 
-export type IRegisterWith = keyof typeof REGISTER_WITH
-export type IUserRole = keyof typeof USER_ROLE
-export type IUserStatus = keyof typeof USER_STATUS
+import type { IUserRole } from '@/app/modules/user/user.types'
 
 export const AUTHENTICATED_ROLES: IUserRole[] = Object.values(USER_ROLE)

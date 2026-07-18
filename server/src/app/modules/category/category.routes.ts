@@ -15,7 +15,7 @@ router
     validateRequest(CategoryValidation.createCategoryValidationSchema),
     CategoryController.create
   )
-  .get(auth(USER_ROLE.admin), CategoryController.getAll);
+  .get(CategoryController.getAll);
 
 router
   .route('/:categoryId')

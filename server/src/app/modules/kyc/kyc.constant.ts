@@ -10,6 +10,3 @@ export const KYC_STATUS = {
   approved: 'approved',
   rejected: 'rejected'
 } as const;
-
-export type IVehicle = keyof typeof VEHICLE
-export type IKYCStatus = keyof typeof KYC_STATUS

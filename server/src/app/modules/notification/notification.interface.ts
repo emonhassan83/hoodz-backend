@@ -1,5 +1,6 @@
 import { Document, Model, Types } from "mongoose";
-import { INotificationModelType } from "@/app/modules/notification/notification.constant";
+
+import { INotificationModelType } from "@/app/modules/notification/notification.types";
 
 export interface INotification extends Document {
   receiver: Types.ObjectId | string

@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 
-import { SettingService } from '@/app/modules/settings/settings.service';
-
 import { getTraceId } from '@/app/configs/requestContext.configs';
+import { SettingService } from '@/app/modules/settings/settings.services';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
 const getSetting = asyncHandler(async (req: Request, res: Response) => {

@@ -1,6 +1,6 @@
 import { Document, Model, Types } from "mongoose";
 
-import { IUserRole, IUserStatus } from "@/app/modules/user/user.constant";
+import { IUserRole, IUserStatus } from "@/app/modules/user/user.types";
 
 export type IGeoLocation = {
   type: 'Point';

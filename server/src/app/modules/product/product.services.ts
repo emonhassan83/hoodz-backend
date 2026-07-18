@@ -6,9 +6,9 @@ import {
   buildProductWritePayload,
   generateUniqueSku,
   getProductByIdOrThrow,
-  TProductPayload,
 } from '@/app/modules/product/product.helpers';
 import { Product } from '@/app/modules/product/product.model';
+import { TProductPayload } from '@/app/modules/product/product.types';
 import {
   addRecentlyViewedProduct,
   getRecentlyViewedProductIds,

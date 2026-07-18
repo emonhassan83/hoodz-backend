@@ -1,7 +1,6 @@
-import { HttpStatusCode } from 'axios';
-
-import ApiError from '@/app/errors/ApiError';
 import { Product } from '@/app/modules/product/product.model';
+import { assertWishlistProductExists } from '@/app/modules/wishlist/wishlist.helpers';
+import { TWishlistTogglePayload } from '@/app/modules/wishlist/wishlist.types';
 import {
   addWishlistProduct,
   getWishlistProductIds,
@@ -9,19 +8,13 @@ import {
   removeWishlistProduct,
 } from '@/app/redis/helpers/wishlist';
 
-const assertProductExists = async (traceId: string, productId: string) => {
-  const exists = await Product.exists({ _id: productId, isDeleted: false });
-  if (!exists) {
-    throw new ApiError(HttpStatusCode.NotFound, 'Product not found', traceId);
-  }
-};
-
+/** Toggles a product id inside the user's Redis wishlist set. */
 const toggle = async (
   traceId: string,
   userId: string,
-  payload: { productId: string }
+  payload: TWishlistTogglePayload
 ) => {
-  await assertProductExists(traceId, payload.productId);
+  await assertWishlistProductExists(traceId, payload.productId);
 
   const alreadyAdded = await isWishlistProduct(userId, payload.productId);
   if (alreadyAdded) {
@@ -33,6 +26,7 @@ const toggle = async (
   return { productId: payload.productId, added: true };
 };
 
+/** Returns wishlist products with frontend-ready basic product details. */
 const getAll = async (userId: string) => {
   const productIds = await getWishlistProductIds(userId);
   if (productIds.length === 0) return [];
@@ -42,6 +36,7 @@ const getAll = async (userId: string) => {
     .lean();
 };
 
+/** Checks if a product is already saved in the user's wishlist set. */
 const check = async (userId: string, productId: string) => ({
   productId,
   added: await isWishlistProduct(userId, productId),

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import auth from '@/app/middlewares/auth';
-import { SettingController } from '@/app/modules/settings/settings.controller';
+import { SettingController } from '@/app/modules/settings/settings.controllers';
 import { SettingValidation } from '@/app/modules/settings/settings.validation';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import validateRequest from '@/app/utils/validateRequest';

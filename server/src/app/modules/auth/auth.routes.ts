@@ -3,7 +3,7 @@ import { Router } from 'express';
 import auth from '@/app/middlewares/auth';
 import { AuthControllers } from '@/app/modules/auth/auth.controllers';
 import { checkDuplicateUser } from '@/app/modules/auth/auth.middlewares';
-import { AuthValidation } from '@/app/modules/auth/auth.validators';
+import { AuthValidation } from '@/app/modules/auth/auth.validation';
 import { AUTHENTICATED_ROLES } from '@/app/modules/user/user.constant';
 import validateRequest from '@/app/utils/validateRequest';
 

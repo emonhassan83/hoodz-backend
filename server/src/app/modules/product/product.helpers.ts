@@ -1,31 +1,17 @@
-import { HttpStatusCode } from 'axios';
 import crypto from 'node:crypto';
+
+import { HttpStatusCode } from 'axios';
 import { Types } from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
 import { Category } from '@/app/modules/category/category.model';
-import { ICollectionType } from '@/app/modules/product/product.constant';
 import { Product } from '@/app/modules/product/product.model';
 import {
   TProductColor,
-  TProductSeo,
+  TProductPayload,
   TProductVariant,
-} from '@/app/modules/product/product.interface';
+} from '@/app/modules/product/product.types';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
-
-export type TProductPayload = {
-  category: string;
-  sku: string;
-  collectionType: ICollectionType;
-  brand: string;
-  title: string;
-  description: string;
-  images: string[];
-  price: number;
-  discount?: number;
-  variants: TProductVariant[];
-  seo?: TProductSeo;
-};
 
 export const calculateDiscountPrice = (price: number, discount = 0) =>
   Number((price - price * (discount / 100)).toFixed(2));

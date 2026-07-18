@@ -4,9 +4,9 @@ import {
   createCategory,
   deleteCategoryById,
   findCategories,
-  TCategoryPayload,
   updateCategoryById,
 } from '@/app/modules/category/category.helpers';
+import { TCategoryPayload } from '@/app/modules/category/category.types';
 
 const create = async (
   traceId: string,

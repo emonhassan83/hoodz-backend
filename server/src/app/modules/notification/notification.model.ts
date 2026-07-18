@@ -1,9 +1,10 @@
 import { Schema, model } from 'mongoose';
+
+import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
 import {
   ICommentsModules,
   INotification,
 } from '@/app/modules/notification/notification.interface';
-import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
 
 const notificationSchema = new Schema<INotification>(
   {

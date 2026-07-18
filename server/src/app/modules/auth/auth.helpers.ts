@@ -1,10 +1,10 @@
 import { HttpStatusCode } from 'axios';
-import Jwt, { sign, verify } from 'jsonwebtoken';
-import { Types } from 'mongoose';
+import { sign, verify, JwtPayload } from 'jsonwebtoken';
 
 import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
-import { TExpiresIn } from '@/app/modules/auth/auth.interface';
+import { TExpiresIn, TJwtPayload } from '@/app/modules/auth/auth.types';
+import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import {
   checkUserExists,
   createUser,
@@ -13,18 +13,17 @@ import {
   validateUserCreation,
 } from '@/app/modules/user/user.helpers';
 import { ISignUpWithEmail, IUser } from '@/app/modules/user/user.interface';
-import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 
 // ─── JWT ───────────────────────────────────────────────────────────────────
 
 export const createToken = (
-  jwtPayload: { userId: Types.ObjectId; email: string; role: string },
+  jwtPayload: TJwtPayload,
   secret: string,
   expiresIn: TExpiresIn
 ) => sign(jwtPayload, secret, { expiresIn });
 
 export const verifyToken = (token: string, secret: string) =>
-  verify(token, secret) as Jwt.JwtPayload;
+  verify(token, secret) as JwtPayload;
 
 // Single definition — otp.helpers was using generateAuthTokens (same logic, now removed)
 export const generateTokens = (user: IUser) => {

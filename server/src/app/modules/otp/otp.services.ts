@@ -22,6 +22,10 @@ import {
   findUserByPhone,
   validateUserExists,
 } from '@/app/modules/user/user.helpers';
+import {
+  TSendOtpPhonePayload,
+  TVerifyOtpQuery,
+} from '@/app/modules/otp/otp.types';
 
 // ─── Verify OTP ────────────────────────────────────────────────────────────
 // S (SRP): owns only verification decision — token decode, Redis check, DB update
@@ -30,7 +34,7 @@ export const verifyOTP = async (
   traceId: string,
   tokenWithBearer: string | undefined,
   otp: string | number,
-  query: Record<string, unknown>
+  query: TVerifyOtpQuery
 ) => {
   const { type } = query;
 
@@ -102,7 +106,7 @@ export const sendOtpInEmail = async (
 export const sendOtpViaTokenInPhone = async (
   traceId: string,
   userId: string,
-  payload: { phone: string }
+  payload: TSendOtpPhonePayload
 ) => {
   const { phone } = payload;
 
@@ -128,7 +132,7 @@ export const sendOtpViaTokenInPhone = async (
 
 export const sendOtpViaDirectPhone = async (
   traceId: string,
-  payload: { phone: string }
+  payload: TSendOtpPhonePayload
 ) => {
   const { phone } = payload;
 

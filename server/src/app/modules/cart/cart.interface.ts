@@ -1,16 +1,6 @@
 import { Model, Types } from 'mongoose';
 
-export type TCartColor = {
-  code: string;
-  name: string;
-};
-
-export type TCartItem = {
-  productId: Types.ObjectId;
-  size: string;
-  color: TCartColor;
-  quantity: number;
-};
+import { TCartItem } from '@/app/modules/cart/cart.types';
 
 export interface ICart {
   _id: Types.ObjectId;

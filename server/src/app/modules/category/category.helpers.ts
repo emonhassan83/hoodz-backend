@@ -2,11 +2,7 @@ import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
 import { Category } from '@/app/modules/category/category.model';
-
-export type TCategoryPayload = {
-  title: string;
-  icon: string;
-};
+import { TCategoryPayload } from '@/app/modules/category/category.types';
 
 export const assertCategoryTitleAvailable = async (
   traceId: string,
