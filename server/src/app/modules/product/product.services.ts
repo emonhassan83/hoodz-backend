@@ -22,6 +22,10 @@ import {
   TProductRequester,
 } from '@/app/modules/product/product.types';
 import {
+  deleteProductFromTypesense,
+  upsertProductToTypesense,
+} from '@/app/modules/search/search.typesense';
+import {
   deleteCache,
   getCache,
   setCache,
@@ -53,6 +57,12 @@ const createProduct = async (
   });
 
   await invalidateProductCaches();
+  await upsertProductToTypesense(product._id.toString()).catch((error) => {
+    console.warn(
+      '[Typesense] Product create sync failed:',
+      error instanceof Error ? error.message : error
+    );
+  });
   return product;
 };
 
@@ -217,6 +227,12 @@ const updateProduct = async (
     .select('-__v');
 
   await invalidateProductCaches();
+  await upsertProductToTypesense(productId).catch((error) => {
+    console.warn(
+      '[Typesense] Product update sync failed:',
+      error instanceof Error ? error.message : error
+    );
+  });
   if (previousStock <= 0 && updatedProduct && updatedProduct.stock > 0) {
     await notifyProductRestockedSubscribers(
       productId,
@@ -242,6 +258,12 @@ const deleteProduct = async (
   ).select('-__v');
 
   await invalidateProductCaches();
+  await deleteProductFromTypesense(productId).catch((error) => {
+    console.warn(
+      '[Typesense] Product delete sync failed:',
+      error instanceof Error ? error.message : error
+    );
+  });
   return deletedProduct;
 };
 

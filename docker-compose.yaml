@@ -15,6 +15,23 @@ services:
     networks:
       - hoodz_backend_net
 
+  typesense:
+    image: typesense/typesense:27.1
+    container_name: hoodz_backend_typesense
+    restart: unless-stopped
+    command: >
+      --data-dir /data
+      --api-key=${TYPESENSE_API_KEY:-hoodzTypesenseAdminKey}
+      --enable-cors
+    expose:
+      - "8108"
+    ports:
+      - "127.0.0.1:8108:8108"
+    volumes:
+      - typesense_data:/data
+    networks:
+      - hoodz_backend_net
+
   server:
     build:
       context: ./server
@@ -27,6 +44,11 @@ services:
       REDIS_HOST: redis
       REDIS_PASSWORD: ${REDIS_PASSWORD:-myStrongRedisPassword}
       REDIS_PORT: 6379
+      TYPESENSE_ENABLED: ${TYPESENSE_ENABLED:-true}
+      TYPESENSE_HOST: typesense
+      TYPESENSE_PORT: 8108
+      TYPESENSE_PROTOCOL: http
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-hoodzTypesenseAdminKey}
     ports:
       - "5029:5029"
     volumes:
@@ -34,11 +56,14 @@ services:
     depends_on:
       redis:
         condition: service_started
+      typesense:
+        condition: service_started
     networks:
       - hoodz_backend_net
 
 volumes:
   redis_data:
+  typesense_data:
 
 networks:
   hoodz_backend_net:

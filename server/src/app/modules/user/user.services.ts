@@ -6,6 +6,10 @@ import QueryBuilder from '@/app/builder/QueryBuilder';
 import { SALT_ROUNDS } from '@/app/constant';
 import ApiError from '@/app/errors/ApiError';
 import { generateTokens } from '@/app/modules/auth/auth.helpers';
+import {
+  deleteShopFromTypesense,
+  upsertShopToTypesense,
+} from '@/app/modules/search/search.typesense';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import {
   assertEmailNotTaken,
@@ -224,6 +228,14 @@ const updateUserProfile = async (
 
   if (!result)
     throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
+  if (result.role === USER_ROLE.vendor) {
+    await upsertShopToTypesense(userId).catch((error) => {
+      console.warn(
+        '[Typesense] Vendor profile sync failed:',
+        error instanceof Error ? error.message : error
+      );
+    });
+  }
   return result;
 };
 
@@ -246,6 +258,18 @@ const updateUserStatus = async (
 
   // Send notification via queue (async, non-blocking)
   await sendUserStatusNotifYToUser(payload.status, result);
+  if (result.role === USER_ROLE.vendor) {
+    const syncShop =
+      payload.status === 'active'
+        ? upsertShopToTypesense
+        : deleteShopFromTypesense;
+    await syncShop(userId).catch((error) => {
+      console.warn(
+        '[Typesense] Vendor status sync failed:',
+        error instanceof Error ? error.message : error
+      );
+    });
+  }
 
   return result;
 };
@@ -260,7 +284,7 @@ const updateLocationFromDB = async (
 
   await findActiveUserOrThrow(userId, traceId);
 
-  return User.findByIdAndUpdate(
+  const result = await User.findByIdAndUpdate(
     userId,
     {
       location: buildGeoLocation(longitude, latitude),
@@ -269,6 +293,17 @@ const updateLocationFromDB = async (
     },
     { returnDocument: 'after' }
   );
+
+  if (result?.role === USER_ROLE.vendor) {
+    await upsertShopToTypesense(userId).catch((error) => {
+      console.warn(
+        '[Typesense] Vendor location sync failed:',
+        error instanceof Error ? error.message : error
+      );
+    });
+  }
+
+  return result;
 };
 
 /** Updates user's delivery address, location, and optional timezone. */
@@ -415,6 +450,15 @@ const createInvitedPlatformUser = async (
       password,
     }
   );
+
+  if (role === USER_ROLE.vendor) {
+    await upsertShopToTypesense(user._id.toString()).catch((error) => {
+      console.warn(
+        '[Typesense] Vendor invite sync failed:',
+        error instanceof Error ? error.message : error
+      );
+    });
+  }
 
   return user;
 };

@@ -17,6 +17,10 @@ export const REDIS_KEYS = {
     createRedisKey(REDIS_PREFIXES.product, 'single', productId, userId),
   PRODUCT_RECENTLY_VIEWED: (userId: string) =>
     createRedisKey(REDIS_PREFIXES.product, 'recently-viewed', userId),
+  SEARCH_RESULT: (userId: string, searchTerm: string) =>
+    createRedisKey(REDIS_PREFIXES.search, 'result', userId, searchTerm),
+  SEARCH_HISTORY: (userId: string, scope: string) =>
+    createRedisKey(REDIS_PREFIXES.search, 'history', userId, scope),
   CART: (userId: string) => createRedisKey(REDIS_PREFIXES.cart, userId),
 
   REGISTER_OTP: (email: string) => createRedisKey(REDIS_PREFIXES.otp, email),

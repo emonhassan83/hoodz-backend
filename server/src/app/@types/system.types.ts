@@ -26,6 +26,11 @@ export type TEnv = {
   SERVER_URL: string;
   DASHBOARD_URL: string;
   GOOGLE_MAPS_API_KEY: string;
+  TYPESENSE_HOST?: string;
+  TYPESENSE_PORT?: number;
+  TYPESENSE_PROTOCOL?: string;
+  TYPESENSE_API_KEY?: string;
+  TYPESENSE_ENABLED?: boolean;
 
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;

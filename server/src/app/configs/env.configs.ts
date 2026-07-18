@@ -30,4 +30,9 @@ export const env: TEnv = {
   SERVER_URL: process.env.SERVER_URL || 'http://localhost:5029/api/v1',
   DASHBOARD_URL: process.env.DASHBOARD_URL || 'http://localhost:3000',
   GOOGLE_MAPS_API_KEY: getEnv('GOOGLE_MAPS_API_KEY'),
+  TYPESENSE_HOST: process.env.TYPESENSE_HOST || 'typesense',
+  TYPESENSE_PORT: Number(process.env.TYPESENSE_PORT || 8108),
+  TYPESENSE_PROTOCOL: process.env.TYPESENSE_PROTOCOL || 'http',
+  TYPESENSE_API_KEY: process.env.TYPESENSE_API_KEY,
+  TYPESENSE_ENABLED: process.env.TYPESENSE_ENABLED === 'true',
 };

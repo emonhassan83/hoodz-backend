@@ -47,6 +47,7 @@ export const REDIS_PREFIXES = {
   recentlyViewedProducts: 'user:recently-viewed:products',
   wishlist: 'user:wishlist',
   product: 'product',
+  search: 'search',
   cart: 'user:cart',
   session: 'session',
   rateLimit: 'rate:limit',
