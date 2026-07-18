@@ -1,7 +1,12 @@
 import { Schema, model } from 'mongoose';
 
 import { COLLECTION_TYPE } from '@/app/modules/product/product.constant';
-import { IProduct, IProductModel } from '@/app/modules/product/product.interface';
+import {
+  IProduct,
+  IProductModel,
+  IProductStockNotify,
+  IProductStockNotifyModel,
+} from '@/app/modules/product/product.interface';
 
 const colorSchema = new Schema(
   {
@@ -95,3 +100,33 @@ productSchema.index({ vendorId: 1, isDeleted: 1, createdAt: -1 });
 productSchema.index({ category: 1, isDeleted: 1 });
 
 export const Product = model<IProduct, IProductModel>('Product', productSchema);
+
+const productStockNotifySchema = new Schema<
+  IProductStockNotify,
+  IProductStockNotifyModel
+>(
+  {
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
+    product: {
+      type: Schema.Types.ObjectId,
+      ref: 'Product',
+      required: true,
+      index: true,
+    },
+    notifiedAt: { type: Date, default: null },
+  },
+  { timestamps: true }
+);
+
+productStockNotifySchema.index({ user: 1, product: 1 }, { unique: true });
+productStockNotifySchema.index({ product: 1, notifiedAt: 1 });
+
+export const ProductStockNotify = model<
+  IProductStockNotify,
+  IProductStockNotifyModel
+>('ProductStockNotify', productStockNotifySchema);

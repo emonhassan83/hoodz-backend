@@ -40,3 +40,18 @@ export type TProductVariantSummary = {
   colors: TProductColor[];
   stock: number;
 };
+
+export type TProductRequester = {
+  userId: string;
+  role: string;
+};
+
+export type TProductListQuery = Record<string, unknown>;
+
+export type TProductViewPayload = {
+  productId: string;
+};
+
+export type TProductWithWishlist<T> = T & {
+  isWishlisted: boolean;
+};

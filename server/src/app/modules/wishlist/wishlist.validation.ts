@@ -8,13 +8,6 @@ const toggleWishlistValidationSchema = z.object({
   }),
 });
 
-const checkWishlistValidationSchema = z.object({
-  params: z.object({
-    productId: objectIdSchema,
-  }),
-});
-
 export const WishlistValidation = {
   toggleWishlistValidationSchema,
-  checkWishlistValidationSchema,
 };

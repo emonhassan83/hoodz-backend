@@ -31,3 +31,17 @@ export interface IProduct {
 }
 
 export type IProductModel = Model<IProduct, Record<string, unknown>>;
+
+export interface IProductStockNotify {
+  _id: Types.ObjectId;
+  user: Types.ObjectId;
+  product: Types.ObjectId;
+  notifiedAt?: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type IProductStockNotifyModel = Model<
+  IProductStockNotify,
+  Record<string, unknown>
+>;

@@ -68,7 +68,7 @@ const getRecentlyViewedProducts = asyncHandler(
 
 const getAllProduct = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await ProductService.getAllProduct(req.query);
+  const data = await ProductService.getAllProduct(req.query, req.user?.userId);
 
   sendResponse(res, {
     success: true,
@@ -94,7 +94,10 @@ const getMyProducts = asyncHandler(async (req: Request, res: Response) => {
 
 const getShopProducts = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await ProductService.getShopProducts(req.params.vendorId as string);
+  const data = await ProductService.getShopProducts(
+    req.params.vendorId as string,
+    req.user?.userId
+  );
 
   sendResponse(res, {
     success: true,
@@ -109,7 +112,8 @@ const getProductById = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await ProductService.getProductById(
     traceId,
-    req.params.productId as string
+    req.params.productId as string,
+    req.user?.userId
   );
 
   sendResponse(res, {
@@ -156,6 +160,25 @@ const deleteProduct = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const notifyMe = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await ProductService.notifyMe(
+    traceId,
+    req.user.userId,
+    req.params.productId as string
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: data.alreadyInStock
+      ? 'Product is already in stock'
+      : 'Stock notification request saved successfully',
+    data,
+    traceId,
+  });
+});
+
 export const ProductController = {
   generateSku,
   markProductViewed,
@@ -167,4 +190,5 @@ export const ProductController = {
   getProductById,
   updateProduct,
   deleteProduct,
+  notifyMe,
 };

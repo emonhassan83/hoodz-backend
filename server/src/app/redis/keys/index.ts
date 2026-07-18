@@ -3,11 +3,20 @@ import { createRedisKey } from '@/app/utils/system.utils';
 
 export const REDIS_KEYS = {
   CONTENTS: createRedisKey('contents', 'cache'),
+  CATEGORY_LIST: createRedisKey(REDIS_PREFIXES.category, 'list'),
 
   UNREAD_NOTIFICATION: (userId: string) => createRedisKey(REDIS_PREFIXES.unreadNotification, userId),
   RECENTLY_VIEWED_PRODUCTS: (userId: string) =>
     createRedisKey(REDIS_PREFIXES.recentlyViewedProducts, userId),
   WISHLIST: (userId: string) => createRedisKey(REDIS_PREFIXES.wishlist, userId),
+  WISHLIST_PRODUCTS: (userId: string) =>
+    createRedisKey(REDIS_PREFIXES.wishlist, userId, 'products'),
+  PRODUCT_LIST: (scope: string) =>
+    createRedisKey(REDIS_PREFIXES.product, 'list', scope),
+  PRODUCT_SINGLE: (productId: string, userId = 'anonymous') =>
+    createRedisKey(REDIS_PREFIXES.product, 'single', productId, userId),
+  PRODUCT_RECENTLY_VIEWED: (userId: string) =>
+    createRedisKey(REDIS_PREFIXES.product, 'recently-viewed', userId),
   CART: (userId: string) => createRedisKey(REDIS_PREFIXES.cart, userId),
 
   REGISTER_OTP: (email: string) => createRedisKey(REDIS_PREFIXES.otp, email),

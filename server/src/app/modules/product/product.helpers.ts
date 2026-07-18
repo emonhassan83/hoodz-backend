@@ -4,18 +4,31 @@ import { HttpStatusCode } from 'axios';
 import { Types } from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
+import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
 import { Category } from '@/app/modules/category/category.model';
-import { Product } from '@/app/modules/product/product.model';
+import {
+  Product,
+  ProductStockNotify,
+} from '@/app/modules/product/product.model';
 import {
   TProductColor,
   TProductPayload,
   TProductVariant,
 } from '@/app/modules/product/product.types';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
+import { User } from '@/app/modules/user/user.model';
+import { deleteCachePattern } from '@/app/redis/helpers';
+import {
+  getWishlistProductIds,
+  syncWishlistProductIds,
+} from '@/app/redis/helpers/wishlist';
+import { Wishlist } from '@/app/modules/wishlist/wishlist.model';
+import { sendNotificationViaQueue } from '@/app/utils/notification-queue.service';
 
 export const calculateDiscountPrice = (price: number, discount = 0) =>
   Number((price - price * (discount / 100)).toFixed(2));
 
+/** Builds product sizes, colors, and total stock from variants. */
 export const buildVariantSummary = (variants: TProductVariant[]) => {
   const sizeSet = new Set<string>();
   const colorMap = new Map<string, TProductColor>();
@@ -32,6 +45,7 @@ export const buildVariantSummary = (variants: TProductVariant[]) => {
   };
 };
 
+/** Builds normalized product write data and computed discount/stock fields. */
 export const buildProductWritePayload = (
   payload: Partial<TProductPayload>,
   existing?: { price: number; discount: number; variants: TProductVariant[] }
@@ -49,6 +63,7 @@ export const buildProductWritePayload = (
   };
 };
 
+/** Throws when another product already owns the requested SKU. */
 export const assertSkuAvailable = async (
   traceId: string,
   sku: string,
@@ -64,6 +79,7 @@ export const assertSkuAvailable = async (
   }
 };
 
+/** Throws when the category does not exist. */
 export const assertCategoryExists = async (traceId: string, categoryId: string) => {
   const exists = await Category.exists({ _id: categoryId });
   if (!exists) {
@@ -71,12 +87,14 @@ export const assertCategoryExists = async (traceId: string, categoryId: string) 
   }
 };
 
+/** Throws when a product lookup did not return a product. */
 export const assertProductExists = (product: unknown, traceId: string) => {
   if (!product) {
     throw new ApiError(HttpStatusCode.NotFound, 'Product not found', traceId);
   }
 };
 
+/** Allows only admins or owning vendors to mutate a product. */
 export const assertProductAccess = (
   traceId: string,
   product: { vendorId: Types.ObjectId },
@@ -90,18 +108,21 @@ export const assertProductAccess = (
   }
 };
 
+/** Returns a product document or throws a traceable API error. */
 export const getProductByIdOrThrow = async (traceId: string, productId: string) => {
   const product = await Product.findOne({ _id: productId, isDeleted: false });
   assertProductExists(product, traceId);
   return product!;
 };
 
+/** Creates a readable SKU candidate with timestamp and random entropy. */
 const createSkuCandidate = () => {
   const timestamp = Date.now().toString(36).toUpperCase().slice(-4);
   const random = crypto.randomBytes(3).toString('hex').toUpperCase();
   return `HDZ-${timestamp}-${random}`;
 };
 
+/** Generates a unique product SKU with bounded retries. */
 export const generateUniqueSku = async () => {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const sku = createSkuCandidate();
@@ -113,4 +134,86 @@ export const generateUniqueSku = async () => {
     HttpStatusCode.InternalServerError,
     'Failed to generate unique SKU'
   );
+};
+
+/** Clears product list/detail caches after product or wishlist writes. */
+export const invalidateProductCaches = async () => {
+  await deleteCachePattern('product:*');
+};
+
+/** Loads a user's wishlist ids from Redis and hydrates from MongoDB on miss. */
+export const getWishlistProductIdSet = async (userId?: string) => {
+  if (!userId) return new Set<string>();
+
+  const redisProductIds = await getWishlistProductIds(userId);
+  if (redisProductIds.length > 0) return new Set(redisProductIds);
+
+  const dbProductIds = (
+    await Wishlist.find({ user: userId }).select('product -_id').lean()
+  ).map((item) => item.product.toString());
+
+  await syncWishlistProductIds(userId, dbProductIds);
+  return new Set(dbProductIds);
+};
+
+/** Adds an isWishlisted boolean to one product result. */
+export const withWishlistFlag = <T extends { _id: unknown }>(
+  product: T,
+  wishlistIds: Set<string>
+) => ({
+  ...product,
+  isWishlisted: wishlistIds.has(String(product._id)),
+});
+
+/** Adds isWishlisted boolean to a product list. */
+export const withWishlistFlags = <T extends { _id: unknown }>(
+  products: T[],
+  wishlistIds: Set<string>
+) => products.map((product) => withWishlistFlag(product, wishlistIds));
+
+/** Notifies stock subscribers when a previously unavailable product is restocked. */
+export const notifyProductRestockedSubscribers = async (
+  productId: string,
+  productTitle: string
+) => {
+  const subscriptions = await ProductStockNotify.find({
+    product: productId,
+    notifiedAt: null,
+  }).lean();
+
+  if (subscriptions.length === 0) return 0;
+
+  const users = await User.find({
+    _id: { $in: subscriptions.map((item) => item.user) },
+    isDeleted: false,
+  })
+    .select('_id fcmToken')
+    .lean();
+
+  await Promise.all(
+    users.map((user) =>
+      sendNotificationViaQueue({
+        userId: user._id.toString(),
+        fcmToken: user.fcmToken,
+        channel: 'both',
+        title: 'Product back in stock',
+        message: `${productTitle} is available again.`,
+        data: {
+          modelType: NOTIFICATION_MODEL_TYPE.Product,
+          reference: productId,
+        },
+      })
+    )
+  );
+
+  await ProductStockNotify.updateMany(
+    {
+      product: productId,
+      user: { $in: users.map((user) => user._id) },
+      notifiedAt: null,
+    },
+    { notifiedAt: new Date() }
+  );
+
+  return users.length;
 };

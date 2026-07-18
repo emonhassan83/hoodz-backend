@@ -69,8 +69,15 @@ const markProductViewedValidationSchema = z.object({
   }),
 });
 
+const notifyMeValidationSchema = z.object({
+  params: z.object({
+    productId: objectIdSchema,
+  }),
+});
+
 export const ProductValidation = {
   createProductValidationSchema,
   updateProductValidationSchema,
   markProductViewedValidationSchema,
+  notifyMeValidationSchema,
 };

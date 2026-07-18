@@ -25,3 +25,17 @@ export const getWishlistProductIds = async (userId: string) => {
   const redis = getRedisClient();
   return redis.smembers(REDIS_KEYS.WISHLIST(userId));
 };
+
+/** Replaces the user's Redis wishlist set with MongoDB product ids. */
+export const syncWishlistProductIds = async (
+  userId: string,
+  productIds: string[]
+) => {
+  const redis = getRedisClient();
+  const key = REDIS_KEYS.WISHLIST(userId);
+
+  await redis.del(key);
+  if (productIds.length > 0) {
+    await redis.sadd(key, ...productIds);
+  }
+};

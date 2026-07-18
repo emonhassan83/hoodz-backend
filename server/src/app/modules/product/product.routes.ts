@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import auth from '@/app/middlewares/auth';
+import auth, { optionalAuth } from '@/app/middlewares/auth';
 import { ProductController } from '@/app/modules/product/product.controllers';
 import { ProductValidation } from '@/app/modules/product/product.validation';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
@@ -15,7 +15,7 @@ router
     validateRequest(ProductValidation.createProductValidationSchema),
     ProductController.createProduct
   )
-  .get(ProductController.getAllProduct);
+  .get(optionalAuth, ProductController.getAllProduct);
 
 router
   .route('/my-products')
@@ -42,11 +42,19 @@ router
 
 router
   .route('/shop/:vendorId')
-  .get(ProductController.getShopProducts);
+  .get(optionalAuth, ProductController.getShopProducts);
+
+router
+  .route('/:productId/notify-me')
+  .post(
+    auth(USER_ROLE.user, USER_ROLE.rider, USER_ROLE.vendor, USER_ROLE.agent),
+    validateRequest(ProductValidation.notifyMeValidationSchema),
+    ProductController.notifyMe
+  );
 
 router
   .route('/:productId')
-  .get(ProductController.getProductById)
+  .get(optionalAuth, ProductController.getProductById)
   .patch(
     auth(USER_ROLE.vendor, USER_ROLE.admin),
     validateRequest(ProductValidation.updateProductValidationSchema),

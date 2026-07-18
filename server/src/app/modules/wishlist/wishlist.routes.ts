@@ -20,12 +20,4 @@ router
     WishlistController.toggle
   );
 
-router
-  .route('/check/:productId')
-  .get(
-    auth(...AUTHENTICATED_ROLES),
-    validateRequest(WishlistValidation.checkWishlistValidationSchema),
-    WishlistController.check
-  );
-
 export const WishlistRoutes = router;

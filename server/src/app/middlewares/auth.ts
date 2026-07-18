@@ -95,4 +95,28 @@ const auth = (...requiredRoles: IUserRole[]) => {
   );
 };
 
+/** Attaches req.user when a valid token is present and keeps public routes open. */
+export const optionalAuth = asyncHandler(
+  async (req: Request, _res: Response, next: NextFunction) => {
+    const token = req.headers.authorization;
+    if (!token) return next();
+
+    try {
+      const decoded = verify(
+        token,
+        env.JWT_ACCESS_TOKEN_SECRET_KEY as string
+      ) as JwtPayload;
+
+      const user = await User.isUserExistsByEmail(decoded.email);
+      if (user && !user.isDeleted && user.status !== 'blocked') {
+        req.user = decoded as any;
+      }
+    } catch (_err) {
+      // Public routes should continue as anonymous when optional auth fails.
+    }
+
+    return next();
+  }
+);
+
 export default auth;

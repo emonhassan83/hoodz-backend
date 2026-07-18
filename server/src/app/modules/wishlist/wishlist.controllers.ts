@@ -32,24 +32,7 @@ const getAll = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-const check = asyncHandler(async (req: Request, res: Response) => {
-  const traceId = getTraceId();
-  const data = await WishlistService.check(
-    req.user.userId,
-    req.params.productId as string
-  );
-
-  sendResponse(res, {
-    success: true,
-    statusCode: 200,
-    message: 'Wishlist product checked successfully',
-    data,
-    traceId,
-  });
-});
-
 export const WishlistController = {
   toggle,
   getAll,
-  check,
 };
