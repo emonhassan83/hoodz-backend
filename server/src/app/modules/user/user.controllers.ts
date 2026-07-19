@@ -59,6 +59,19 @@ const getNearbyShops = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const getFeaturedVendors = asyncHandler(async (_req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await UserService.getFeaturedVendors();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Featured vendors fetched successfully',
+    data,
+    traceId,
+  });
+});
+
 const inviteAgent = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await UserService.inviteAgent(traceId, req.body);
@@ -200,6 +213,7 @@ export const UserControllers = {
   getAllUsers,
   getAUser,
   getNearbyShops,
+  getFeaturedVendors,
   inviteVendor,
   inviteAgent,
   changedEmail,

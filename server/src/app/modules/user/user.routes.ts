@@ -86,6 +86,10 @@ router
 // ─── User by ID ────────────────────────────────────────────────────────────
 
 router
+  .route('/featured-vendors')
+  .get(UserControllers.getFeaturedVendors);
+
+router
   .route('/:userId')
   .get(auth(...AUTHENTICATED_ROLES), UserControllers.getAUser)
   .put(

@@ -4,8 +4,8 @@ import { HttpStatusCode } from 'axios';
 import { Types } from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
-import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
 import { Category } from '@/app/modules/category/category.model';
+import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
 import {
   Product,
   ProductStockNotify,
@@ -17,12 +17,12 @@ import {
 } from '@/app/modules/product/product.types';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
+import { Wishlist } from '@/app/modules/wishlist/wishlist.model';
 import { deleteCachePattern } from '@/app/redis/helpers';
 import {
   getWishlistProductIds,
   syncWishlistProductIds,
 } from '@/app/redis/helpers/wishlist';
-import { Wishlist } from '@/app/modules/wishlist/wishlist.model';
 import { sendNotificationViaQueue } from '@/app/utils/notification-queue.service';
 
 export const calculateDiscountPrice = (price: number, discount = 0) =>

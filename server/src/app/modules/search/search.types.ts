@@ -47,6 +47,9 @@ export type TTypesenseProductDocument = {
   price: number;
   discountPrice: number;
   stock: number;
+  avgRating: number;
+  ratingCount: number;
+  sold: number;
   inStock: boolean;
   seoKeywords: string[];
   createdAt: number;

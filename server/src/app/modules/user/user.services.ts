@@ -167,6 +167,20 @@ const getNearbyShops = async (
 
 // ─── Update ────────────────────────────────────────────────────────────────
 
+/** Returns vendors with rating above 4 for featured vendor sections. */
+const getFeaturedVendors = async () =>
+  User.find({
+    role: USER_ROLE.vendor,
+    status: 'active',
+    isDeleted: false,
+    avgRating: { $gt: 4 },
+  })
+    .select(
+      '_id id name email phone profileAvatar coverPhoto address location avgRating ratingCount'
+    )
+    .sort({ avgRating: -1, ratingCount: -1, createdAt: -1 })
+    .lean();
+
 /** Changes a user's email after OTP verification. */
 const changeEmail = async (
   traceId: string,
@@ -542,6 +556,7 @@ export const UserService = {
   getAllUsersFromDB,
   getSingleUser,
   getNearbyShops,
+  getFeaturedVendors,
   changeEmail,
   updateUserProfile,
   updateUserStatus,

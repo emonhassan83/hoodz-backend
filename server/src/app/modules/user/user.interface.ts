@@ -35,6 +35,7 @@ export interface IUser extends Document {
   stripeCustomerId?: string
   avgRating: number
   ratingCount: number
+  points: number
   passwordChangedAt?: Date
   needsPasswordChange: boolean
   isVerified: boolean;

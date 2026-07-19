@@ -48,6 +48,25 @@ export type TProductRequester = {
 
 export type TProductListQuery = Record<string, unknown>;
 
+export type TProductFilterQuery = {
+  category?: string;
+  brand?: string;
+  color?: string;
+  size?: string;
+  collectionType?: string;
+  gender?: string;
+  minPrice?: string | number;
+  maxPrice?: string | number;
+  minimumPrice?: string | number;
+  maximumPrice?: string | number;
+  latitude?: string | number;
+  longitude?: string | number;
+  maxDistanceKm?: string | number;
+  maxDistance?: string | number;
+  maxDeliveryTimeMinutes?: string | number;
+  maxDeliveryTime?: string | number;
+};
+
 export type TProductViewPayload = {
   productId: string;
 };

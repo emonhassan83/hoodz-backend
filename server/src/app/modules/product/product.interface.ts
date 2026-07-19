@@ -23,6 +23,9 @@ export interface IProduct {
   sizes: string[];
   colors: TProductColor[];
   stock: number;
+  avgRating: number;
+  ratingCount: number;
+  sold: number;
   variants: TProductVariant[];
   seo?: TProductSeo;
   isDeleted: boolean;

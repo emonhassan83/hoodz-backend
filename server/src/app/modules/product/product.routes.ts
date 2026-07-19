@@ -26,12 +26,8 @@ router
   .get(auth(USER_ROLE.vendor), ProductController.generateSku);
 
 router
-  .route('/viewed')
-  .post(
-    auth(USER_ROLE.user, USER_ROLE.rider, USER_ROLE.vendor, USER_ROLE.agent),
-    validateRequest(ProductValidation.markProductViewedValidationSchema),
-    ProductController.markProductViewed
-  );
+  .route('/trending')
+  .get(optionalAuth, ProductController.getTrendingProducts);
 
 router
   .route('/recently-viewed')
@@ -45,11 +41,19 @@ router
   .get(optionalAuth, ProductController.getShopProducts);
 
 router
-  .route('/:productId/notify-me')
+  .route('/notify-me/:productId')
   .post(
     auth(USER_ROLE.user, USER_ROLE.rider, USER_ROLE.vendor, USER_ROLE.agent),
     validateRequest(ProductValidation.notifyMeValidationSchema),
     ProductController.notifyMe
+  );
+
+router
+  .route('/viewed/:productId')
+  .patch(
+    auth(USER_ROLE.user, USER_ROLE.rider, USER_ROLE.vendor, USER_ROLE.agent),
+    validateRequest(ProductValidation.markProductViewedValidationSchema),
+    ProductController.markProductViewed
   );
 
 router

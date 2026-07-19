@@ -84,6 +84,9 @@ const productSchema = new Schema<IProduct, IProductModel>(
     sizes: { type: [String], default: [] },
     colors: { type: [colorSchema], default: [] },
     stock: { type: Number, required: true, min: 0, default: 0 },
+    avgRating: { type: Number, default: 0, min: 0 },
+    ratingCount: { type: Number, default: 0, min: 0 },
+    sold: { type: Number, default: 0, min: 0, index: true },
     variants: { type: [variantSchema], required: true, default: [] },
     seo: {
       type: seoSchema,
@@ -98,6 +101,12 @@ const productSchema = new Schema<IProduct, IProductModel>(
 
 productSchema.index({ vendorId: 1, isDeleted: 1, createdAt: -1 });
 productSchema.index({ category: 1, isDeleted: 1 });
+productSchema.index({
+  avgRating: -1,
+  ratingCount: -1,
+  sold: -1,
+  isDeleted: 1,
+});
 
 export const Product = model<IProduct, IProductModel>('Product', productSchema);
 

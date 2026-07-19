@@ -39,7 +39,7 @@ const markProductViewed = asyncHandler(async (req: Request, res: Response) => {
   const data = await ProductService.markProductViewed(
     traceId,
     req.user.userId,
-    req.body.productId
+    req.params.productId as string
   );
 
   sendResponse(res, {
@@ -66,9 +66,26 @@ const getRecentlyViewedProducts = asyncHandler(
   }
 );
 
+const getTrendingProducts = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await ProductService.getTrendingProducts(req.user?.userId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Trending products fetched successfully',
+    data,
+    traceId,
+  });
+});
+
 const getAllProduct = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await ProductService.getAllProduct(req.query, req.user?.userId);
+  const data = await ProductService.getAllProduct(
+    traceId,
+    req.query,
+    req.user?.userId
+  );
 
   sendResponse(res, {
     success: true,
@@ -183,6 +200,7 @@ export const ProductController = {
   generateSku,
   markProductViewed,
   getRecentlyViewedProducts,
+  getTrendingProducts,
   createProduct,
   getAllProduct,
   getMyProducts,

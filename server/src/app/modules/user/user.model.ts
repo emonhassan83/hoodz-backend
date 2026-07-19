@@ -76,6 +76,7 @@ const userSchema = new Schema<IUser, IUserModal>(
     },
     avgRating: { type: Number, default: 0, min: 0 },
     ratingCount: { type: Number, default: 0, min: 0 },
+    points: { type: Number, default: 0 },
 
     status: {
       type: String,

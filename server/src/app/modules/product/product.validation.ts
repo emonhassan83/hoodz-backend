@@ -64,7 +64,7 @@ const updateProductValidationSchema = z.object({
 });
 
 const markProductViewedValidationSchema = z.object({
-  body: z.object({
+  params: z.object({
     productId: objectIdSchema,
   }),
 });
