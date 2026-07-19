@@ -4,7 +4,13 @@ import { hash } from 'bcrypt';
 import { env } from '@/app/configs/env.configs';
 import { SALT_ROUNDS } from '@/app/constant';
 import ApiError from '@/app/errors/ApiError';
-import { processSignup, generateTokens, createToken, verifyToken } from '@/app/modules/auth/auth.helpers';
+import {
+  buildSignupAddressPayload,
+  processSignup,
+  generateTokens,
+  createToken,
+  verifyToken,
+} from '@/app/modules/auth/auth.helpers';
 import {
   TExpiresIn,
   TGoogleLoginPayload,
@@ -28,7 +34,7 @@ export const signupWithEmail = (traceId: string, payload: ISignUpWithEmail) =>
 
 /** Registers a user with phone credentials. */
 export const signupWithPhone = (traceId: string, payload: ISignUpWithPhone) =>
-  processSignup(payload as ISignUpWithEmail, traceId);
+  processSignup(payload as unknown as ISignUpWithEmail, traceId);
 
 // ─── Social Auth ───────────────────────────────────────────────────────────
 
@@ -47,16 +53,24 @@ const registerWithSocialAuth = async (
     );
   }
 
-  const profileData = {
+  const registrationStatus =
+    role === USER_ROLE.rider ? USER_STATUS.pending : USER_STATUS.active;
+
+  const profileData = buildSignupAddressPayload({
     name: payload.name,
     email: payload.email,
     photoUrl: payload.photoUrl,
     fcmToken: payload.fcmToken,
     profileAvatar: payload.profileAvatar,
-    countryCode: payload.countryCode,
-    phone: payload.phone,
+    address: payload.address,
+    latitude: payload.latitude,
+    longitude: payload.longitude,
+    deliveryAddress: payload.deliveryAddress,
+    deliveryLatitude: payload.deliveryLatitude,
+    deliveryLongitude: payload.deliveryLongitude,
+    timeZone: payload.timeZone,
     isLegalTermsAccepted: payload.isLegalTermsAccepted,
-  };
+  });
 
   const user = await User.isUserExistsByEmail(payload.email as string);
 
@@ -70,7 +84,13 @@ const registerWithSocialAuth = async (
     }
 
     const updatePayload = user.isDeleted
-      ? { ...profileData, isDeleted: false, expireAt: null }
+      ? {
+          ...profileData,
+          role,
+          status: registrationStatus,
+          isDeleted: false,
+          expireAt: null,
+        }
       : profileData;
 
     const updatedUser = await User.findByIdAndUpdate(user._id, updatePayload, {
@@ -91,7 +111,7 @@ const registerWithSocialAuth = async (
   const newUser = await User.create({
     ...profileData,
     role,
-    status: role === USER_ROLE.rider ? USER_STATUS.pending : USER_STATUS.active,
+    status: registrationStatus,
     registerWith: provider,
     expireAt: null as any,
   });

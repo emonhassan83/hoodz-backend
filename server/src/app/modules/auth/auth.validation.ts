@@ -3,6 +3,23 @@ import { z } from 'zod';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 
 const registerRoleSchema = z.enum([USER_ROLE.user, USER_ROLE.rider]).optional();
+const coordinateSchema = z.number();
+const optionalAddressSchema = z
+  .string()
+  .trim()
+  .min(1, { message: 'address cannot be empty' })
+  .max(200, { message: 'address cannot exceed 200 characters' })
+  .optional();
+
+const optionalLocationFields = {
+  address: optionalAddressSchema,
+  latitude: coordinateSchema.optional(),
+  longitude: coordinateSchema.optional(),
+  deliveryAddress: optionalAddressSchema,
+  deliveryLatitude: coordinateSchema.optional(),
+  deliveryLongitude: coordinateSchema.optional(),
+  timeZone: z.string().trim().min(1).optional(),
+};
 
 const signupWithEmailSchema = z.object({
   body: z.object({
@@ -17,21 +34,7 @@ const signupWithEmailSchema = z.object({
       .trim()
       .toLowerCase(),
 
-    countryCode: z
-      .string({ error: 'Invalid country code format' })
-      .trim()
-      .toUpperCase(),
-
-    phone: z
-      .string({ message: 'Phone number is required!' })
-      .min(6, { message: 'Contact number must be at least 6 digits long' })
-      .max(15, { message: 'Contact number must be at most 15 digits long' }),
-
-    address: z
-      .string({ error: 'address is required and must be text' })
-      .trim()
-      .min(1, { message: 'address cannot be empty' })
-      .max(100, { message: 'address cannot exceed 100 characters' }).optional(),
+    ...optionalLocationFields,
 
     password: z
       .string({ error: 'Password is required' })
@@ -192,6 +195,7 @@ const googleZodValidationSchema = z.object({
     }),
     fcmToken: z.string().optional(),
     role: registerRoleSchema,
+    ...optionalLocationFields,
     profileImage: z.string().optional(),
     isLegalTermsAccepted: z.boolean({
       error: 'Terms flag must be a true/false value',
@@ -218,6 +222,7 @@ const appleZodValidationSchema = z.object({
     }),
     fcmToken: z.string().optional(),
     role: registerRoleSchema,
+    ...optionalLocationFields,
     profileImage: z.string().optional(),
     isLegalTermsAccepted: z.boolean({
       error: 'Terms flag must be a true/false value',

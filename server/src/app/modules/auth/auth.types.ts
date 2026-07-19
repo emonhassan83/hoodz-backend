@@ -39,8 +39,13 @@ export type TGoogleLoginPayload = {
   token?: string;
   fcmToken?: string;
   profileAvatar?: string;
-  countryCode?: string;
-  phone?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  deliveryAddress?: string;
+  deliveryLatitude?: number;
+  deliveryLongitude?: number;
+  timeZone?: string;
   isLegalTermsAccepted: boolean;
 };
 

@@ -16,9 +16,10 @@ export interface IUser extends Document {
   securityCode?: string | null;
   fcmToken: string
   profileAvatar: string
+  coverPhoto?: string | null
   description?: string | null;
   gender?: string | null;
-  dob?: Date | null;
+  dob?: string | null;
   countryCode?: string
   phone: string | null;
   address: string;
@@ -32,6 +33,8 @@ export interface IUser extends Document {
 
   registerWith: string
   stripeCustomerId?: string
+  avgRating: number
+  ratingCount: number
   passwordChangedAt?: Date
   needsPasswordChange: boolean
   isVerified: boolean;
@@ -67,8 +70,13 @@ export interface IUserModal extends Model<IUser> {
 export interface ISignUpWithEmail {
   name: string,
   email: string
-  countryCode: string
-  phone: string
+  address?: string
+  latitude?: number
+  longitude?: number
+  deliveryAddress?: string
+  deliveryLatitude?: number
+  deliveryLongitude?: number
+  timeZone?: string
   password: string
   role?: IUserRole
   fcmToken?: string
@@ -77,7 +85,6 @@ export interface ISignUpWithEmail {
 
 export interface ISignUpWithPhone {
   name: string,
-  email: string
   countryCode: string
   phone: string
   role?: IUserRole

@@ -43,6 +43,23 @@ const getA = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const updateMyKyc = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await KycService.updateMyKyc(
+    traceId,
+    req.user.userId,
+    req.body
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'KYC updated successfully, waiting for admin approval',
+    data,
+    traceId,
+  });
+});
+
 const changeStatus = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await KycService.changeStatus(traceId, req.params.id as string, req.body);
@@ -60,5 +77,6 @@ export const KycController = {
   addKycRequest,
   getAll,
   getA,
+  updateMyKyc,
   changeStatus,
 };

@@ -18,6 +18,14 @@ router
   .get(auth(USER_ROLE.admin), KycController.getAll);
 
 router
+  .route('/me')
+  .patch(
+    auth(USER_ROLE.rider),
+    validateRequest(KycValidation.updateKycValidationSchema),
+    KycController.updateMyKyc
+  );
+
+router
   .route('/:id')
   .get(auth(USER_ROLE.admin, USER_ROLE.rider), KycController.getA);
 

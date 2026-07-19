@@ -30,8 +30,16 @@ export const findUserByEmail = async (email: string) =>
 export const findUserByPhone = async (phone: string) =>
   User.findOne({ phone }).lean();
 
-export const checkUserExists = async (email: string, phone: string) =>
-  User.findOne({ $or: [{ email }, { phone }] }).lean();
+export const checkUserExists = async (email?: string, phone?: string) => {
+  const conditions: Record<string, string>[] = [];
+
+  if (email) conditions.push({ email });
+  if (phone) conditions.push({ phone });
+
+  if (conditions.length === 0) return null;
+
+  return User.findOne({ $or: conditions }).lean();
+};
 
 // ─── Mutations ─────────────────────────────────────────────────────────────
 

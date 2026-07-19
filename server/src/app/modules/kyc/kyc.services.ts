@@ -14,6 +14,7 @@ import {
   TAddKycPayload,
   TChangeKycStatusPayload,
   TKycRequester,
+  TUpdateKycPayload,
 } from '@/app/modules/kyc/kyc.types';
 import { USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
@@ -68,6 +69,34 @@ const getA = async (traceId: string, kycId: string, requester: TKycRequester) =>
   return kyc;
 };
 
+/** Lets riders update their own approved/rejected/pending KYC and resubmit for admin review. */
+const updateMyKyc = async (
+  traceId: string,
+  riderId: string,
+  payload: TUpdateKycPayload
+) => {
+  const rider = await User.findById(riderId).select('role status');
+  assertRiderCanSubmitKyc(rider, traceId);
+
+  const kyc = await Kyc.findOne({ user: riderId });
+  if (!kyc) {
+    throw new ApiError(HttpStatusCode.NotFound, 'KYC not found', traceId);
+  }
+
+  if (payload.vehicle !== undefined) kyc.vehicle = payload.vehicle as any;
+  if (payload.license !== undefined) kyc.license = payload.license;
+  if (payload.nationalId !== undefined) kyc.nationalId = payload.nationalId;
+  kyc.status = KYC_STATUS.pending as any;
+  kyc.rejectedReason = null;
+
+  await Promise.all([
+    kyc.save(),
+    User.findByIdAndUpdate(riderId, { status: USER_STATUS.pending }),
+  ]);
+
+  return Kyc.findById(kyc._id).select('-__v');
+};
+
 /** Updates KYC status and notifies the rider by push and email. */
 const changeStatus = async (
   traceId: string,
@@ -117,5 +146,6 @@ export const KycService = {
   addKycRequest,
   getAll,
   getA,
+  updateMyKyc,
   changeStatus,
 };

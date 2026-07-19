@@ -7,6 +7,7 @@ import { TExpiresIn, TJwtPayload } from '@/app/modules/auth/auth.types';
 import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import {
   checkUserExists,
+  buildGeoLocation,
   createUser,
   restoreUser,
   updateUnverifiedUser,
@@ -56,13 +57,42 @@ export const generateTokens = (user: IUser) => {
   return { user: userResponse, accessToken, refreshToken };
 };
 
+/** Converts flat signup coordinates into persisted GeoJSON location fields. */
+export const buildSignupAddressPayload = <T extends Partial<ISignUpWithEmail>>(
+  payload: T
+) => {
+  const {
+    latitude,
+    longitude,
+    deliveryLatitude,
+    deliveryLongitude,
+    ...rest
+  } = payload;
+
+  return {
+    ...rest,
+    ...(typeof latitude === 'number' && typeof longitude === 'number'
+      ? { location: buildGeoLocation(longitude, latitude) }
+      : {}),
+    ...(typeof deliveryLatitude === 'number' &&
+    typeof deliveryLongitude === 'number'
+      ? {
+          deliveryLocation: buildGeoLocation(
+            deliveryLongitude,
+            deliveryLatitude
+          ),
+        }
+      : {}),
+  };
+};
+
 // ─── Signup orchestration ──────────────────────────────────────────────────
 
 // S (SRP): processSignup owns the "create or return existing user" decision only.
 // Token generation, OTP sending — handled by callers (auth.services.ts).
 export const handleDuplicateUser = async (
-  email: string,
-  phone: string,
+  email: string | undefined,
+  phone: string | undefined,
   payload: Partial<ISignUpWithEmail>,
   traceId: string
 ) => {
@@ -76,9 +106,14 @@ export const handleDuplicateUser = async (
   }
 
   const nextPayload = {
-    ...payload,
+    ...buildSignupAddressPayload(payload),
     role,
     status: role === USER_ROLE.rider ? USER_STATUS.pending : USER_STATUS.active,
+  };
+
+  const identityPayload = {
+    ...(email ? { email } : {}),
+    ...(phone ? { phone } : {}),
   };
 
   const existingUser = await checkUserExists(email, phone);
@@ -89,7 +124,7 @@ export const handleDuplicateUser = async (
 
   if (!existingUser.isDeleted && existingUser.isSignUpOtpVerified) {
     const message =
-      existingUser.email === email
+      email && existingUser.email === email
         ? 'User already exists with this email'
         : 'User already exists with this phone number';
 
@@ -99,13 +134,13 @@ export const handleDuplicateUser = async (
   if (existingUser.isDeleted) {
     await restoreUser(
       existingUser._id.toString(),
-      { email, phone, ...nextPayload },
+      { ...identityPayload, ...nextPayload },
       traceId
     );
   } else {
     await updateUnverifiedUser(
       existingUser._id.toString(),
-      { email, phone, ...nextPayload },
+      { ...identityPayload, ...nextPayload },
       traceId
     );
   }
@@ -117,7 +152,7 @@ export const processSignup = async (
   payload: ISignUpWithEmail,
   traceId: string
 ) => {
-  const { email, phone } = payload;
+  const { email } = payload;
   const role = payload.role ?? USER_ROLE.user;
   if (![USER_ROLE.user, USER_ROLE.rider].includes(role as any)) {
     throw new ApiError(
@@ -128,17 +163,17 @@ export const processSignup = async (
   }
 
   const signupPayload = {
-    ...payload,
+    ...buildSignupAddressPayload(payload),
     role,
     status: role === USER_ROLE.rider ? USER_STATUS.pending : USER_STATUS.active,
   };
 
-  const existingUser = await checkUserExists(email, phone);
+  const existingUser = await checkUserExists(email);
 
   if (existingUser) {
     if (!existingUser.isDeleted && existingUser.isSignUpOtpVerified) {
       const message =
-        existingUser.email === email
+        email && existingUser.email === email
           ? 'User already exists with this email'
           : 'User already exists with this phone number';
       throw new ApiError(HttpStatusCode.Conflict, message, traceId);

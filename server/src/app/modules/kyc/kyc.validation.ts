@@ -16,6 +16,30 @@ const addKycRequestValidationSchema = z.object({
   }),
 });
 
+const updateKycValidationSchema = z
+  .object({
+    body: z
+      .object({
+        vehicle: z
+          .enum(Object.values(VEHICLE) as [string, ...string[]], {
+            message: 'Invalid vehicle type',
+          })
+          .optional(),
+        license: z
+          .array(z.string().trim().min(1, 'License file cannot be empty'))
+          .min(1, 'License is required')
+          .optional(),
+        nationalId: z
+          .array(z.string().trim().min(1, 'National ID file cannot be empty'))
+          .min(1, 'National ID is required')
+          .optional(),
+      })
+      .strip(),
+  })
+  .refine(({ body }) => Object.keys(body).length > 0, {
+    message: 'At least one KYC field is required',
+  });
+
 const changeKycStatusValidationSchema = z
   .object({
     body: z.object({
@@ -38,5 +62,6 @@ const changeKycStatusValidationSchema = z
 
 export const KycValidation = {
   addKycRequestValidationSchema,
+  updateKycValidationSchema,
   changeKycStatusValidationSchema,
 };

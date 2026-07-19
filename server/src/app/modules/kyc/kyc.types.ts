@@ -9,6 +9,8 @@ export type TAddKycPayload = {
   nationalId: string[];
 };
 
+export type TUpdateKycPayload = Partial<TAddKycPayload>;
+
 export type TKycRequester = {
   userId: string;
   role: string;

@@ -24,9 +24,10 @@ const userSchema = new Schema<IUser, IUserModal>(
     securityCode: { type: String, default: null, select: false },
     fcmToken: { type: String, default: null },
     profileAvatar: { type: String, default: null },
+    coverPhoto: { type: String, default: null },
     description: { type: String, default: null },
     gender: { type: String, default: null },
-    dob: { type: Date, default: null },
+    dob: { type: String, default: null },
 
     countryCode: { type: String, default: null },
     phone: { type: String, default: null },
@@ -73,6 +74,8 @@ const userSchema = new Schema<IUser, IUserModal>(
       type: String,
       default: null,
     },
+    avgRating: { type: Number, default: 0, min: 0 },
+    ratingCount: { type: Number, default: 0, min: 0 },
 
     status: {
       type: String,

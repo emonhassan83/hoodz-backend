@@ -6,6 +6,7 @@ import QueryBuilder from '@/app/builder/QueryBuilder';
 import { SALT_ROUNDS } from '@/app/constant';
 import ApiError from '@/app/errors/ApiError';
 import { generateTokens } from '@/app/modules/auth/auth.helpers';
+import { Kyc } from '@/app/modules/kyc/kyc.model';
 import {
   deleteShopFromTypesense,
   upsertShopToTypesense,
@@ -67,12 +68,18 @@ const getAllUsersFromDB = async (
 /** Returns a single non-deleted user without private fields. */
 const getSingleUser = async (traceId: string, userId: string) => {
   const user = await User.findById(userId)
-    .select('-password -expireAt -updatedAt -__v')
+    .select(
+      '-password -securityCode -stripeCustomerId -isSignUpOtpVerified -isLoginOTPVerified -isResetPasswordVerified -isChangeEmailOtpVerified -isChangePhoneOtpVerified -isLegalTermsAccepted -expireAt -updatedAt -__v'
+    )
     .lean();
   if (!user || user.isDeleted) {
     throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
   }
-  return user;
+
+  if (user.role !== USER_ROLE.rider) return user;
+
+  const kyc = await Kyc.findOne({ user: user._id }).select('-__v').lean();
+  return { ...user, kyc };
 };
 
 /** Lists nearby vendor shops with distance and optional Google duration data. */
