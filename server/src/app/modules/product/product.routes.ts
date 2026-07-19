@@ -37,10 +37,6 @@ router
   );
 
 router
-  .route('/shop/:vendorId')
-  .get(optionalAuth, ProductController.getShopProducts);
-
-router
   .route('/notify-me/:productId')
   .post(
     auth(USER_ROLE.user, USER_ROLE.rider, USER_ROLE.vendor, USER_ROLE.agent),

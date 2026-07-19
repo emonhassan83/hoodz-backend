@@ -1,6 +1,7 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
+import { getFollowedVendorIdSet } from '@/app/modules/follow/follow.helpers';
 import {
   assertCategoryExists,
   assertProductAccess,
@@ -14,6 +15,9 @@ import {
   notifyProductRestockedSubscribers,
   withWishlistFlag,
   withWishlistFlags,
+  toNumber,
+  toStringArray,
+  getUserOrigin,
 } from '@/app/modules/product/product.helpers';
 import {
   Product,
@@ -29,6 +33,7 @@ import {
   deleteProductFromTypesense,
   upsertProductToTypesense,
 } from '@/app/modules/search/search.typesense';
+import { getGoogleDistanceMatrix } from '@/app/modules/user/user.helpers';
 import {
   deleteCache,
   getCache,
@@ -39,55 +44,11 @@ import {
   getRecentlyViewedProductIds,
 } from '@/app/redis/helpers/recentlyViewedProducts';
 import { REDIS_KEYS } from '@/app/redis/keys';
-import { getGoogleDistanceMatrix } from '@/app/modules/user/user.helpers';
-import { User } from '@/app/modules/user/user.model';
 
 const productPopulate = [
   { path: 'vendorId', select: 'name email phone profileAvatar address location' },
   { path: 'category', select: 'title icon' },
 ];
-
-const toNumber = (value: unknown) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-};
-
-const toStringArray = (value: unknown) =>
-  Array.isArray(value)
-    ? value.map(String).filter(Boolean)
-    : typeof value === 'string' && value.trim()
-      ? value.split(',').map((item) => item.trim()).filter(Boolean)
-      : [];
-
-const getUserOrigin = async (
-  traceId: string,
-  userId?: string,
-  query?: TProductFilterQuery
-) => {
-  const queryLatitude = toNumber(query?.latitude);
-  const queryLongitude = toNumber(query?.longitude);
-  if (queryLatitude !== undefined && queryLongitude !== undefined) {
-    return { latitude: queryLatitude, longitude: queryLongitude };
-  }
-
-  if (!userId) return null;
-
-  const user = await User.findById(userId)
-    .select('deliveryLocation location isDeleted')
-    .lean();
-  if (!user || user.isDeleted) {
-    throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
-  }
-
-  const coordinates =
-    user.deliveryLocation?.coordinates?.some((item) => item !== 0)
-      ? user.deliveryLocation.coordinates
-      : user.location?.coordinates;
-
-  if (!coordinates || coordinates.every((item) => item === 0)) return null;
-
-  return { longitude: coordinates[0], latitude: coordinates[1] };
-};
 
 const createProduct = async (
   traceId: string,
@@ -296,7 +257,20 @@ const getAllProduct = async (
   }
 
   const wishlistIds = await getWishlistProductIdSet(userId);
-  const result = withWishlistFlags(products, wishlistIds);
+  const followedVendorIds = await getFollowedVendorIdSet(userId);
+  const sortedProducts = followedVendorIds.size
+    ? [...products].sort((a: any, b: any) => {
+        const aFollowed = followedVendorIds.has(
+          a.vendorId?._id?.toString() ?? a.vendorId?.toString()
+        );
+        const bFollowed = followedVendorIds.has(
+          b.vendorId?._id?.toString() ?? b.vendorId?.toString()
+        );
+
+        return Number(bFollowed) - Number(aFollowed);
+      })
+    : products;
+  const result = withWishlistFlags(sortedProducts, wishlistIds);
 
   await setCache(cacheKey, result, 300);
   return result;
@@ -314,26 +288,6 @@ const getMyProducts = async (vendorId: string) => {
     .lean();
 
   const wishlistIds = await getWishlistProductIdSet(vendorId);
-  const result = withWishlistFlags(products, wishlistIds);
-
-  await setCache(cacheKey, result, 300);
-  return result;
-};
-
-const getShopProducts = async (vendorId: string, userId?: string) => {
-  const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `shop:${vendorId}:${userId ?? 'anonymous'}`
-  );
-  const cached = await getCache(cacheKey);
-  if (cached) return cached;
-
-  const products = await Product.find({ vendorId, isDeleted: false })
-    .populate(productPopulate)
-    .sort({ createdAt: -1 })
-    .select('-__v')
-    .lean();
-
-  const wishlistIds = await getWishlistProductIdSet(userId);
   const result = withWishlistFlags(products, wishlistIds);
 
   await setCache(cacheKey, result, 300);
@@ -453,7 +407,6 @@ export const ProductService = {
   createProduct,
   getAllProduct,
   getMyProducts,
-  getShopProducts,
   getProductById,
   updateProduct,
   deleteProduct,

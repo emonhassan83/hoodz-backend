@@ -6,6 +6,10 @@ import QueryBuilder from '@/app/builder/QueryBuilder';
 import { SALT_ROUNDS } from '@/app/constant';
 import ApiError from '@/app/errors/ApiError';
 import { generateTokens } from '@/app/modules/auth/auth.helpers';
+import {
+  getFollowedVendorIdSet,
+  withFollowingFlag,
+} from '@/app/modules/follow/follow.helpers';
 import { Kyc } from '@/app/modules/kyc/kyc.model';
 import {
   deleteShopFromTypesense,
@@ -85,7 +89,8 @@ const getSingleUser = async (traceId: string, userId: string) => {
 /** Lists nearby vendor shops with distance and optional Google duration data. */
 const getNearbyShops = async (
   _traceId: string,
-  query: TNearbyShopsQuery
+  query: TNearbyShopsQuery,
+  userId?: string
 ) => {
   const origin = {
     latitude: query.latitude,
@@ -132,6 +137,8 @@ const getNearbyShops = async (
     );
   }
 
+  const followedVendorIds = await getFollowedVendorIdSet(userId);
+
   return nearbyVendors.map((vendor, index) => {
     const element = googleElements[index];
     const googleDistanceKm =
@@ -143,7 +150,7 @@ const getNearbyShops = async (
         ? Math.ceil(element.duration.value / 60)
         : null;
 
-    return {
+    return withFollowingFlag({
       _id: vendor._id,
       name: vendor.name,
       email: vendor.email,
@@ -161,15 +168,15 @@ const getNearbyShops = async (
         element?.status === 'OK' && element.duration?.text
           ? element.duration.text
           : null,
-    };
+    }, followedVendorIds);
   });
 };
 
 // ─── Update ────────────────────────────────────────────────────────────────
 
 /** Returns vendors with rating above 4 for featured vendor sections. */
-const getFeaturedVendors = async () =>
-  User.find({
+const getFeaturedVendors = async (userId?: string) => {
+  const vendors = await User.find({
     role: USER_ROLE.vendor,
     status: 'active',
     isDeleted: false,
@@ -180,6 +187,10 @@ const getFeaturedVendors = async () =>
     )
     .sort({ avgRating: -1, ratingCount: -1, createdAt: -1 })
     .lean();
+
+  const followedVendorIds = await getFollowedVendorIdSet(userId);
+  return vendors.map((vendor) => withFollowingFlag(vendor, followedVendorIds));
+};
 
 /** Changes a user's email after OTP verification. */
 const changeEmail = async (

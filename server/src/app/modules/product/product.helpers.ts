@@ -12,6 +12,7 @@ import {
 } from '@/app/modules/product/product.model';
 import {
   TProductColor,
+  TProductFilterQuery,
   TProductPayload,
   TProductVariant,
 } from '@/app/modules/product/product.types';
@@ -24,6 +25,48 @@ import {
   syncWishlistProductIds,
 } from '@/app/redis/helpers/wishlist';
 import { sendNotificationViaQueue } from '@/app/utils/notification-queue.service';
+
+export const toNumber = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+export const toStringArray = (value: unknown) =>
+  Array.isArray(value)
+    ? value.map(String).filter(Boolean)
+    : typeof value === 'string' && value.trim()
+      ? value.split(',').map((item) => item.trim()).filter(Boolean)
+      : [];
+
+export const getUserOrigin = async (
+  traceId: string,
+  userId?: string,
+  query?: TProductFilterQuery
+) => {
+  const queryLatitude = toNumber(query?.latitude);
+  const queryLongitude = toNumber(query?.longitude);
+  if (queryLatitude !== undefined && queryLongitude !== undefined) {
+    return { latitude: queryLatitude, longitude: queryLongitude };
+  }
+
+  if (!userId) return null;
+
+  const user = await User.findById(userId)
+    .select('deliveryLocation location isDeleted')
+    .lean();
+  if (!user || user.isDeleted) {
+    throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
+  }
+
+  const coordinates =
+    user.deliveryLocation?.coordinates?.some((item) => item !== 0)
+      ? user.deliveryLocation.coordinates
+      : user.location?.coordinates;
+
+  if (!coordinates || coordinates.every((item) => item === 0)) return null;
+
+  return { longitude: coordinates[0], latitude: coordinates[1] };
+};
 
 export const calculateDiscountPrice = (price: number, discount = 0) =>
   Number((price - price * (discount / 100)).toFixed(2));

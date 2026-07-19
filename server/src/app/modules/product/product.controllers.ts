@@ -109,22 +109,6 @@ const getMyProducts = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-const getShopProducts = asyncHandler(async (req: Request, res: Response) => {
-  const traceId = getTraceId();
-  const data = await ProductService.getShopProducts(
-    req.params.vendorId as string,
-    req.user?.userId
-  );
-
-  sendResponse(res, {
-    success: true,
-    statusCode: 200,
-    message: 'Shop products fetched successfully',
-    data,
-    traceId,
-  });
-});
-
 const getProductById = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await ProductService.getProductById(
@@ -204,7 +188,6 @@ export const ProductController = {
   createProduct,
   getAllProduct,
   getMyProducts,
-  getShopProducts,
   getProductById,
   updateProduct,
   deleteProduct,

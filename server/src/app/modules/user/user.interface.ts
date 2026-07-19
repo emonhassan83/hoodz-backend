@@ -36,6 +36,8 @@ export interface IUser extends Document {
   avgRating: number
   ratingCount: number
   points: number
+  followers: number
+
   passwordChangedAt?: Date
   needsPasswordChange: boolean
   isVerified: boolean;

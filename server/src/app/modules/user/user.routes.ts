@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import auth from '@/app/middlewares/auth';
+import auth, { optionalAuth } from '@/app/middlewares/auth';
 import {
   AUTHENTICATED_ROLES,
   USER_ROLE,
@@ -87,7 +87,7 @@ router
 
 router
   .route('/featured-vendors')
-  .get(UserControllers.getFeaturedVendors);
+  .get(optionalAuth, UserControllers.getFeaturedVendors);
 
 router
   .route('/:userId')

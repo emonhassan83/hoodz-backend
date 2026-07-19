@@ -48,7 +48,11 @@ const inviteVendor = asyncHandler(async (req: Request, res: Response) => {
 
 const getNearbyShops = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await UserService.getNearbyShops(traceId, req.query as any);
+  const data = await UserService.getNearbyShops(
+    traceId,
+    req.query as any,
+    req.user.userId
+  );
 
   sendResponse(res, {
     success: true,
@@ -59,9 +63,9 @@ const getNearbyShops = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-const getFeaturedVendors = asyncHandler(async (_req: Request, res: Response) => {
+const getFeaturedVendors = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await UserService.getFeaturedVendors();
+  const data = await UserService.getFeaturedVendors(req.user?.userId);
 
   sendResponse(res, {
     success: true,
