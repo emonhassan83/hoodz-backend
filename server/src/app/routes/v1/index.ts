@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { AuthRoutes } from '@/app/modules/auth/auth.routes';
+import { BannerRoutes } from '@/app/modules/banner/banner.routes';
 import { CartRoutes } from '@/app/modules/cart/cart.routes';
 import { CategoryRoutes } from '@/app/modules/category/category.routes';
 import { KycRoutes } from '@/app/modules/kyc/kyc.routes';
@@ -19,6 +20,10 @@ const apiRoutes = [
   {
     path: '/auth',
     route: AuthRoutes,
+  },
+  {
+    path: '/banner',
+    route: BannerRoutes,
   },
   {
     path: '/otp',

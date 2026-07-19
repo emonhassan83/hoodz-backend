@@ -14,7 +14,8 @@ const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
     success: true,
     statusCode: 200,
     message: 'Users fetched successfully',
-    data,
+    meta: data.meta,
+    data: data.users,
     traceId,
   });
 });

@@ -78,7 +78,7 @@ const getSingleUser = async (traceId: string, userId: string) => {
 
   if (user.role !== USER_ROLE.rider) return user;
 
-  const kyc = await Kyc.findOne({ user: user._id }).select('-__v').lean();
+  const kyc = await Kyc.findOne({ user: user._id }).select('-user -rejectedReason -updatedAt -__v').lean();
   return { ...user, kyc };
 };
 

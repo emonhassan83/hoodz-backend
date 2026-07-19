@@ -27,10 +27,10 @@ router
 
 router
   .route('/:id')
-  .get(auth(USER_ROLE.admin, USER_ROLE.rider), KycController.getA);
+  .get(auth(USER_ROLE.admin), KycController.getA);
 
 router
-  .route('/:id/status')
+  .route('/status/:id')
   .patch(
     auth(USER_ROLE.admin),
     validateRequest(KycValidation.changeKycStatusValidationSchema),
