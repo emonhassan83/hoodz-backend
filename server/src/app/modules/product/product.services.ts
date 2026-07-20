@@ -1,5 +1,6 @@
 import { HttpStatusCode } from 'axios';
 
+import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import { getFollowedVendorIdSet } from '@/app/modules/follow/follow.helpers';
 import {
@@ -11,13 +12,14 @@ import {
   assertInventoryOptionsValid,
   buildProductWritePayload,
   buildVendorProductStats,
+  formatProductListItem,
+  formatProductListItems,
   generateUniqueSku,
   getWishlistProductIdSet,
   getProductByIdOrThrow,
   invalidateProductCaches,
   notifyProductRestockedSubscribers,
   withWishlistFlag,
-  withWishlistFlags,
   toNumber,
   toStringArray,
   getUserOrigin,
@@ -53,6 +55,24 @@ const productPopulate = [
   { path: 'vendorId', select: 'name email phone profileAvatar address location' },
   { path: 'category', select: 'title icon' },
 ];
+
+const productListSelect =
+  '_id category vendorId title collectionType images price discount discountPrice stock avgRating ratingCount createdAt';
+
+type TProductPaginationMeta = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPage: number;
+};
+
+type TMyProductsResponse = {
+  meta: TProductPaginationMeta;
+  data: {
+    stats: ReturnType<typeof buildVendorProductStats>;
+    products: ReturnType<typeof formatProductListItems>;
+  };
+};
 
 const createProduct = async (
   traceId: string,
@@ -101,13 +121,16 @@ const markProductViewed = async (
 ) => {
   await getProductByIdOrThrow(traceId, productId);
   await addRecentlyViewedProduct(userId, productId);
-  await deleteCache(REDIS_KEYS.PRODUCT_RECENTLY_VIEWED(userId));
+  await Promise.all([
+    deleteCache(REDIS_KEYS.PRODUCT_RECENTLY_VIEWED(userId)),
+    deleteCache(REDIS_KEYS.PRODUCT_LIST(`recently-viewed:${userId}:cards:v2`)),
+  ]);
 
   return { viewed: true };
 };
 
 const getRecentlyViewedProducts = async (userId: string) => {
-  const cacheKey = REDIS_KEYS.PRODUCT_RECENTLY_VIEWED(userId);
+  const cacheKey = REDIS_KEYS.PRODUCT_LIST(`recently-viewed:${userId}:cards:v2`);
   const cached = await getCache(cacheKey);
   if (cached) return cached;
 
@@ -118,7 +141,8 @@ const getRecentlyViewedProducts = async (userId: string) => {
     _id: { $in: productIds },
     isDeleted: false,
   })
-    .select('title price discountPrice images stock')
+    .populate([{ path: 'category', select: 'title' }])
+    .select(productListSelect)
     .lean();
 
   const productById = new Map(
@@ -129,7 +153,7 @@ const getRecentlyViewedProducts = async (userId: string) => {
   const productsWithWishlist = productIds
     .map((productId) => productById.get(productId))
     .filter(Boolean)
-    .map((product) => withWishlistFlag(product!, wishlistIds));
+    .map((product) => formatProductListItem(product!, wishlistIds));
 
   await setCache(cacheKey, productsWithWishlist, 300);
   return productsWithWishlist;
@@ -137,7 +161,7 @@ const getRecentlyViewedProducts = async (userId: string) => {
 
 const getTrendingProducts = async (userId?: string) => {
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `trending:${userId ?? 'anonymous'}`
+    `trending:${userId ?? 'anonymous'}:cards:v2`
   );
   const cached = await getCache(cacheKey);
   if (cached) return cached;
@@ -152,11 +176,11 @@ const getTrendingProducts = async (userId?: string) => {
   })
     .populate(productPopulate)
     .sort({ avgRating: -1, ratingCount: -1, sold: -1, createdAt: -1 })
-    .select('-__v')
+    .select(productListSelect)
     .lean();
 
   const wishlistIds = await getWishlistProductIdSet(userId);
-  const result = withWishlistFlags(products, wishlistIds);
+  const result = formatProductListItems(products, wishlistIds);
 
   await setCache(cacheKey, result, 300);
   return result;
@@ -169,7 +193,7 @@ const getAllProduct = async (
 ) => {
   const productQuery = query as TProductFilterQuery;
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `all:${userId ?? 'anonymous'}:${JSON.stringify(query)}`
+    `all:${userId ?? 'anonymous'}:cards:v2:${JSON.stringify(query)}`
   );
   const cached = await getCache(cacheKey);
   if (cached) return cached;
@@ -197,7 +221,7 @@ const getAllProduct = async (
   let products = await Product.find(filter)
     .populate(productPopulate)
     .sort({ createdAt: -1 })
-    .select('-__v')
+    .select(productListSelect)
     .lean();
 
   const maxDistanceKm = toNumber(
@@ -285,27 +309,50 @@ const getAllProduct = async (
         return Number(bFollowed) - Number(aFollowed);
       })
     : products;
-  const result = withWishlistFlags(sortedProducts, wishlistIds);
+  const result = formatProductListItems(sortedProducts, wishlistIds);
 
   await setCache(cacheKey, result, 300);
   return result;
 };
 
-const getMyProducts = async (vendorId: string) => {
-  const cacheKey = REDIS_KEYS.PRODUCT_LIST(`my:${vendorId}`);
-  const cached = await getCache(cacheKey);
+const getMyProducts = async (
+  vendorId: string,
+  query: Record<string, unknown>
+) => {
+  const cacheKey = REDIS_KEYS.PRODUCT_LIST(
+    `my:${vendorId}:dashboard:v2:${JSON.stringify(query)}`
+  );
+  const cached = await getCache<TMyProductsResponse>(cacheKey);
   if (cached) return cached;
 
-  const products = await Product.find({ vendorId, isDeleted: false })
-    .populate(productPopulate)
-    .sort({ createdAt: -1 })
-    .select('-__v')
-    .lean();
+  const productQuery = new QueryBuilder(
+    Product.find({ vendorId, isDeleted: false })
+      .populate(productPopulate)
+      .select(productListSelect)
+      .lean(),
+    query
+  )
+    .search(['title', 'brand', 'sku'])
+    .filter()
+    .sort()
+    .paginate();
+
+  const [products, meta, statsProducts] = await Promise.all([
+    productQuery.modelQuery,
+    productQuery.countTotal(),
+    Product.find({ vendorId, isDeleted: false })
+      .populate([{ path: 'category', select: 'title' }])
+      .select('category price discountPrice stock')
+      .lean(),
+  ]);
 
   const wishlistIds = await getWishlistProductIdSet(vendorId);
   const result = {
-    stats: buildVendorProductStats(products),
-    products: withWishlistFlags(products, wishlistIds),
+    meta,
+    data: {
+      stats: buildVendorProductStats(statsProducts),
+      products: formatProductListItems(products, wishlistIds),
+    },
   };
 
   await setCache(cacheKey, result, 300);

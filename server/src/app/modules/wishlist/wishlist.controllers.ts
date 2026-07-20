@@ -6,7 +6,9 @@ import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
 const toggle = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await WishlistService.toggle(traceId, req.user.userId, req.body);
+  const data = await WishlistService.toggle(traceId, req.user.userId, {
+    productId: req.params.productId as string,
+  });
 
   sendResponse(res, {
     success: true,

@@ -13,7 +13,7 @@ router
   .get(auth(...AUTHENTICATED_ROLES), WishlistController.getAll);
 
 router
-  .route('/toggle')
+  .route('/toggle/:productId')
   .post(
     auth(...AUTHENTICATED_ROLES),
     validateRequest(WishlistValidation.toggleWishlistValidationSchema),

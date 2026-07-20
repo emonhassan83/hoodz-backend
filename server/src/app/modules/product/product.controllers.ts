@@ -111,13 +111,14 @@ const getAllProduct = asyncHandler(async (req: Request, res: Response) => {
 
 const getMyProducts = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await ProductService.getMyProducts(req.user.userId);
+  const result = await ProductService.getMyProducts(req.user.userId, req.query);
 
   sendResponse(res, {
     success: true,
     statusCode: 200,
     message: 'My products fetched successfully',
-    data,
+    meta: result.meta,
+    data: result.data,
     traceId,
   });
 });

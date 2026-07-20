@@ -404,6 +404,39 @@ export const withWishlistFlags = <T extends { _id: unknown }>(
   wishlistIds: Set<string>
 ) => products.map((product) => withWishlistFlag(product, wishlistIds));
 
+/** Shapes product list cards with only frontend list fields. */
+export const formatProductListItem = (
+  product: Record<string, any>,
+  wishlistIds: Set<string>
+) => {
+  const categoryTitle =
+    product.category && typeof product.category === 'object'
+      ? product.category.title
+      : undefined;
+
+  return {
+    _id: product._id,
+    categoryTitle,
+    title: product.title,
+    collectionType: product.collectionType,
+    images: product.images ?? [],
+    price: product.price ?? 0,
+    discount: product.discount ?? 0,
+    discountPrice: product.discountPrice ?? product.price ?? 0,
+    stock: product.stock ?? 0,
+    avgRating: product.avgRating ?? 0,
+    ratingCount: product.ratingCount ?? 0,
+    inStock: Number(product.stock ?? 0) > 0,
+    isWishlisted: wishlistIds.has(String(product._id)),
+  };
+};
+
+/** Shapes multiple products for list/card API responses. */
+export const formatProductListItems = (
+  products: Record<string, any>[],
+  wishlistIds: Set<string>
+) => products.map((product) => formatProductListItem(product, wishlistIds));
+
 /** Notifies stock subscribers when a previously unavailable product is restocked. */
 export const notifyProductRestockedSubscribers = async (
   productId: string,
