@@ -67,13 +67,17 @@ const markProductViewed = asyncHandler(async (req: Request, res: Response) => {
 const getRecentlyViewedProducts = asyncHandler(
   async (req: Request, res: Response) => {
     const traceId = getTraceId();
-    const data = await ProductService.getRecentlyViewedProducts(req.user.userId);
+    const result = await ProductService.getRecentlyViewedProducts(
+      req.user.userId,
+      req.query
+    );
 
     sendResponse(res, {
       success: true,
       statusCode: 200,
       message: 'Recently viewed products fetched successfully',
-      data,
+      meta: result.meta,
+      data: result.data,
       traceId,
     });
   }
@@ -81,20 +85,24 @@ const getRecentlyViewedProducts = asyncHandler(
 
 const getTrendingProducts = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await ProductService.getTrendingProducts(req.user?.userId);
+  const result = await ProductService.getTrendingProducts(
+    req.query,
+    req.user?.userId
+  );
 
   sendResponse(res, {
     success: true,
     statusCode: 200,
     message: 'Trending products fetched successfully',
-    data,
+    meta: result.meta,
+    data: result.data,
     traceId,
   });
 });
 
 const getAllProduct = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await ProductService.getAllProduct(
+  const result = await ProductService.getAllProduct(
     traceId,
     req.query,
     req.user?.userId
@@ -104,7 +112,8 @@ const getAllProduct = asyncHandler(async (req: Request, res: Response) => {
     success: true,
     statusCode: 200,
     message: 'Products fetched successfully',
-    data,
+    meta: result.meta,
+    data: result.data,
     traceId,
   });
 });

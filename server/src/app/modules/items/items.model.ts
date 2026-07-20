@@ -2,6 +2,14 @@ import { Schema, model } from 'mongoose';
 
 import { IItems, IItemsModel } from './items.interface';
 
+const itemColorSchema = new Schema(
+  {
+    code: { type: String, required: true, trim: true },
+    name: { type: String, required: true, trim: true },
+  },
+  { _id: false }
+);
+
 const itemsSchema = new Schema<IItems, IItemsModel>(
    {
     order: {
@@ -35,7 +43,7 @@ const itemsSchema = new Schema<IItems, IItemsModel>(
       default: null,
     },
     color: {
-      type: String,
+      type: itemColorSchema,
       default: null,
     },
   },
@@ -43,5 +51,8 @@ const itemsSchema = new Schema<IItems, IItemsModel>(
     timestamps: true,
   },
 );
+
+itemsSchema.index({ order: 1, author: 1 });
+itemsSchema.index({ product: 1 });
 
 export const Items = model<IItems, IItemsModel>('Items', itemsSchema);

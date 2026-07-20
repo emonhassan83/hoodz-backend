@@ -129,21 +129,49 @@ const markProductViewed = async (
   return { viewed: true };
 };
 
-const getRecentlyViewedProducts = async (userId: string) => {
-  const cacheKey = REDIS_KEYS.PRODUCT_LIST(`recently-viewed:${userId}:cards:v2`);
-  const cached = await getCache(cacheKey);
+type TProductListResponse = {
+  meta: TProductPaginationMeta;
+  data: ReturnType<typeof formatProductListItems>;
+};
+
+const getRecentlyViewedProducts = async (
+  userId: string,
+  query: Record<string, unknown>
+) => {
+  const cacheKey = REDIS_KEYS.PRODUCT_LIST(
+    `recently-viewed:${userId}:cards:v3:${JSON.stringify(query)}`
+  );
+  const cached = await getCache<TProductListResponse>(cacheKey);
   if (cached) return cached;
 
   const productIds = await getRecentlyViewedProductIds(userId);
-  if (productIds.length === 0) return [];
+  if (productIds.length === 0) {
+    return {
+      meta: {
+        page: Number(query.page) || 1,
+        limit: Number(query.limit) || 10,
+        total: 0,
+        totalPage: 0,
+      },
+      data: [],
+    };
+  }
 
-  const products = await Product.find({
-    _id: { $in: productIds },
-    isDeleted: false,
-  })
-    .populate([{ path: 'category', select: 'title' }])
-    .select(productListSelect)
-    .lean();
+  const recentlyViewedQuery = new QueryBuilder(
+    Product.find({
+      _id: { $in: productIds },
+      isDeleted: false,
+    })
+      .populate([{ path: 'category', select: 'title' }])
+      .select(productListSelect)
+      .lean(),
+    query
+  ).paginate();
+
+  const [products, meta] = await Promise.all([
+    recentlyViewedQuery.modelQuery,
+    recentlyViewedQuery.countTotal(),
+  ]);
 
   const productById = new Map(
     products.map((product) => [product._id.toString(), product])
@@ -154,33 +182,49 @@ const getRecentlyViewedProducts = async (userId: string) => {
     .map((productId) => productById.get(productId))
     .filter(Boolean)
     .map((product) => formatProductListItem(product!, wishlistIds));
+  const result = { meta, data: productsWithWishlist };
 
-  await setCache(cacheKey, productsWithWishlist, 300);
-  return productsWithWishlist;
+  await setCache(cacheKey, result, 300);
+  return result;
 };
 
-const getTrendingProducts = async (userId?: string) => {
+const getTrendingProducts = async (
+  query: Record<string, unknown>,
+  userId?: string
+) => {
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `trending:${userId ?? 'anonymous'}:cards:v2`
+    `trending:${userId ?? 'anonymous'}:cards:v3:${JSON.stringify(query)}`
   );
-  const cached = await getCache(cacheKey);
+  const cached = await getCache<TProductListResponse>(cacheKey);
   if (cached) return cached;
 
-  const products = await Product.find({
-    isDeleted: false,
-    $or: [
-      { avgRating: { $gt: 0 } },
-      { ratingCount: { $gt: 0 } },
-      { sold: { $gt: 0 } },
-    ],
-  })
-    .populate(productPopulate)
-    .sort({ avgRating: -1, ratingCount: -1, sold: -1, createdAt: -1 })
-    .select(productListSelect)
-    .lean();
+  const trendingQuery = new QueryBuilder(
+    Product.find({
+      isDeleted: false,
+      $or: [
+        { avgRating: { $gt: 0 } },
+        { ratingCount: { $gt: 0 } },
+        { sold: { $gt: 0 } },
+      ],
+    })
+      .populate(productPopulate)
+      .select(productListSelect)
+      .lean(),
+    {
+      sort: '-avgRating,-ratingCount,-sold,-createdAt',
+      ...query,
+    }
+  )
+    .sort()
+    .paginate();
+
+  const [products, meta] = await Promise.all([
+    trendingQuery.modelQuery,
+    trendingQuery.countTotal(),
+  ]);
 
   const wishlistIds = await getWishlistProductIdSet(userId);
-  const result = formatProductListItems(products, wishlistIds);
+  const result = { meta, data: formatProductListItems(products, wishlistIds) };
 
   await setCache(cacheKey, result, 300);
   return result;
@@ -193,9 +237,9 @@ const getAllProduct = async (
 ) => {
   const productQuery = query as TProductFilterQuery;
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `all:${userId ?? 'anonymous'}:cards:v2:${JSON.stringify(query)}`
+    `all:${userId ?? 'anonymous'}:cards:v3:${JSON.stringify(query)}`
   );
-  const cached = await getCache(cacheKey);
+  const cached = await getCache<TProductListResponse>(cacheKey);
   if (cached) return cached;
 
   const filter: Record<string, unknown> = { isDeleted: false };
@@ -218,11 +262,20 @@ const getAllProduct = async (
     };
   }
 
-  let products = await Product.find(filter)
-    .populate(productPopulate)
-    .sort({ createdAt: -1 })
-    .select(productListSelect)
-    .lean();
+  const productsQuery = new QueryBuilder(
+    Product.find(filter)
+      .populate(productPopulate)
+      .select(productListSelect)
+      .lean(),
+    query
+  )
+    .sort()
+    .paginate();
+
+  let [products, meta] = await Promise.all([
+    productsQuery.modelQuery,
+    productsQuery.countTotal(),
+  ]);
 
   const maxDistanceKm = toNumber(
     productQuery.maxDistanceKm ?? productQuery.maxDistance
@@ -309,7 +362,10 @@ const getAllProduct = async (
         return Number(bFollowed) - Number(aFollowed);
       })
     : products;
-  const result = formatProductListItems(sortedProducts, wishlistIds);
+  const result = {
+    meta,
+    data: formatProductListItems(sortedProducts, wishlistIds),
+  };
 
   await setCache(cacheKey, result, 300);
   return result;

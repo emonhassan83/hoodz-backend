@@ -8,6 +8,7 @@ import { FollowRoutes } from '@/app/modules/follow/follow.routes';
 import { KycRoutes } from '@/app/modules/kyc/kyc.routes';
 import { NotificationRoutes } from '@/app/modules/notification/notification.routes';
 import { OtpRoutes } from '@/app/modules/otp/otp.routes';
+import { OrdersRoutes } from '@/app/modules/orders/orders.routes';
 import { ProductRoutes } from '@/app/modules/product/product.routes';
 import { SearchRoutes } from '@/app/modules/search/search.routes';
 import { SettingsRoutes } from '@/app/modules/settings/settings.routes';
@@ -73,6 +74,10 @@ const apiRoutes = [
   {
     path: '/search',
     route: SearchRoutes,
+  },
+  {
+    path: '/orders',
+    route: OrdersRoutes,
   },
 ];
 
