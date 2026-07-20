@@ -7,15 +7,15 @@ export type TCartColor = {
 
 export type TCartItem = {
   productId: Types.ObjectId;
-  size: string;
-  color: TCartColor;
+  size?: string | null;
+  color?: TCartColor | null;
   quantity: number;
 };
 
 export type TCartItemIdentity = {
   productId: string;
-  size: string;
-  color: TCartColor;
+  size?: string | null;
+  color?: TCartColor | null;
 };
 
 export type TAddCartItemPayload = TCartItemIdentity & {

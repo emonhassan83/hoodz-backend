@@ -3,6 +3,7 @@ import { HttpStatusCode } from 'axios';
 import ApiError from '@/app/errors/ApiError';
 import {
   assertVariantStock,
+  buildCartItemMatch,
   buildCartItem,
   clearCart,
   findProductVariantOrThrow,
@@ -44,11 +45,7 @@ const add = async (
       {
         userId,
         items: {
-          $elemMatch: {
-            productId: payload.productId,
-            size: payload.size,
-            'color.code': payload.color.code,
-          },
+          $elemMatch: buildCartItemMatch(payload),
         },
       },
       { $inc: { 'items.$.quantity': payload.quantity } }
@@ -93,16 +90,12 @@ const update = async (
   assertVariantStock(traceId, variant.quantity, payload.quantity);
 
   await Cart.updateOne(
-    {
-      userId,
-      items: {
-        $elemMatch: {
-          productId: payload.productId,
-          size: payload.size,
-          'color.code': payload.color.code,
+      {
+        userId,
+        items: {
+          $elemMatch: buildCartItemMatch(payload),
         },
       },
-    },
     { $set: { 'items.$.quantity': payload.quantity } }
   );
 
@@ -120,11 +113,7 @@ const remove = async (
     { userId },
     {
       $pull: {
-        items: {
-          productId: payload.productId,
-          size: payload.size,
-          'color.code': payload.color.code,
-        },
+        items: buildCartItemMatch(payload),
       },
     }
   );
@@ -167,8 +156,8 @@ const getCart = async (userId: string) => {
       const unitPrice = product.discountPrice || product.price;
       return {
         productId: item.productId,
-        size: item.size,
-        color: item.color,
+        size: item.size ?? null,
+        color: item.color ?? null,
         quantity: item.quantity,
         product: {
           _id: product._id,
@@ -182,7 +171,7 @@ const getCart = async (userId: string) => {
         totalPrice: Number((unitPrice * item.quantity).toFixed(2)),
       };
     })
-    .filter((item): item is TEnrichedCartItem => Boolean(item));
+    .filter(Boolean) as TEnrichedCartItem[];
 
   const subTotal = enrichedItems.reduce(
     (total, item) => total + item.totalPrice,

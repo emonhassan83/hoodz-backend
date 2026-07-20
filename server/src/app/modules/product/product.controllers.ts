@@ -34,6 +34,19 @@ const createProduct = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const createProductByAdmin = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await ProductService.createProductByAdmin(traceId, req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 201,
+    message: 'Product created successfully',
+    data,
+    traceId,
+  });
+});
+
 const markProductViewed = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await ProductService.markProductViewed(
@@ -186,6 +199,7 @@ export const ProductController = {
   getRecentlyViewedProducts,
   getTrendingProducts,
   createProduct,
+  createProductByAdmin,
   getAllProduct,
   getMyProducts,
   getProductById,

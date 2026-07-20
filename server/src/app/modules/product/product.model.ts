@@ -1,6 +1,9 @@
 import { Schema, model } from 'mongoose';
 
-import { COLLECTION_TYPE } from '@/app/modules/product/product.constant';
+import {
+  COLLECTION_TYPE,
+  PRODUCT_INVENTORY_TYPE,
+} from '@/app/modules/product/product.constant';
 import {
   IProduct,
   IProductModel,
@@ -18,8 +21,8 @@ const colorSchema = new Schema(
 
 const variantSchema = new Schema(
   {
-    size: { type: String, required: true, trim: true },
-    color: { type: colorSchema, required: true },
+    size: { type: String, default: null, trim: true },
+    color: { type: colorSchema, default: null },
     quantity: { type: Number, required: true, min: 0 },
   },
   { _id: true }
@@ -67,6 +70,13 @@ const productSchema = new Schema<IProduct, IProductModel>(
       required: true,
       trim: true,
       unique: true,
+      index: true,
+    },
+    inventoryType: {
+      type: String,
+      enum: Object.values(PRODUCT_INVENTORY_TYPE),
+      required: true,
+      default: PRODUCT_INVENTORY_TYPE.sizeColor,
       index: true,
     },
     collectionType: {

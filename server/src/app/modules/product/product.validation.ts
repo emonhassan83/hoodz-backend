@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-import { COLLECTION_TYPE } from '@/app/modules/product/product.constant';
+import {
+  COLLECTION_TYPE,
+  PRODUCT_INVENTORY_TYPE,
+} from '@/app/modules/product/product.constant';
 
 const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
 
@@ -10,10 +13,66 @@ const colorSchema = z.object({
 });
 
 const variantSchema = z.object({
-  size: z.string().trim().min(1, 'Size is required'),
-  color: colorSchema,
+  size: z.string().trim().min(1, 'Size is required').nullable().optional(),
+  color: colorSchema.nullable().optional(),
   quantity: z.number().int().nonnegative(),
 });
+
+const inventoryTypeSchema = z.enum(
+  Object.values(PRODUCT_INVENTORY_TYPE) as [string, ...string[]]
+);
+
+const validateInventoryShape = (
+  data: {
+    inventoryType?: string;
+    stock?: number;
+    variants?: Array<{ size?: string | null; color?: unknown; quantity: number }>;
+  },
+  ctx: z.RefinementCtx
+) => {
+  if (!data.inventoryType) return;
+
+  if (data.inventoryType === PRODUCT_INVENTORY_TYPE.single) {
+    if (typeof data.stock !== 'number') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['stock'],
+        message: 'Stock is required for single inventory products',
+      });
+    }
+    return;
+  }
+
+  if (!data.variants || data.variants.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['variants'],
+      message: 'At least one inventory option is required',
+    });
+    return;
+  }
+
+  data.variants.forEach((variant, index) => {
+    if (
+      data.inventoryType === PRODUCT_INVENTORY_TYPE.sizeColor &&
+      !variant.size
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['variants', index, 'size'],
+        message: 'Size is required for size_color inventory products',
+      });
+    }
+
+    if (!variant.color) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['variants', index, 'color'],
+        message: 'Color is required for option based inventory products',
+      });
+    }
+  });
+};
 
 const seoSchema = z.object({
   metaTitle: z.string().trim().optional(),
@@ -25,6 +84,7 @@ const seoSchema = z.object({
 const baseProductSchema = {
   category: objectIdSchema,
   sku: z.string().trim().min(1, 'SKU is required'),
+  inventoryType: inventoryTypeSchema,
   collectionType: z.enum(Object.values(COLLECTION_TYPE) as [string, ...string[]]),
   brand: z.string().trim().min(1, 'Brand is required'),
   title: z.string().trim().min(1, 'Title is required'),
@@ -32,12 +92,23 @@ const baseProductSchema = {
   images: z.array(z.string().trim().min(1)).min(1, 'At least one image is required'),
   price: z.number().nonnegative(),
   discount: z.number().min(0).max(100).default(0),
-  variants: z.array(variantSchema).min(1, 'At least one variant is required'),
+  stock: z.number().int().nonnegative().optional(),
+  variants: z.array(variantSchema).optional(),
   seo: seoSchema.optional(),
 };
 
 const createProductValidationSchema = z.object({
-  body: z.object(baseProductSchema).strip(),
+  body: z.object(baseProductSchema).strip().superRefine(validateInventoryShape),
+});
+
+const createProductByAdminValidationSchema = z.object({
+  body: z
+    .object({
+      vendorId: objectIdSchema,
+      ...baseProductSchema,
+    })
+    .strip()
+    .superRefine(validateInventoryShape),
 });
 
 const updateProductValidationSchema = z.object({
@@ -45,6 +116,7 @@ const updateProductValidationSchema = z.object({
     .object({
       category: objectIdSchema.optional(),
       sku: z.string().trim().min(1, 'SKU is required').optional(),
+      inventoryType: inventoryTypeSchema.optional(),
       collectionType: z
         .enum(Object.values(COLLECTION_TYPE) as [string, ...string[]])
         .optional(),
@@ -54,10 +126,12 @@ const updateProductValidationSchema = z.object({
       images: z.array(z.string().trim().min(1)).min(1).optional(),
       price: z.number().nonnegative().optional(),
       discount: z.number().min(0).max(100).optional(),
-      variants: z.array(variantSchema).min(1).optional(),
+      stock: z.number().int().nonnegative().optional(),
+      variants: z.array(variantSchema).optional(),
       seo: seoSchema.optional(),
     })
     .strip()
+    .superRefine(validateInventoryShape)
     .refine((data) => Object.keys(data).length > 0, {
       message: 'At least one field is required',
     }),
@@ -77,6 +151,7 @@ const notifyMeValidationSchema = z.object({
 
 export const ProductValidation = {
   createProductValidationSchema,
+  createProductByAdminValidationSchema,
   updateProductValidationSchema,
   markProductViewedValidationSchema,
   notifyMeValidationSchema,

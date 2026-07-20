@@ -1,6 +1,12 @@
-import { COLLECTION_TYPE } from '@/app/modules/product/product.constant';
+import {
+  COLLECTION_TYPE,
+  PRODUCT_INVENTORY_TYPE,
+} from '@/app/modules/product/product.constant';
 
 export type ICollectionType = keyof typeof COLLECTION_TYPE;
+
+export type TProductInventoryType =
+  (typeof PRODUCT_INVENTORY_TYPE)[keyof typeof PRODUCT_INVENTORY_TYPE];
 
 export type TProductColor = {
   code: string;
@@ -9,8 +15,8 @@ export type TProductColor = {
 
 export type TProductVariant = {
   _id?: import('mongoose').Types.ObjectId;
-  size: string;
-  color: TProductColor;
+  size?: string | null;
+  color?: TProductColor | null;
   quantity: number;
 };
 
@@ -24,6 +30,7 @@ export type TProductSeo = {
 export type TProductPayload = {
   category: string;
   sku: string;
+  inventoryType: TProductInventoryType;
   collectionType: ICollectionType;
   brand: string;
   title: string;
@@ -31,8 +38,13 @@ export type TProductPayload = {
   images: string[];
   price: number;
   discount?: number;
-  variants: TProductVariant[];
+  stock?: number;
+  variants?: TProductVariant[];
   seo?: TProductSeo;
+};
+
+export type TAdminProductPayload = TProductPayload & {
+  vendorId: string;
 };
 
 export type TProductVariantSummary = {
@@ -73,4 +85,18 @@ export type TProductViewPayload = {
 
 export type TProductWithWishlist<T> = T & {
   isWishlisted: boolean;
+};
+
+export type TProductDashboardStats = {
+  overview: {
+    allProducts: number;
+    totalValue: number;
+    lowStock: number;
+    outOfStock: number;
+  };
+  analytics: {
+    topCategories: { title: string; count: number }[];
+    priceDistribution: { label: string; count: number }[];
+    stockInsights: { label: string; count: number }[];
+  };
 };

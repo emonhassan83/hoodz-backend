@@ -22,6 +22,14 @@ router
   .get(auth(USER_ROLE.vendor), ProductController.getMyProducts);
 
 router
+  .route('/admin')
+  .post(
+    auth(USER_ROLE.admin),
+    validateRequest(ProductValidation.createProductByAdminValidationSchema),
+    ProductController.createProductByAdmin
+  );
+
+router
   .route('/generate-sku')
   .get(auth(USER_ROLE.vendor), ProductController.generateSku);
 

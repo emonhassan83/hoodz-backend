@@ -8,7 +8,9 @@ import {
   TCartItemIdentity,
   TCartColor,
 } from '@/app/modules/cart/cart.types';
+import { PRODUCT_INVENTORY_TYPE } from '@/app/modules/product/product.constant';
 import { Product } from '@/app/modules/product/product.model';
+import { TProductVariant } from '@/app/modules/product/product.types';
 import { clearCartCache, syncCartItemsToCache } from '@/app/redis/helpers/cart';
 
 /** Finds a product variant by size and color or throws a traceable API error. */
@@ -22,13 +24,44 @@ export const findProductVariantOrThrow = async (
     throw new ApiError(HttpStatusCode.NotFound, 'Product not found', traceId);
   }
 
-  const variant = product.variants.find(
-    (item) =>
-      item.size === payload.size &&
-      item.color.code === payload.color.code
-  );
+  if (product.inventoryType === PRODUCT_INVENTORY_TYPE.single) {
+    return {
+      product,
+      variant: {
+        size: null,
+        color: null,
+        quantity: product.stock,
+      } as TProductVariant,
+    };
+  }
+
+  if (
+    product.inventoryType === PRODUCT_INVENTORY_TYPE.colorOnly &&
+    !payload.color?.code
+  ) {
+    throw new ApiError(HttpStatusCode.BadRequest, 'Color is required', traceId);
+  }
+
+  if (
+    product.inventoryType === PRODUCT_INVENTORY_TYPE.sizeColor &&
+    (!payload.size || !payload.color?.code)
+  ) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Size and color are required',
+      traceId
+    );
+  }
+
+  const variant = product.variants.find((item) => {
+    if (product.inventoryType === PRODUCT_INVENTORY_TYPE.colorOnly) {
+      return item.color?.code === payload.color?.code;
+    }
+
+    return item.size === payload.size && item.color?.code === payload.color?.code;
+  });
   if (!variant) {
-    throw new ApiError(HttpStatusCode.NotFound, 'Product variant not found', traceId);
+    throw new ApiError(HttpStatusCode.NotFound, 'Product option not found', traceId);
   }
 
   return { product, variant };
@@ -52,14 +85,30 @@ export const assertVariantStock = (
 /** Builds the MongoDB cart item payload from a resolved product variant. */
 export const buildCartItem = (
   productId: string,
-  variant: { size: string; color: TCartColor },
+  variant: { size?: string | null; color?: TCartColor | null },
   quantity: number
 ): TCartItem => ({
   productId: new Types.ObjectId(productId),
-  size: variant.size,
-  color: variant.color,
+  size: variant.size ?? null,
+  color: variant.color ?? null,
   quantity,
 });
+
+/** Builds the cart item identity used by MongoDB update and pull operations. */
+export const buildCartItemMatch = (payload: TCartItemIdentity) => {
+  const match: Record<string, unknown> = {
+    productId: payload.productId,
+    size: payload.size ?? null,
+  };
+
+  if (payload.color?.code) {
+    match['color.code'] = payload.color.code;
+  } else {
+    match.color = null;
+  }
+
+  return match;
+};
 
 /** Checks if a stored cart item matches the incoming product, size, and color. */
 export const isSameCartItem = (
@@ -67,8 +116,8 @@ export const isSameCartItem = (
   payload: TCartItemIdentity
 ) =>
   item.productId.toString() === payload.productId &&
-  item.size === payload.size &&
-  item.color.code === payload.color.code;
+  (item.size ?? null) === (payload.size ?? null) &&
+  (item.color?.code ?? null) === (payload.color?.code ?? null);
 
 /** Returns existing cart items or an empty list for new carts. */
 export const getCartItemsOrEmpty = async (userId: string) => {

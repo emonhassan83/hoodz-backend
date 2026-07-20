@@ -22,7 +22,9 @@ export const syncCartItemsToCache = async (
   if (items.length === 0) return;
 
   const hashPayload = items.reduce<Record<string, string>>((payload, item) => {
-    payload[`${item.productId}:${item.size}:${item.color.code}`] = JSON.stringify(item);
+    const sizeKey = item.size ?? 'no_size';
+    const colorKey = item.color?.code ?? 'no_color';
+    payload[`${item.productId}:${sizeKey}:${colorKey}`] = JSON.stringify(item);
     return payload;
   }, {});
 

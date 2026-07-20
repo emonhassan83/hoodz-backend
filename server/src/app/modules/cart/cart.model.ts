@@ -20,12 +20,12 @@ const cartItemSchema = new Schema(
     },
     size: {
       type: String,
-      required: true,
+      default: null,
       trim: true,
     },
     color: {
       type: cartColorSchema,
-      required: true,
+      default: null,
     },
     quantity: {
       type: Number,

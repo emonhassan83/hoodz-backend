@@ -7,7 +7,10 @@ import {
   assertProductAccess,
   assertProductExists,
   assertSkuAvailable,
+  assertVendorExists,
+  assertInventoryOptionsValid,
   buildProductWritePayload,
+  buildVendorProductStats,
   generateUniqueSku,
   getWishlistProductIdSet,
   getProductByIdOrThrow,
@@ -24,6 +27,7 @@ import {
   ProductStockNotify,
 } from '@/app/modules/product/product.model';
 import {
+  TAdminProductPayload,
   TProductFilterQuery,
   TProductListQuery,
   TProductPayload,
@@ -59,6 +63,7 @@ const createProduct = async (
     assertSkuAvailable(traceId, payload.sku),
     assertCategoryExists(traceId, payload.category),
   ]);
+  assertInventoryOptionsValid(traceId, payload, payload.inventoryType);
 
   const product = await Product.create({
     ...buildProductWritePayload(payload),
@@ -73,6 +78,16 @@ const createProduct = async (
     );
   });
   return product;
+};
+
+const createProductByAdmin = async (
+  traceId: string,
+  payload: TAdminProductPayload
+) => {
+  const { vendorId, ...productPayload } = payload;
+  await assertVendorExists(traceId, vendorId);
+
+  return createProduct(traceId, vendorId, productPayload);
 };
 
 const generateSku = async () => ({
@@ -288,7 +303,10 @@ const getMyProducts = async (vendorId: string) => {
     .lean();
 
   const wishlistIds = await getWishlistProductIdSet(vendorId);
-  const result = withWishlistFlags(products, wishlistIds);
+  const result = {
+    stats: buildVendorProductStats(products),
+    products: withWishlistFlags(products, wishlistIds),
+  };
 
   await setCache(cacheKey, result, 300);
   return result;
@@ -325,6 +343,11 @@ const updateProduct = async (
   const product = await getProductByIdOrThrow(traceId, productId);
   const previousStock = product.stock;
   assertProductAccess(traceId, product, requester);
+  assertInventoryOptionsValid(
+    traceId,
+    payload,
+    payload.inventoryType ?? product.inventoryType
+  );
 
   await Promise.all([
     payload.sku
@@ -405,6 +428,7 @@ export const ProductService = {
   getRecentlyViewedProducts,
   getTrendingProducts,
   createProduct,
+  createProductByAdmin,
   getAllProduct,
   getMyProducts,
   getProductById,

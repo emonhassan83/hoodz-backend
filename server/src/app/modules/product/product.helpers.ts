@@ -6,13 +6,16 @@ import { Types } from 'mongoose';
 import ApiError from '@/app/errors/ApiError';
 import { Category } from '@/app/modules/category/category.model';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { PRODUCT_INVENTORY_TYPE } from '@/app/modules/product/product.constant';
 import {
   Product,
   ProductStockNotify,
 } from '@/app/modules/product/product.model';
 import {
   TProductColor,
+  TProductDashboardStats,
   TProductFilterQuery,
+  TProductInventoryType,
   TProductPayload,
   TProductVariant,
 } from '@/app/modules/product/product.types';
@@ -76,8 +79,10 @@ export const buildVariantSummary = (variants: TProductVariant[]) => {
   const sizeSet = new Set<string>();
   const colorMap = new Map<string, TProductColor>();
   const stock = variants.reduce((total, variant) => {
-    sizeSet.add(variant.size);
-    colorMap.set(`${variant.color.code}:${variant.color.name}`, variant.color);
+    if (variant.size) sizeSet.add(variant.size);
+    if (variant.color) {
+      colorMap.set(`${variant.color.code}:${variant.color.name}`, variant.color);
+    }
     return total + variant.quantity;
   }, 0);
 
@@ -88,21 +93,193 @@ export const buildVariantSummary = (variants: TProductVariant[]) => {
   };
 };
 
+/** Normalizes stock, variants, sizes, and colors for the selected inventory mode. */
+const buildInventoryFields = (
+  payload: Partial<TProductPayload>,
+  existing?: {
+    inventoryType?: TProductInventoryType;
+    stock?: number;
+    variants?: TProductVariant[];
+  }
+) => {
+  const inventoryType =
+    payload.inventoryType ??
+    existing?.inventoryType ??
+    PRODUCT_INVENTORY_TYPE.sizeColor;
+
+  if (inventoryType === PRODUCT_INVENTORY_TYPE.single) {
+    return {
+      inventoryType,
+      variants: [],
+      sizes: [],
+      colors: [],
+      stock: payload.stock ?? existing?.stock ?? 0,
+    };
+  }
+
+  const variants = payload.variants ?? existing?.variants ?? [];
+  const normalizedVariants = variants.map((variant) => ({
+    ...variant,
+    size:
+      inventoryType === PRODUCT_INVENTORY_TYPE.colorOnly
+        ? null
+        : variant.size,
+  }));
+  const variantSummary = buildVariantSummary(normalizedVariants);
+
+  return {
+    inventoryType,
+    variants: normalizedVariants,
+    ...variantSummary,
+  };
+};
+
+/** Throws when option payload does not match the selected inventory mode. */
+export const assertInventoryOptionsValid = (
+  traceId: string,
+  payload: Partial<TProductPayload>,
+  inventoryType: TProductInventoryType
+) => {
+  if (!payload.variants || inventoryType === PRODUCT_INVENTORY_TYPE.single) {
+    return;
+  }
+
+  if (payload.variants.length === 0) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'At least one inventory option is required',
+      traceId
+    );
+  }
+
+  payload.variants.forEach((variant) => {
+    if (
+      inventoryType === PRODUCT_INVENTORY_TYPE.sizeColor &&
+      !variant.size
+    ) {
+      throw new ApiError(
+        HttpStatusCode.BadRequest,
+        'Size is required for size_color inventory products',
+        traceId
+      );
+    }
+
+    if (!variant.color?.code) {
+      throw new ApiError(
+        HttpStatusCode.BadRequest,
+        'Color is required for option based inventory products',
+        traceId
+      );
+    }
+  });
+};
+
 /** Builds normalized product write data and computed discount/stock fields. */
 export const buildProductWritePayload = (
   payload: Partial<TProductPayload>,
-  existing?: { price: number; discount: number; variants: TProductVariant[] }
+  existing?: {
+    price: number;
+    discount?: number;
+    inventoryType?: TProductInventoryType;
+    stock?: number;
+    variants?: TProductVariant[];
+  }
 ) => {
   const price = payload.price ?? existing?.price ?? 0;
   const discount = payload.discount ?? existing?.discount ?? 0;
-  const variants = payload.variants ?? existing?.variants ?? [];
-  const variantSummary = buildVariantSummary(variants);
+  const inventoryFields = buildInventoryFields(payload, existing);
 
   return {
     ...payload,
     discount,
     discountPrice: calculateDiscountPrice(price, discount),
-    ...variantSummary,
+    ...inventoryFields,
+  };
+};
+
+/** Builds vendor product dashboard metrics from the loaded product list. */
+export const buildVendorProductStats = (
+  products: Array<{
+    category?: unknown;
+    price?: number;
+    discountPrice?: number;
+    stock?: number;
+  }>
+): TProductDashboardStats => {
+  const categoryCount = new Map<string, number>();
+  const priceDistribution = {
+    under50: 0,
+    from50To200: 0,
+    over200: 0,
+  };
+  const stockInsights = {
+    high: 0,
+    medium: 0,
+    low: 0,
+  };
+
+  const overview = products.reduce(
+    (stats, product) => {
+      const stock = product.stock ?? 0;
+      const unitPrice = product.discountPrice ?? product.price ?? 0;
+      const categoryTitle =
+        product.category &&
+        typeof product.category === 'object' &&
+        'title' in product.category
+          ? String(product.category.title)
+          : undefined;
+
+      if (categoryTitle) {
+        categoryCount.set(
+          categoryTitle,
+          (categoryCount.get(categoryTitle) ?? 0) + 1
+        );
+      }
+
+      if (unitPrice < 50) priceDistribution.under50 += 1;
+      else if (unitPrice <= 200) priceDistribution.from50To200 += 1;
+      else priceDistribution.over200 += 1;
+
+      if (stock > 50) stockInsights.high += 1;
+      else if (stock >= 10) stockInsights.medium += 1;
+      else if (stock > 0) stockInsights.low += 1;
+
+      return {
+        allProducts: stats.allProducts + 1,
+        totalValue: stats.totalValue + unitPrice * stock,
+        lowStock: stats.lowStock + (stock > 0 && stock < 10 ? 1 : 0),
+        outOfStock: stats.outOfStock + (stock === 0 ? 1 : 0),
+      };
+    },
+    {
+      allProducts: 0,
+      totalValue: 0,
+      lowStock: 0,
+      outOfStock: 0,
+    }
+  );
+
+  return {
+    overview: {
+      ...overview,
+      totalValue: Number(overview.totalValue.toFixed(2)),
+    },
+    analytics: {
+      topCategories: [...categoryCount.entries()]
+        .map(([title, count]) => ({ title, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5),
+      priceDistribution: [
+        { label: 'Under $50', count: priceDistribution.under50 },
+        { label: '$50 - $200', count: priceDistribution.from50To200 },
+        { label: 'Over $200', count: priceDistribution.over200 },
+      ],
+      stockInsights: [
+        { label: 'High Stock (>50)', count: stockInsights.high },
+        { label: 'Medium Stock (10-50)', count: stockInsights.medium },
+        { label: 'Low Stock (<10)', count: stockInsights.low },
+      ],
+    },
   };
 };
 
@@ -127,6 +304,19 @@ export const assertCategoryExists = async (traceId: string, categoryId: string) 
   const exists = await Category.exists({ _id: categoryId });
   if (!exists) {
     throw new ApiError(HttpStatusCode.NotFound, 'Category not found', traceId);
+  }
+};
+
+/** Throws when admin targets a missing or non-vendor user. */
+export const assertVendorExists = async (traceId: string, vendorId: string) => {
+  const exists = await User.exists({
+    _id: vendorId,
+    role: USER_ROLE.vendor,
+    isDeleted: false,
+  });
+
+  if (!exists) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Vendor not found', traceId);
   }
 };
 

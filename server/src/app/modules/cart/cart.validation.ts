@@ -10,8 +10,8 @@ const cartColorSchema = z.object({
 const addCartItemValidationSchema = z.object({
   body: z.object({
     productId: objectIdSchema,
-    size: z.string().trim().min(1, 'Size is required'),
-    color: cartColorSchema,
+    size: z.string().trim().min(1, 'Size is required').nullable().optional(),
+    color: cartColorSchema.nullable().optional(),
     quantity: z.number().int().positive().default(1),
   }),
 });
@@ -19,8 +19,8 @@ const addCartItemValidationSchema = z.object({
 const updateCartItemValidationSchema = z.object({
   body: z.object({
     productId: objectIdSchema,
-    size: z.string().trim().min(1, 'Size is required'),
-    color: cartColorSchema,
+    size: z.string().trim().min(1, 'Size is required').nullable().optional(),
+    color: cartColorSchema.nullable().optional(),
     quantity: z.number().int().positive(),
   }),
 });
@@ -28,8 +28,8 @@ const updateCartItemValidationSchema = z.object({
 const removeCartItemValidationSchema = z.object({
   body: z.object({
     productId: objectIdSchema,
-    size: z.string().trim().min(1, 'Size is required'),
-    color: cartColorSchema,
+    size: z.string().trim().min(1, 'Size is required').nullable().optional(),
+    color: cartColorSchema.nullable().optional(),
   }),
 });
 
