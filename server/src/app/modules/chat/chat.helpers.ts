@@ -1,9 +1,9 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
-import { IChat } from '@/app/modules/chat/chat.interface';
 import { Orders } from '@/app/modules/orders/orders.model';
-import { USER_ROLE } from '@/app/modules/user/user.constant';
+import { isChatParticipant } from '@/app/modules/participant/participant.helpers';
+import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 
 /** Throws when a chat participant does not exist. */
@@ -12,6 +12,19 @@ export const assertChatUserExists = async (traceId: string, userId: string) => {
   if (!user) {
     throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
   }
+};
+
+/** Returns active agent ids for support conversations. */
+export const getActiveAgentIds = async () => {
+  const agents = await User.find({
+    role: USER_ROLE.agent,
+    status: USER_STATUS.active,
+    isDeleted: false,
+  })
+    .select('_id')
+    .lean();
+
+  return agents.map((agent) => agent._id.toString());
 };
 
 /** Returns an order if requester can open an order-support chat for it. */
@@ -37,16 +50,13 @@ export const getChatOrderOrThrow = async (
 };
 
 /** Throws when requester is not inside the chat participants. */
-export const assertChatAccess = (
+export const assertChatAccess = async (
   traceId: string,
-  chat: IChat | Record<string, any>,
+  chatId: string,
   requester: { userId: string; role: string }
 ) => {
   const isAdmin = requester.role === USER_ROLE.admin;
-  const isParticipant = chat.participants?.some(
-    (participant: any) =>
-      (participant?._id?.toString() ?? participant?.toString()) === requester.userId
-  );
+  const isParticipant = await isChatParticipant(chatId, requester.userId);
 
   if (!isAdmin && !isParticipant) {
     throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this chat', traceId);

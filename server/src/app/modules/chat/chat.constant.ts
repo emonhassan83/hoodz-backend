@@ -5,8 +5,8 @@ export const CHAT_TYPES = {
 } as const;
 
 export const CHAT_STATUS = {
-  accepted: 'accepted',
-  blocked: 'blocked',
+  active: 'active',
+  closed: 'closed',
 } as const;
 
 export type IChatStatus = (typeof CHAT_STATUS)[keyof typeof CHAT_STATUS];

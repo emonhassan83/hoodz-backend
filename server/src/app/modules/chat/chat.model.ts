@@ -5,12 +5,6 @@ import { IChat, IChatModel } from '@/app/modules/chat/chat.interface';
 
 const chatSchema = new Schema<IChat, IChatModel>(
   {
-    user: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-      index: true,
-    },
     type: {
       type: String,
       enum: Object.values(CHAT_TYPES),
@@ -23,17 +17,10 @@ const chatSchema = new Schema<IChat, IChatModel>(
       default: null,
       index: true,
     },
-    participants: {
-      type: [Schema.Types.ObjectId],
-      ref: 'User',
-      required: true,
-      default: [],
-      index: true,
-    },
     status: {
       type: String,
       enum: Object.values(CHAT_STATUS),
-      default: CHAT_STATUS.accepted,
+      default: CHAT_STATUS.active,
     },
   },
   {
@@ -41,20 +28,6 @@ const chatSchema = new Schema<IChat, IChatModel>(
   }
 );
 
-chatSchema.index(
-  { user: 1, type: 1 },
-  {
-    unique: true,
-    partialFilterExpression: { type: CHAT_TYPES.customer_support },
-  }
-);
-chatSchema.index(
-  { user: 1, type: 1 },
-  {
-    unique: true,
-    partialFilterExpression: { type: CHAT_TYPES.ai_assistant },
-  }
-);
 chatSchema.index(
   { order: 1, type: 1 },
   {
