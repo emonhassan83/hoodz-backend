@@ -3,19 +3,19 @@ import { Router } from 'express';
 import auth from '@/app/middlewares/auth';
 import { CartController } from '@/app/modules/cart/cart.controllers';
 import { CartValidation } from '@/app/modules/cart/cart.validation';
-import { AUTHENTICATED_ROLES } from '@/app/modules/user/user.constant';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
 import validateRequest from '@/app/utils/validateRequest';
 
 const router = Router();
 
 router
   .route('/')
-  .get(auth(...AUTHENTICATED_ROLES), CartController.getCart);
+  .get(auth(USER_ROLE.user), CartController.getCart);
 
 router
   .route('/add')
   .post(
-    auth(...AUTHENTICATED_ROLES),
+    auth(USER_ROLE.user),
     validateRequest(CartValidation.addCartItemValidationSchema),
     CartController.add
   );
@@ -23,7 +23,7 @@ router
 router
   .route('/update')
   .put(
-    auth(...AUTHENTICATED_ROLES),
+    auth(USER_ROLE.user),
     validateRequest(CartValidation.updateCartItemValidationSchema),
     CartController.update
   );
@@ -31,13 +31,13 @@ router
 router
   .route('/remove')
   .delete(
-    auth(...AUTHENTICATED_ROLES),
+    auth(USER_ROLE.user),
     validateRequest(CartValidation.removeCartItemValidationSchema),
     CartController.remove
   );
 
 router
   .route('/clear')
-  .delete(auth(...AUTHENTICATED_ROLES), CartController.clear);
+  .delete(auth(USER_ROLE.user), CartController.clear);
 
 export const CartRoutes = router;

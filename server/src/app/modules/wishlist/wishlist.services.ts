@@ -79,7 +79,7 @@ const getAll = async (userId: string) => {
   if (productIds.length === 0) return [];
 
   const products = await Product.find({ _id: { $in: productIds }, isDeleted: false })
-    .select('title price discountPrice images stock')
+    .select('title price discountPrice images stock brand')
     .lean();
 
   const productById = new Map(
