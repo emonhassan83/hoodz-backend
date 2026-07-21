@@ -272,10 +272,11 @@ const getAllProduct = async (
     .sort()
     .paginate();
 
-  let [products, meta] = await Promise.all([
+  const [initialProducts, meta] = await Promise.all([
     productsQuery.modelQuery,
     productsQuery.countTotal(),
   ]);
+  let products = initialProducts;
 
   const maxDistanceKm = toNumber(
     productQuery.maxDistanceKm ?? productQuery.maxDistance

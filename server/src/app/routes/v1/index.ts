@@ -7,6 +7,7 @@ import { CategoryRoutes } from '@/app/modules/category/category.routes';
 import { ChatRoutes } from '@/app/modules/chat/chat.routes';
 import { FollowRoutes } from '@/app/modules/follow/follow.routes';
 import { KycRoutes } from '@/app/modules/kyc/kyc.routes';
+import { MessagesRoutes } from '@/app/modules/messages/messages.routes';
 import { NotificationRoutes } from '@/app/modules/notification/notification.routes';
 import { OrdersRoutes } from '@/app/modules/orders/orders.routes';
 import { OtpRoutes } from '@/app/modules/otp/otp.routes';
@@ -59,6 +60,10 @@ const apiRoutes = [
   {
     path: '/chat',
     route: ChatRoutes,
+  },
+  {
+    path: '/messages',
+    route: MessagesRoutes,
   },
   {
     path: '/connections',
