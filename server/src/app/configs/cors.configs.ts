@@ -1,11 +1,22 @@
 import { CorsOptions } from 'cors';
 
 import { logger } from '@/app/configs/logger.configs';
-import { corsWhiteList } from '@/app/constant';
+import { corsAllowedHosts, corsWhiteList } from '@/app/constant';
+
+const isAllowedOrigin = (origin: string) => {
+  if (corsWhiteList.includes(origin)) return true;
+
+  try {
+    const { hostname } = new URL(origin);
+    return corsAllowedHosts.includes(hostname);
+  } catch {
+    return false;
+  }
+};
 
 const corsConfiguration: CorsOptions = {
   origin: (origin, callback) => {
-    if (!origin || corsWhiteList.indexOf(origin) !== -1) {
+    if (!origin || isAllowedOrigin(origin)) {
       callback(null, true);
     } else {
       logger.warn(`Blocked CORS request from origin: ${origin}`);

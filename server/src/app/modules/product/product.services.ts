@@ -57,7 +57,7 @@ const productPopulate = [
 ];
 
 const productListSelect =
-  '_id category vendorId title collectionType images price discount discountPrice stock avgRating ratingCount createdAt';
+  '_id category vendorId title inventoryType collectionType images price discount discountPrice stock avgRating ratingCount createdAt';
 
 type TProductPaginationMeta = {
   page: number;

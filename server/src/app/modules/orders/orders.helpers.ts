@@ -152,6 +152,7 @@ export const resolveCheckoutItemsOrThrow = async (
         vendorId: product.vendorId,
         title: product.title,
         images: product.images,
+        inventoryType: product.inventoryType,
         price: product.price,
         discountPrice: product.discountPrice,
       },

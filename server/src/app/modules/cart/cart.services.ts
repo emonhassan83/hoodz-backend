@@ -141,7 +141,7 @@ const getCart = async (userId: string) => {
     _id: { $in: items.map((item) => item.productId) },
     isDeleted: false,
   })
-    .select('vendorId title images price discountPrice variants')
+    .select('vendorId title images inventoryType price discountPrice variants')
     .lean();
 
   const productById = new Map(
@@ -164,6 +164,7 @@ const getCart = async (userId: string) => {
           vendorId: product.vendorId,
           title: product.title,
           images: product.images,
+          inventoryType: product.inventoryType,
           price: product.price,
           discountPrice: product.discountPrice,
         },

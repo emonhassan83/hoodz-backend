@@ -34,6 +34,7 @@ export type TEnrichedCartItem = TCartItem & {
     vendorId: Types.ObjectId;
     title: string;
     images: string[];
+    inventoryType: string;
     price: number;
     discountPrice: number;
   };

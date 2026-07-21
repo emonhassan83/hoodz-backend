@@ -418,6 +418,7 @@ export const formatProductListItem = (
     _id: product._id,
     categoryTitle,
     title: product.title,
+    inventoryType: product.inventoryType,
     collectionType: product.collectionType,
     images: product.images ?? [],
     price: product.price ?? 0,
