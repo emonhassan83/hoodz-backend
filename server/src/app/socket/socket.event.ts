@@ -10,12 +10,29 @@ import { sendMessageHandler } from '@/app/socket/handlers/chat/sendMessage.handl
 import { stopTypingHandler } from '@/app/socket/handlers/chat/stopTyping.handler';
 import { typingHandler } from '@/app/socket/handlers/chat/typing.handler';
 import disconnectHandler from '@/app/socket/handlers/disconnect.handler';
+import { findOnlineRiderHandler } from '@/app/socket/handlers/jobs/findOnlineRider.handlers';
+import { jobAcceptHandler } from '@/app/socket/handlers/jobs/jobAccept.handlers';
+import { jobAssignHandler } from '@/app/socket/handlers/jobs/jobAssign.handlers';
+import { jobDeliveredHandler } from '@/app/socket/handlers/jobs/jobDelivered.handlers';
+import { jobGoPickupHandler } from '@/app/socket/handlers/jobs/jobGoPickup.handlers';
+import { jobOnTheWayHandler } from '@/app/socket/handlers/jobs/jobOnTheWay.handlers';
+import { jobPickupHandler } from '@/app/socket/handlers/jobs/jobPickUp.handlers';
+import { jobRejectHandler } from '@/app/socket/handlers/jobs/jobReject.handlers';
+import { resendOtpHandler } from '@/app/socket/handlers/jobs/resendOtp.handlers';
+import { riderGoOfflineHandler } from '@/app/socket/handlers/jobs/riderGoOffline.handlers';
+import { riderGoOnlineHandler } from '@/app/socket/handlers/jobs/riderGoOnline.handlers';
+import { riderLocationUpdateHandler } from '@/app/socket/handlers/jobs/riderLocationUpdate.handlers';
+import { sendDeliveryOtpHandler } from '@/app/socket/handlers/jobs/sendDeliveryOtp.handlers';
+import { submitCompanyDepositHandler } from '@/app/socket/handlers/jobs/submitCompanyDeposit.handlers';
+import { verifyCompanyDepositHandler } from '@/app/socket/handlers/jobs/verifyCompanyDeposit.handlers';
+import { verifyDeliveryOtpHandler } from '@/app/socket/handlers/jobs/verifyDeliveryOtp.handlers';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_LISTENER } from '@/app/socket/socket.constant';
 
 export const registerSocketEvents = (socket: Socket) => {
   const tSocket = socket as TSocket; // Cast to TSocket
 
+  // Chat related socket events
   tSocket.on(SOCKET_LISTENER.chatSendMessage, sendMessageHandler);
   tSocket.on(SOCKET_LISTENER.aiSendMessage, aiSendMessageHandler);
   tSocket.on(SOCKET_LISTENER.chatMyList, myChatListHandler);
@@ -25,13 +42,23 @@ export const registerSocketEvents = (socket: Socket) => {
   tSocket.on(SOCKET_LISTENER.chatEditMessage, editMessageHandler);
   tSocket.on(SOCKET_LISTENER.chatDeleteMessage, deleteMessageHandler);
 
-  tSocket.on('send-message', sendMessageHandler);
-  tSocket.on('my-chat-list', myChatListHandler);
-  tSocket.on('typing', typingHandler);
-  tSocket.on('stopTyping', stopTypingHandler);
-  tSocket.on('seen', seenHandler);
-  tSocket.on('edit-message', editMessageHandler);
-  tSocket.on('delete-message', deleteMessageHandler);
+  // Job related socket events
+  tSocket.on(SOCKET_LISTENER.riderGoOnline, riderGoOnlineHandler);
+  tSocket.on(SOCKET_LISTENER.riderGoOffline, riderGoOfflineHandler);
+  tSocket.on(SOCKET_LISTENER.riderLocationUpdate, riderLocationUpdateHandler);
+  tSocket.on(SOCKET_LISTENER.riderFindOnline, findOnlineRiderHandler);
+  tSocket.on(SOCKET_LISTENER.jobAssign, jobAssignHandler);
+  tSocket.on(SOCKET_LISTENER.jobAccept, jobAcceptHandler);
+  tSocket.on(SOCKET_LISTENER.jobReject, jobRejectHandler);
+  tSocket.on(SOCKET_LISTENER.jobGoPickup, jobGoPickupHandler);
+  tSocket.on(SOCKET_LISTENER.jobPickup, jobPickupHandler);
+  tSocket.on(SOCKET_LISTENER.jobOnTheWay, jobOnTheWayHandler);
+  tSocket.on(SOCKET_LISTENER.jobSendDeliveryOtp, sendDeliveryOtpHandler);
+  tSocket.on(SOCKET_LISTENER.jobResendDeliveryOtp, resendOtpHandler);
+  tSocket.on(SOCKET_LISTENER.jobVerifyDeliveryOtp, verifyDeliveryOtpHandler);
+  tSocket.on(SOCKET_LISTENER.jobDelivered, jobDeliveredHandler);
+  tSocket.on(SOCKET_LISTENER.depositSubmitCompany, submitCompanyDepositHandler);
+  tSocket.on(SOCKET_LISTENER.depositVerifyCompany, verifyCompanyDepositHandler);
 
   tSocket.on('disconnect', () => disconnectHandler.call(tSocket, undefined));
 };

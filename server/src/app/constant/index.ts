@@ -50,6 +50,7 @@ export const REDIS_PREFIXES = {
   product: 'product',
   search: 'search',
   cart: 'user:cart',
+  rider: 'rider',
   session: 'session',
   rateLimit: 'rate:limit',
   contents: 'contents'

@@ -6,13 +6,16 @@ import { BannerRoutes } from '@/app/modules/banner/banner.routes';
 import { CartRoutes } from '@/app/modules/cart/cart.routes';
 import { CategoryRoutes } from '@/app/modules/category/category.routes';
 import { ChatRoutes } from '@/app/modules/chat/chat.routes';
+import { CompanyDepositRoutes } from '@/app/modules/companyDeposit/companyDeposit.routes';
 import { FollowRoutes } from '@/app/modules/follow/follow.routes';
+import { JobRoutes } from '@/app/modules/job/job.routes';
 import { KycRoutes } from '@/app/modules/kyc/kyc.routes';
 import { MessagesRoutes } from '@/app/modules/messages/messages.routes';
 import { NotificationRoutes } from '@/app/modules/notification/notification.routes';
 import { OrdersRoutes } from '@/app/modules/orders/orders.routes';
 import { OtpRoutes } from '@/app/modules/otp/otp.routes';
 import { ProductRoutes } from '@/app/modules/product/product.routes';
+import { RiderWalletRoutes } from '@/app/modules/riderWallet/riderWallet.routes';
 import { SearchRoutes } from '@/app/modules/search/search.routes';
 import { SettingsRoutes } from '@/app/modules/settings/settings.routes';
 import { UploadRoutes } from '@/app/modules/upload/upload.routes';
@@ -89,6 +92,18 @@ const apiRoutes = [
   {
     path: '/orders',
     route: OrdersRoutes,
+  },
+  {
+    path: '/jobs',
+    route: JobRoutes,
+  },
+  {
+    path: '/rider-wallet',
+    route: RiderWalletRoutes,
+  },
+  {
+    path: '/company-deposits',
+    route: CompanyDepositRoutes,
   },
   {
     path: '/ai-assistant',

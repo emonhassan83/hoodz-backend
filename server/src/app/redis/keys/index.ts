@@ -22,6 +22,9 @@ export const REDIS_KEYS = {
   SEARCH_HISTORY: (userId: string, scope: string) =>
     createRedisKey(REDIS_PREFIXES.search, 'history', userId, scope),
   CART: (userId: string) => createRedisKey(REDIS_PREFIXES.cart, userId),
+  RIDER_ONLINE_GEO: createRedisKey('rider', 'online', 'geo'),
+  RIDER_AVAILABILITY: (riderId: string) =>
+    createRedisKey('rider', 'availability', riderId),
 
   REGISTER_OTP: (email: string) => createRedisKey(REDIS_PREFIXES.otp, email),
   RESET_OTP: (email: string) => createRedisKey(REDIS_PREFIXES.otp, 'reset', email),
