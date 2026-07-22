@@ -1,7 +1,7 @@
 import { JOB_PAYMENT_METHOD } from '@/app/modules/job/job.constant';
 import { JobService } from '@/app/modules/job/job.services';
-import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import { TSocket } from '@/app/socket/interface/socket.interface';
+import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import eventHandler from '@/app/socket/utils/eventHandler';
 import {
   assertSocketRole,

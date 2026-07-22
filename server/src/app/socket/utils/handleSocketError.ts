@@ -1,11 +1,9 @@
 import mongoose from "mongoose";
 import { Socket } from "socket.io";
 
-import { TAckFn } from "@/app/socket/interface/socket.interface";
-
-import ackHandler from "@/app/socket/utils/ackHandler";
-
 import ApiError from "@/app/errors/ApiError";
+import { TAckFn } from "@/app/socket/interface/socket.interface";
+import ackHandler from "@/app/socket/utils/ackHandler";
 
 /**
  * Handles all types of errors in Socket.io events with proper status codes and messages
