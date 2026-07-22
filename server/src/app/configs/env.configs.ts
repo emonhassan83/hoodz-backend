@@ -35,4 +35,11 @@ export const env: TEnv = {
   TYPESENSE_PROTOCOL: process.env.TYPESENSE_PROTOCOL || 'http',
   TYPESENSE_API_KEY: process.env.TYPESENSE_API_KEY,
   TYPESENSE_ENABLED: process.env.TYPESENSE_ENABLED === 'true',
+  AI_PROVIDER: process.env.AI_PROVIDER || 'groq',
+  AI_FALLBACK_PROVIDER: process.env.AI_FALLBACK_PROVIDER || 'gemini',
+  AI_PROVIDER_MODE: process.env.AI_PROVIDER_MODE || 'auto',
+  GROQ_API_KEY: process.env.GROQ_API_KEY,
+  GROQ_MODEL: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
 };

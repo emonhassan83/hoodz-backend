@@ -34,8 +34,18 @@ const messagesSchema = new Schema<IMessages, IMessagesModel>(
     sender: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
       index: true,
+    },
+    senderType: {
+      type: String,
+      enum: ['user', 'ai', 'system'],
+      default: 'user',
+      index: true,
+    },
+    metadata: {
+      type: Schema.Types.Mixed,
+      default: {},
     },
   },
   {

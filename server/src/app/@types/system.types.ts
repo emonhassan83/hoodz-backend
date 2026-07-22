@@ -31,6 +31,13 @@ export type TEnv = {
   TYPESENSE_PROTOCOL?: string;
   TYPESENSE_API_KEY?: string;
   TYPESENSE_ENABLED?: boolean;
+  AI_PROVIDER?: string;
+  AI_FALLBACK_PROVIDER?: string;
+  AI_PROVIDER_MODE?: string;
+  GROQ_API_KEY?: string;
+  GROQ_MODEL?: string;
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL?: string;
 
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;

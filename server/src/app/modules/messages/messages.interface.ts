@@ -1,5 +1,7 @@
 import { Model, Types } from 'mongoose';
 
+export type TMessageSenderType = 'user' | 'ai' | 'system';
+
 export interface IMessages {
   _id: Types.ObjectId;
   text?: string;
@@ -7,7 +9,9 @@ export interface IMessages {
   seen: boolean;
   isEdited: boolean;
   chat: Types.ObjectId;
-  sender: Types.ObjectId;
+  sender?: Types.ObjectId | null;
+  senderType: TMessageSenderType;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }

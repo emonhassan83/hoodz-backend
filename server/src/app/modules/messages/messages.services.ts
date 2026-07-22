@@ -27,7 +27,7 @@ const getMessagesByChatId = async (
 
   const messageQuery = new QueryBuilder(
     Messages.find({ chat: chat._id })
-      .select('text files seen isEdited sender createdAt')
+      .select('text files seen isEdited sender senderType metadata createdAt')
       .sort({ createdAt: 1 }),
     query
   )

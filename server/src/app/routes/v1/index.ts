@@ -1,5 +1,6 @@
 import { Router } from 'express';
 
+import { AiAssistantRoutes } from '@/app/modules/aiAssistant/aiAssistant.routes';
 import { AuthRoutes } from '@/app/modules/auth/auth.routes';
 import { BannerRoutes } from '@/app/modules/banner/banner.routes';
 import { CartRoutes } from '@/app/modules/cart/cart.routes';
@@ -88,6 +89,10 @@ const apiRoutes = [
   {
     path: '/orders',
     route: OrdersRoutes,
+  },
+  {
+    path: '/ai-assistant',
+    route: AiAssistantRoutes,
   },
 ];
 
