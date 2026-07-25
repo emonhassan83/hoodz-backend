@@ -12,3 +12,4 @@ export interface ISearch {
 }
 
 export type ISearchModel = Model<ISearch, Record<string, unknown>>;
+

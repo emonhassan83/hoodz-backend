@@ -58,3 +58,4 @@ const cartSchema = new Schema<ICart, ICartModel>(
 cartSchema.index({ userId: 1, 'items.productId': 1, 'items.size': 1, 'items.color.code': 1 });
 
 export const Cart = model<ICart, ICartModel>('Cart', cartSchema);
+

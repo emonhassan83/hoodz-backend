@@ -11,3 +11,4 @@ export const CHAT_STATUS = {
 
 export type IChatStatus = (typeof CHAT_STATUS)[keyof typeof CHAT_STATUS];
 export type IChatType = (typeof CHAT_TYPES)[keyof typeof CHAT_TYPES];
+

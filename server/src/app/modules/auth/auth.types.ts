@@ -63,3 +63,4 @@ export type TResetPasswordPayload = {
 export type TChangePasswordPayload = TResetPasswordPayload & {
   currentPassword: string;
 };
+

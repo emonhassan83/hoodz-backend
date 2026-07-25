@@ -11,3 +11,4 @@ const toggleWishlistValidationSchema = z.object({
 export const WishlistValidation = {
   toggleWishlistValidationSchema,
 };
+

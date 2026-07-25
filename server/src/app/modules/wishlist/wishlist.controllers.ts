@@ -38,3 +38,4 @@ export const WishlistController = {
   toggle,
   getAll,
 };
+

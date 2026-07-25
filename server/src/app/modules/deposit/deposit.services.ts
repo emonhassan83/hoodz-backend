@@ -2,18 +2,18 @@ import { HttpStatusCode } from 'axios';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
-import { COMPANY_DEPOSIT_STATUS } from '@/app/modules/companyDeposit/companyDeposit.constant';
+import { DEPOSIT_STATUS } from '@/app/modules/deposit/deposit.constant';
 import {
-  getCompanyDepositOrThrow,
+  getDepositOrThrow,
   getDepositableJobOrThrow,
   resolveJobDepositStatus,
-} from '@/app/modules/companyDeposit/companyDeposit.helpers';
-import { CompanyDeposit } from '@/app/modules/companyDeposit/companyDeposit.model';
+} from '@/app/modules/deposit/deposit.helpers';
+import { Deposit } from '@/app/modules/deposit/deposit.model';
 import {
-  TCompanyDepositRequester,
-  TSubmitCompanyDepositPayload,
-  TVerifyCompanyDepositPayload,
-} from '@/app/modules/companyDeposit/companyDeposit.types';
+  TDepositRequester,
+  TSubmitDepositPayload,
+  TVerifyDepositPayload,
+} from '@/app/modules/deposit/deposit.types';
 import { JOB_DEPOSIT_STATUS } from '@/app/modules/job/job.constant';
 import { Job } from '@/app/modules/job/job.model';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
@@ -25,15 +25,15 @@ const depositPopulate = [
   { path: 'job', select: 'id status depositStatus collectedMoney earning' },
 ];
 
-/** Rider submits COD company deposit proof. */
-const submitCompanyDeposit = async (
+/** Rider submits COD deposit proof. */
+const submitDeposit = async (
   traceId: string,
   riderId: string,
-  payload: TSubmitCompanyDepositPayload
+  payload: TSubmitDepositPayload
 ) => {
   const job = await getDepositableJobOrThrow(traceId, payload.jobId, riderId);
 
-  const deposit = await CompanyDeposit.findOneAndUpdate(
+  const deposit = await Deposit.findOneAndUpdate(
     { job: job._id },
     {
       rider: job.rider,
@@ -43,7 +43,7 @@ const submitCompanyDeposit = async (
       amount: job.collectedMoney,
       reference: payload.reference,
       files: payload.files ?? [],
-      status: COMPANY_DEPOSIT_STATUS.submitted,
+      status: DEPOSIT_STATUS.submitted,
       rejectionReason: null,
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -59,34 +59,34 @@ const submitCompanyDeposit = async (
 };
 
 /** Admin verifies or rejects submitted COD deposit. */
-const verifyCompanyDeposit = async (
+const verifyDeposit = async (
   traceId: string,
-  requester: TCompanyDepositRequester,
+  requester: TDepositRequester,
   depositId: string,
-  payload: TVerifyCompanyDepositPayload
+  payload: TVerifyDepositPayload
 ) => {
-  if (payload.status === COMPANY_DEPOSIT_STATUS.rejected && !payload.reason) {
+  if (payload.status === DEPOSIT_STATUS.rejected && !payload.reason) {
     throw new ApiError(HttpStatusCode.BadRequest, 'Rejection reason is required', traceId);
   }
 
-  const deposit = await getCompanyDepositOrThrow(traceId, depositId);
+  const deposit = await getDepositOrThrow(traceId, depositId);
   deposit.status = payload.status;
   deposit.verifiedBy = requester.userId as any;
   deposit.rejectionReason =
-    payload.status === COMPANY_DEPOSIT_STATUS.rejected ? payload.reason! : null;
+    payload.status === DEPOSIT_STATUS.rejected ? payload.reason! : null;
   await deposit.save();
 
   await Job.findByIdAndUpdate(deposit.job, {
     depositStatus: resolveJobDepositStatus(payload.status),
   });
 
-  return CompanyDeposit.findById(deposit._id).populate(depositPopulate);
+  return Deposit.findById(deposit._id).populate(depositPopulate);
 };
 
 /** Admin gets all deposits with pagination. */
 const getAll = async (query: Record<string, unknown>) => {
   const depositQuery = new QueryBuilder(
-    CompanyDeposit.find().populate(depositPopulate).select('-__v').lean(),
+    Deposit.find().populate(depositPopulate).select('-__v').lean(),
     query
   )
     .filter()
@@ -105,7 +105,7 @@ const getAll = async (query: Record<string, unknown>) => {
 /** Rider gets own deposits with pagination. */
 const getMy = async (riderId: string, query: Record<string, unknown>) => {
   const depositQuery = new QueryBuilder(
-    CompanyDeposit.find({ rider: riderId }).populate(depositPopulate).select('-__v').lean(),
+    Deposit.find({ rider: riderId }).populate(depositPopulate).select('-__v').lean(),
     query
   )
     .filter()
@@ -124,10 +124,10 @@ const getMy = async (riderId: string, query: Record<string, unknown>) => {
 /** Returns one deposit with role-based access. */
 const getById = async (
   traceId: string,
-  requester: TCompanyDepositRequester,
+  requester: TDepositRequester,
   depositId: string
 ) => {
-  const deposit = await CompanyDeposit.findById(depositId)
+  const deposit = await Deposit.findById(depositId)
     .populate(depositPopulate)
     .select('-__v')
     .lean();
@@ -146,11 +146,13 @@ const getById = async (
   return deposit;
 };
 
-export const CompanyDepositService = {
-  submitCompanyDeposit,
-  verifyCompanyDeposit,
+export const DepositService = {
+  submitDeposit,
+  verifyDeposit,
   getAll,
   getMy,
   getById,
 };
+
+
 

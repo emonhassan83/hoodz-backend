@@ -6,7 +6,7 @@ import { BannerRoutes } from '@/app/modules/banner/banner.routes';
 import { CartRoutes } from '@/app/modules/cart/cart.routes';
 import { CategoryRoutes } from '@/app/modules/category/category.routes';
 import { ChatRoutes } from '@/app/modules/chat/chat.routes';
-import { CompanyDepositRoutes } from '@/app/modules/companyDeposit/companyDeposit.routes';
+import { DepositRoutes } from '@/app/modules/deposit/deposit.routes';
 import { FollowRoutes } from '@/app/modules/follow/follow.routes';
 import { JobRoutes } from '@/app/modules/job/job.routes';
 import { KycRoutes } from '@/app/modules/kyc/kyc.routes';
@@ -102,8 +102,8 @@ const apiRoutes = [
     route: RiderWalletRoutes,
   },
   {
-    path: '/company-deposits',
-    route: CompanyDepositRoutes,
+    path: '/deposits',
+    route: DepositRoutes,
   },
   {
     path: '/ai-assistant',
@@ -114,3 +114,4 @@ const apiRoutes = [
 apiRoutes.forEach((route) => router.use(route.path, route.route));
 
 export default router;
+

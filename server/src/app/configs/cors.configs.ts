@@ -31,3 +31,4 @@ const corsConfiguration: CorsOptions = {
 };
 
 export default corsConfiguration;
+

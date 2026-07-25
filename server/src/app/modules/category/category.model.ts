@@ -19,3 +19,4 @@ const categorySchema = new Schema<ICategory, ICategoryModel>(
 );
 
 export const Category = model<ICategory, ICategoryModel>('Category', categorySchema);
+

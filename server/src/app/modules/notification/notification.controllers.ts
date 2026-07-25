@@ -111,3 +111,4 @@ export const NotificationControllers = {
   deleteANotification,
   deleteAllNotifications,
 };
+

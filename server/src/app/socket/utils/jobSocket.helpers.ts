@@ -76,3 +76,4 @@ export const socketAdminRoles = [USER_ROLE.admin];
 export const socketVendorAdminRoles = [USER_ROLE.vendor, USER_ROLE.admin];
 export const socketRiderRoles = [USER_ROLE.rider];
 
+

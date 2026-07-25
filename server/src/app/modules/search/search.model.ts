@@ -32,3 +32,4 @@ searchSchema.index({ userId: 1, modelType: 1, refId: 1 }, { unique: true });
 searchSchema.index({ userId: 1, updatedAt: -1 });
 
 export const Search = model<ISearch, ISearchModel>('Search', searchSchema);
+

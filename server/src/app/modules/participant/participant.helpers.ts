@@ -96,3 +96,4 @@ export const attachParticipantsToChats = async <T extends { _id: unknown }>(
     participants: participantByChatId.get(String(chat._id)) ?? [],
   }));
 };
+

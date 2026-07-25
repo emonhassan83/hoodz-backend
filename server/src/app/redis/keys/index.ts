@@ -34,3 +34,4 @@ export const REDIS_KEYS = {
   SETTINGS_GENERALS: (vendorId: string) =>
     createRedisKey(REDIS_PREFIXES.settings, vendorId, 'generals')
 } as const;
+

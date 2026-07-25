@@ -217,3 +217,4 @@ export const ProductController = {
   deleteProduct,
   notifyMe,
 };
+

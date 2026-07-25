@@ -21,3 +21,4 @@ const bannerSchema = new Schema<IBanner, IBannerModel>(
 bannerSchema.index({ createdAt: -1 });
 
 export const Banner = model<IBanner, IBannerModel>('Banner', bannerSchema);
+

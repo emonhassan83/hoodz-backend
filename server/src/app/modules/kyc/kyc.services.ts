@@ -149,3 +149,4 @@ export const KycService = {
   updateMyKyc,
   changeStatus,
 };
+

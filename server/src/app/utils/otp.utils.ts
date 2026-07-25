@@ -24,3 +24,4 @@ export function compareOtp({ hashedOtp, otp }: TCompareOtpArgs): boolean {
 
   return crypto.timingSafeEqual(stored, incoming);
 }
+

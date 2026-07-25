@@ -13,3 +13,4 @@ export const RIDER_WALLET_TRANSACTION_STATUS = {
 
 export const WITHDRAW_INTERVAL_DAYS = 14;
 
+

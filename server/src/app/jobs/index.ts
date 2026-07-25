@@ -34,3 +34,4 @@ export const stopCronJobs = () => {
   jobs = [];
   console.log('⏰ [Cron] All cron jobs stopped successfully');
 };
+

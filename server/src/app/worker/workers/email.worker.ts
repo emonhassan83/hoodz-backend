@@ -159,3 +159,4 @@ export const initializeEmailWorker = () => {
   console.log('[Email Worker] Email worker initialized');
   return worker;
 };
+

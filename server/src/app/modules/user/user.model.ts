@@ -170,3 +170,4 @@ userSchema.pre('save', async function () {
 });
 
 export const User: IUserModal = model<IUser, IUserModal>('User', userSchema);
+

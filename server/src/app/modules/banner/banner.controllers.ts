@@ -48,3 +48,4 @@ export const BannerController = {
   viewAllBanner,
   remove,
 };
+

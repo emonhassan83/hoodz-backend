@@ -56,3 +56,4 @@ export const FollowService = {
   follow,
   unfollow,
 };
+

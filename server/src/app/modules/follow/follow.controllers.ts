@@ -42,3 +42,4 @@ export const FollowController = {
   follow,
   unfollow,
 };
+

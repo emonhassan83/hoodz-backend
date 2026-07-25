@@ -22,3 +22,4 @@ export const assertBannerExists = (banner: unknown, traceId: string) => {
     throw new ApiError(HttpStatusCode.NotFound, 'Banner not found', traceId);
   }
 };
+

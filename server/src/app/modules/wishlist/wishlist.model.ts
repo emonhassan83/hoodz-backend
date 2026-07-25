@@ -29,3 +29,4 @@ export const Wishlist = model<IWishlist, IWishlistModel>(
   'Wishlist',
   wishlistSchema
 );
+

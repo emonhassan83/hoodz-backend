@@ -28,3 +28,4 @@ router
 router.route('/').get(SettingController.getSetting);
 
 export const SettingsRoutes = router;
+

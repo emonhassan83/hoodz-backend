@@ -12,3 +12,4 @@ export interface IChat {
 }
 
 export type IChatModel = Model<IChat, Record<string, unknown>>;
+

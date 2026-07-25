@@ -36,3 +36,4 @@ export const clearCartCache = async (userId: string) => {
   const redis = getRedisClient();
   await redis.del(REDIS_KEYS.CART(userId));
 };
+

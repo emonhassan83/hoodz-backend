@@ -58,3 +58,4 @@ if (!messagingInstance) {
 
 export const messaging = messagingInstance;
 export default messagingInstance && getApps().length > 0 ? getApps()[0] : null;
+

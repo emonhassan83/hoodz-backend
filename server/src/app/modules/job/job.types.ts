@@ -35,3 +35,4 @@ export type TVerifyDeliveryOtpPayload = TJobIdPayload & {
   otp: string;
 };
 
+

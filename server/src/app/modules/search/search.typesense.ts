@@ -307,3 +307,4 @@ export const searchTypesense = async (
     page: productResult.page,
   };
 };
+

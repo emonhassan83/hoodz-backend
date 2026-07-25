@@ -11,3 +11,4 @@ const followVendorValidationSchema = z.object({
 export const FollowValidation = {
   followVendorValidationSchema,
 };
+

@@ -9,3 +9,4 @@ export interface IBanner {
 }
 
 export type IBannerModel = Model<IBanner, Record<string, unknown>>;
+

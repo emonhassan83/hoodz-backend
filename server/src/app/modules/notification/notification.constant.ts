@@ -4,3 +4,4 @@ export const NOTIFICATION_MODEL_TYPE = {
   Kyc: 'Kyc',
   Product: 'Product',
 } as const
+

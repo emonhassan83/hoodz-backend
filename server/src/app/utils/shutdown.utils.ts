@@ -68,3 +68,4 @@ export const shutdown = async ({
     process.exit(exitCode);
   }
 };
+

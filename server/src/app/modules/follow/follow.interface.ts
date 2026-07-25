@@ -9,3 +9,4 @@ export interface IFollow {
 }
 
 export type IFollowModel = Model<IFollow, Record<string, unknown>>;
+

@@ -28,3 +28,4 @@ export abstract class BaseDTO<T> {
     return new this(entity);
   }
 }
+

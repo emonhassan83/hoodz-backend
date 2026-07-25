@@ -39,3 +39,4 @@ export const syncWishlistProductIds = async (
     await redis.sadd(key, ...productIds);
   }
 };
+

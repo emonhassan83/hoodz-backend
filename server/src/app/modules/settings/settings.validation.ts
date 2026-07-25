@@ -97,3 +97,4 @@ export const SettingValidation = {
   createOrUpdateSettingZodSchema,
   updateGeneralsZodSchema,
 };
+

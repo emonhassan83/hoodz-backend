@@ -1,8 +1,8 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
-import { COMPANY_DEPOSIT_STATUS } from '@/app/modules/companyDeposit/companyDeposit.constant';
-import { CompanyDeposit } from '@/app/modules/companyDeposit/companyDeposit.model';
+import { DEPOSIT_STATUS } from '@/app/modules/deposit/deposit.constant';
+import { Deposit } from '@/app/modules/deposit/deposit.model';
 import { JOB_DEPOSIT_STATUS, JOB_PAYMENT_METHOD, JOB_STATUS } from '@/app/modules/job/job.constant';
 import { Job } from '@/app/modules/job/job.model';
 
@@ -29,21 +29,23 @@ export const getDepositableJobOrThrow = async (
   return job;
 };
 
-/** Returns one company deposit document or throws. */
-export const getCompanyDepositOrThrow = async (
+/** Returns one deposit document or throws. */
+export const getDepositOrThrow = async (
   traceId: string,
   depositId: string
 ) => {
-  const deposit = await CompanyDeposit.findById(depositId);
+  const deposit = await Deposit.findById(depositId);
   if (!deposit) {
     throw new ApiError(HttpStatusCode.NotFound, 'Deposit not found', traceId);
   }
   return deposit;
 };
 
-/** Maps company deposit status to job deposit status. */
+/** Maps deposit status to job deposit status. */
 export const resolveJobDepositStatus = (status: string) =>
-  status === COMPANY_DEPOSIT_STATUS.verified
+  status === DEPOSIT_STATUS.verified
     ? JOB_DEPOSIT_STATUS.verified
     : JOB_DEPOSIT_STATUS.pending;
+
+
 

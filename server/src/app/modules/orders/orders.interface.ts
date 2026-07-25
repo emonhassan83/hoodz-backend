@@ -27,3 +27,4 @@ export interface IOrders {
 }
 
 export type IOrdersModel = Model<IOrders, Record<string, unknown>>;
+

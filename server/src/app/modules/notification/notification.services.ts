@@ -14,6 +14,8 @@ import {
   sendNotificationViaQueue,
 } from '@/app/utils/notification-queue.service';
 
+const GENERAL_NOTIFICATION_BATCH_SIZE = 500;
+
 // ─── Create ────────────────────────────────────────────────────────────────
 
 const createNotificationIntoDB = async (
@@ -36,32 +38,64 @@ const createNotificationIntoDB = async (
 
 const sendGeneralNotificationIntoDB = async (
   traceId: string,
-  payload: INotification
+  payload: INotification & { roles?: string[]; role?: string }
 ) => {
-  // Exclude receiver from rest so the explicit userId assignment below is the only source
   const {
     message,
     description,
     receiver: _originalReceiver,
+    roles,
+    role,
     ...rest
   } = payload;
+  const targetRoles = roles?.length ? roles : role ? [role] : ['user'];
+  const userCursor = User.find({
+    role: { $in: targetRoles as any },
+    isDeleted: false,
+  })
+    .select('_id')
+    .lean()
+    .cursor();
 
-  const userIds = (await User.distinct('_id', { role: 'user' })).map(
-    (id: any) => id.toString()
-  );
+  let totalUsers = 0;
+  let totalJobs = 0;
+  let batch: string[] = [];
 
-  await sendBatchNotificationViaQueue({
-    userIds,
-    channel: 'both',
-    title: message,
-    message: description,
-    data: {
-      modelType: rest.modelType,
-      reference: rest.reference,
-    },
-  });
+  const flushBatch = async () => {
+    if (batch.length === 0) return;
 
-  return { queued: true, totalUsers: userIds.length, traceId };
+    await sendBatchNotificationViaQueue({
+      userIds: batch,
+      channel: 'both',
+      title: message,
+      message: description,
+      data: {
+        modelType: rest.modelType,
+        reference: rest.reference,
+      },
+    });
+
+    totalJobs += 1;
+    totalUsers += batch.length;
+    batch = [];
+  };
+
+  for await (const user of userCursor) {
+    batch.push(user._id.toString());
+    if (batch.length >= GENERAL_NOTIFICATION_BATCH_SIZE) {
+      await flushBatch();
+    }
+  }
+  await flushBatch();
+
+  return {
+    queued: true,
+    roles: targetRoles,
+    totalUsers,
+    totalJobs,
+    batchSize: GENERAL_NOTIFICATION_BATCH_SIZE,
+    traceId,
+  };
 };
 
 // ─── Read ──────────────────────────────────────────────────────────────────
@@ -157,3 +191,4 @@ export const NotificationService = {
   deleteANotificationFromDB,
   deleteAllNotificationsFromDB,
 };
+

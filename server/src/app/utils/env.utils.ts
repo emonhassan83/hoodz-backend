@@ -12,3 +12,4 @@ export const getEnv = (key: string): string => {
   }
   return value as string;
 };
+

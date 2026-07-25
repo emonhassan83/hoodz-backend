@@ -12,3 +12,4 @@ export interface IParticipant {
 }
 
 export type IParticipantModel = Model<IParticipant, Record<string, unknown>>;
+

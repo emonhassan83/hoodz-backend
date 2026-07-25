@@ -98,3 +98,4 @@ export const sendNotification = async (
   await removeInvalidTokens(tokens, response.responses);
   return response;
 };
+

@@ -14,3 +14,4 @@ export interface ISetting {
 }
 
 export type ISettingModules = Model<ISetting, Record<string, unknown>>;
+

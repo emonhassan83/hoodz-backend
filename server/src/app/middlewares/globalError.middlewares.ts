@@ -107,3 +107,4 @@ export const globalErrorMiddleware = (
     stack: env.NODE_ENV === 'development' ? err?.stack : undefined, // Stack trace in development mode
   });
 };
+

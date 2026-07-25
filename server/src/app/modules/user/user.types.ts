@@ -79,3 +79,4 @@ export type TPlatformInviteEmailPayload = {
   name: string;
   password: string;
 };
+

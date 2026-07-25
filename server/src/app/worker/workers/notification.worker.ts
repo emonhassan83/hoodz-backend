@@ -142,3 +142,4 @@ export const initializeNotificationWorker = () => {
   console.log('[Notification Worker] Notification worker initialized');
   return worker;
 };
+

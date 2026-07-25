@@ -31,3 +31,4 @@ export type IRiderWalletTransactionModel = Model<
   Record<string, unknown>
 >;
 
+

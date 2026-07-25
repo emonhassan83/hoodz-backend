@@ -69,3 +69,4 @@ export const CategoryController = {
   updateA,
   deleteA,
 };
+

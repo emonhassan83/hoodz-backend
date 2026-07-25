@@ -22,3 +22,4 @@ export const CategoryValidation = {
   createCategoryValidationSchema,
   updateCategoryValidationSchema,
 };
+

@@ -55,3 +55,4 @@ export const SOCKET_EMIT = {
   depositVerified: 'deposit:verified',
   depositRejected: 'deposit:rejected',
 } as const;
+

@@ -1,13 +1,13 @@
 import { Schema, model } from 'mongoose';
 
-import { COMPANY_DEPOSIT_STATUS } from '@/app/modules/companyDeposit/companyDeposit.constant';
+import { DEPOSIT_STATUS } from '@/app/modules/deposit/deposit.constant';
 import {
-  ICompanyDeposit,
-  ICompanyDepositModel,
-} from '@/app/modules/companyDeposit/companyDeposit.interface';
+  IDeposit,
+  IDepositModel,
+} from '@/app/modules/deposit/deposit.interface';
 import { generateCryptoString } from '@/app/utils/generateCryptoString';
 
-const companyDepositSchema = new Schema<ICompanyDeposit, ICompanyDepositModel>(
+const DepositSchema = new Schema<IDeposit, IDepositModel>(
   {
     id: {
       type: String,
@@ -45,8 +45,8 @@ const companyDepositSchema = new Schema<ICompanyDeposit, ICompanyDepositModel>(
     files: { type: [String], default: [] },
     status: {
       type: String,
-      enum: Object.values(COMPANY_DEPOSIT_STATUS),
-      default: COMPANY_DEPOSIT_STATUS.submitted,
+      enum: Object.values(DEPOSIT_STATUS),
+      default: DEPOSIT_STATUS.submitted,
       index: true,
     },
     verifiedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
@@ -55,11 +55,13 @@ const companyDepositSchema = new Schema<ICompanyDeposit, ICompanyDepositModel>(
   { timestamps: true }
 );
 
-companyDepositSchema.index({ rider: 1, status: 1, createdAt: -1 });
-companyDepositSchema.index({ vendor: 1, status: 1, createdAt: -1 });
+DepositSchema.index({ rider: 1, status: 1, createdAt: -1 });
+DepositSchema.index({ vendor: 1, status: 1, createdAt: -1 });
 
-export const CompanyDeposit = model<ICompanyDeposit, ICompanyDepositModel>(
-  'CompanyDeposit',
-  companyDepositSchema
+export const Deposit = model<IDeposit, IDepositModel>(
+  'Deposit',
+  DepositSchema
 );
+
+
 

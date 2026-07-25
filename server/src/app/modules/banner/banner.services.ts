@@ -26,3 +26,4 @@ export const BannerService = {
   viewAllBanner,
   remove,
 };
+

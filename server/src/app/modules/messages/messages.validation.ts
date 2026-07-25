@@ -11,3 +11,4 @@ const getMessagesByChatIdValidationSchema = z.object({
 export const MessagesValidation = {
   getMessagesByChatIdValidationSchema,
 };
+

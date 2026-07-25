@@ -41,3 +41,4 @@ export const updateCategoryById = (
 
 export const deleteCategoryById = (categoryId: string) =>
   Category.findByIdAndDelete(categoryId).select('-__v');
+

@@ -1,17 +1,17 @@
 import { Request, Response } from 'express';
 
 import { getTraceId } from '@/app/configs/requestContext.configs';
-import { CompanyDepositService } from '@/app/modules/companyDeposit/companyDeposit.services';
+import { DepositService } from '@/app/modules/deposit/deposit.services';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
 const getAll = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const result = await CompanyDepositService.getAll(req.query);
+  const result = await DepositService.getAll(req.query);
 
   sendResponse(res, {
     success: true,
     statusCode: 200,
-    message: 'Company deposits fetched successfully',
+    message: 'deposits fetched successfully',
     meta: result.meta,
     data: result.data,
     traceId,
@@ -20,12 +20,12 @@ const getAll = asyncHandler(async (req: Request, res: Response) => {
 
 const getMy = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const result = await CompanyDepositService.getMy(req.user.userId, req.query);
+  const result = await DepositService.getMy(req.user.userId, req.query);
 
   sendResponse(res, {
     success: true,
     statusCode: 200,
-    message: 'My company deposits fetched successfully',
+    message: 'My deposits fetched successfully',
     meta: result.meta,
     data: result.data,
     traceId,
@@ -34,7 +34,7 @@ const getMy = asyncHandler(async (req: Request, res: Response) => {
 
 const getById = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await CompanyDepositService.getById(
+  const data = await DepositService.getById(
     traceId,
     req.user,
     req.params.depositId as string
@@ -43,15 +43,17 @@ const getById = asyncHandler(async (req: Request, res: Response) => {
   sendResponse(res, {
     success: true,
     statusCode: 200,
-    message: 'Company deposit fetched successfully',
+    message: 'deposit fetched successfully',
     data,
     traceId,
   });
 });
 
-export const CompanyDepositController = {
+export const DepositController = {
   getAll,
   getMy,
   getById,
 };
+
+
 

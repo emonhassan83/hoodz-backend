@@ -12,6 +12,14 @@ import validateRequest from '@/app/utils/validateRequest';
 const router = Router();
 
 router
+  .route('/general')
+  .post(
+    auth(USER_ROLE.admin),
+    validateRequest(NotificationValidation.generalNotificationSchema),
+    NotificationControllers.sentGeneralNotification
+  );
+
+router
   .route('/')
   .post(
     auth(USER_ROLE.admin),
@@ -45,3 +53,4 @@ router
   );
 
 export const NotificationRoutes = router;
+

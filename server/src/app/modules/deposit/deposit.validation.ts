@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { COMPANY_DEPOSIT_STATUS } from '@/app/modules/companyDeposit/companyDeposit.constant';
+import { DEPOSIT_STATUS } from '@/app/modules/deposit/deposit.constant';
 
 const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
 
@@ -17,13 +17,13 @@ const verifyDepositValidationSchema = z.object({
   body: z
     .object({
       status: z.enum([
-        COMPANY_DEPOSIT_STATUS.verified,
-        COMPANY_DEPOSIT_STATUS.rejected,
+        DEPOSIT_STATUS.verified,
+        DEPOSIT_STATUS.rejected,
       ]),
       reason: z.string().trim().optional(),
     })
     .superRefine((data, ctx) => {
-      if (data.status === COMPANY_DEPOSIT_STATUS.rejected && !data.reason) {
+      if (data.status === DEPOSIT_STATUS.rejected && !data.reason) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['reason'],
@@ -33,8 +33,10 @@ const verifyDepositValidationSchema = z.object({
     }),
 });
 
-export const CompanyDepositValidation = {
+export const DepositValidation = {
   depositIdParamValidationSchema,
   verifyDepositValidationSchema,
 };
+
+
 

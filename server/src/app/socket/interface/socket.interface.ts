@@ -22,3 +22,4 @@ export type TSocket = Socket & {
   auth: TSocketUser;
   data?: { user?: any };
 };
+

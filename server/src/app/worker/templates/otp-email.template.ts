@@ -73,3 +73,4 @@ export const getOtpEmailTemplate = (name: string, otp: string, expiresAt: string
 </html>
   `;
 };
+

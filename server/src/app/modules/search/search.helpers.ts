@@ -76,3 +76,4 @@ export const assertValidSearchReference = async (
 export const invalidateUserSearchCache = async (userId: string) => {
   await deleteCachePattern(`search:*:${userId}:*`);
 };
+

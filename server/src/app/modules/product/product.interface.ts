@@ -50,3 +50,4 @@ export type IProductStockNotifyModel = Model<
   IProductStockNotify,
   Record<string, unknown>
 >;
+

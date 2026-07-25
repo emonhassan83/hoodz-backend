@@ -97,3 +97,4 @@ export const WishlistService = {
   toggle,
   getAll,
 };
+

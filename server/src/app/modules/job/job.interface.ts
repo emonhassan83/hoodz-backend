@@ -51,3 +51,4 @@ export interface IJob {
 }
 
 export type IJobModel = Model<IJob, Record<string, unknown>>;
+

@@ -45,3 +45,4 @@ const kycSchema = new Schema<IKyc, IKycModel>(
 );
 
 export const Kyc = model<IKyc, IKycModel>('Kyc', kycSchema);
+

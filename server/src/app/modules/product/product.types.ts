@@ -100,3 +100,4 @@ export type TProductDashboardStats = {
     stockInsights: { label: string; count: number }[];
   };
 };
+

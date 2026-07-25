@@ -1,4 +1,4 @@
-import { CompanyDepositService } from '@/app/modules/companyDeposit/companyDeposit.services';
+import { DepositService } from '@/app/modules/deposit/deposit.services';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import eventHandler from '@/app/socket/utils/eventHandler';
@@ -9,17 +9,17 @@ import {
   socketRiderRoles,
 } from '@/app/socket/utils/jobSocket.helpers';
 
-type TSubmitCompanyDepositPayload = {
+type TSubmitDepositPayload = {
   jobId: string;
   reference: string;
   files?: string[];
 };
 
-export const submitCompanyDepositHandler =
-  eventHandler<TSubmitCompanyDepositPayload>(
+export const submitDepositHandler =
+  eventHandler<TSubmitDepositPayload>(
   async (socket: TSocket, payload, callback) => {
     assertSocketRole(socket.auth.role, socketRiderRoles);
-    const data = await CompanyDepositService.submitCompanyDeposit(
+    const data = await DepositService.submitDeposit(
       'socket',
       socket.auth._id,
       payload!
@@ -29,9 +29,10 @@ export const submitCompanyDepositHandler =
     sendJobAck(callback, {
       success: true,
       status: 201,
-      message: 'Company deposit submitted',
+      message: 'Deposit submitted',
       data,
     });
   }
 );
+
 

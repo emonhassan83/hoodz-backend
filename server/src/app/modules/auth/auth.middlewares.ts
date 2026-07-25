@@ -197,3 +197,4 @@ export const AuthMiddlewares = {
   validatePhoneFormat,
   validatePassword,
 };
+

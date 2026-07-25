@@ -15,3 +15,4 @@ router.get('/', auth(USER_ROLE.admin, USER_ROLE.vendor), JobController.getAllJob
 router.get('/:jobId', auth(USER_ROLE.admin, USER_ROLE.vendor, USER_ROLE.rider), validateRequest(JobValidation.jobIdParamValidationSchema), JobController.getJobById);
 
 export const JobRoutes = router;
+

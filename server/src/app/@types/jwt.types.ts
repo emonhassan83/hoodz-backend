@@ -16,3 +16,4 @@ export interface AuthenticatedSocket extends Socket {
   user?: IUser;
   traceId?: string;
 }
+

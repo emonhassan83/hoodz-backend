@@ -13,3 +13,4 @@ export const assertWishlistProductExists = async (
     throw new ApiError(HttpStatusCode.NotFound, 'Product not found', traceId);
   }
 };
+

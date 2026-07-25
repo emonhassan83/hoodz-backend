@@ -28,3 +28,4 @@ export const sendEmail = async (values: ISendEmail) => {
     throw error; // Re-throw the error so the caller (e.g., BullMQ worker) knows it failed.
   }
 };
+

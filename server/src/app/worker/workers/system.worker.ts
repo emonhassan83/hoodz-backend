@@ -28,3 +28,4 @@ export const initializeSystemWorker = () => {
   console.log('[System Worker] System worker initialized');
   return worker;
 };
+

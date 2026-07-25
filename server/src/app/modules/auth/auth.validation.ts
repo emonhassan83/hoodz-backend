@@ -244,3 +244,4 @@ export const AuthValidation = {
   googleZodValidationSchema,
   appleZodValidationSchema
 };
+

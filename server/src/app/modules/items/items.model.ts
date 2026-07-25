@@ -56,3 +56,4 @@ itemsSchema.index({ order: 1, author: 1 });
 itemsSchema.index({ product: 1 });
 
 export const Items = model<IItems, IItemsModel>('Items', itemsSchema);
+

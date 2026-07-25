@@ -38,3 +38,4 @@ router
   );
 
 export const KycRoutes = router;
+

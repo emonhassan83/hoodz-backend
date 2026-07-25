@@ -62,3 +62,4 @@ export const OTP_GENERATE_CONFIG = {
   specialChars: false,
   upperCaseAlphabets: false,
 } as const;
+

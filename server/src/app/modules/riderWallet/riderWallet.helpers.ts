@@ -134,3 +134,4 @@ export const emitWalletSummaryIfAvailable = async (riderId: string) => {
 
   io.to(riderId).emit('wallet:updated', await getWalletNumbers(riderId));
 };
+

@@ -50,3 +50,4 @@ router
   );
 
 export const OtpRoutes = router;
+

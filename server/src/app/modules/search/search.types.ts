@@ -74,3 +74,4 @@ export type TTypesenseSearchResult<T> = {
     counts: Array<{ value: string; count: number }>;
   }>;
 };
+

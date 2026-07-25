@@ -26,3 +26,4 @@ const getMessagesByChatId = asyncHandler(async (req: Request, res: Response) => 
 export const MessagesController = {
   getMessagesByChatId,
 };
+

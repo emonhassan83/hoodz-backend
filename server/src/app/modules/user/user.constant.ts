@@ -27,3 +27,4 @@ export const USER_ROLE = {
 import type { IUserRole } from '@/app/modules/user/user.types'
 
 export const AUTHENTICATED_ROLES: IUserRole[] = Object.values(USER_ROLE)
+

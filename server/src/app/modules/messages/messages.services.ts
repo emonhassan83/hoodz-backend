@@ -46,3 +46,4 @@ const getMessagesByChatId = async (
 export const MessagesService = {
   getMessagesByChatId,
 };
+

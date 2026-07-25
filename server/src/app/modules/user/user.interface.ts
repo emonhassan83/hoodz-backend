@@ -94,3 +94,4 @@ export interface ISignUpWithPhone {
   fcmToken?: string
   isLegalTermsAccepted: boolean
 }
+

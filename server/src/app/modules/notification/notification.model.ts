@@ -48,3 +48,4 @@ export const Notification = model<INotification, ICommentsModules>(
   'Notification',
   notificationSchema
 );
+

@@ -16,3 +16,4 @@ export const generateCryptoString = (digitLength: number = 4): string => {
 
   return `${prefix}${randomNumber}`;
 };
+

@@ -107,3 +107,4 @@ export interface IBatchNotificationPayload {
   message: string;
   data?: Record<string, any>;
 }
+

@@ -62,3 +62,4 @@ export const assertChatAccess = async (
     throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this chat', traceId);
   }
 };
+

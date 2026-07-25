@@ -10,3 +10,4 @@ export const KYC_STATUS = {
   approved: 'approved',
   rejected: 'rejected'
 } as const;
+

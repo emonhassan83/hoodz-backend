@@ -29,3 +29,4 @@ const streamConfig = (message: string): void => {
 };
 
 export { morganMessageFormat, streamConfig };
+

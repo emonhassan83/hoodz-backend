@@ -97,3 +97,4 @@ jobSchema.index({ rider: 1, status: 1, createdAt: -1 });
 jobSchema.index({ vendor: 1, status: 1, createdAt: -1 });
 
 export const Job = model<IJob, IJobModel>('Job', jobSchema);
+

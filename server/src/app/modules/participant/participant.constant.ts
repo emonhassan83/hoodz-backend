@@ -5,3 +5,4 @@ export const PARTICIPANT_STATUS = {
 
 export type IParticipantStatus =
   (typeof PARTICIPANT_STATUS)[keyof typeof PARTICIPANT_STATUS];
+

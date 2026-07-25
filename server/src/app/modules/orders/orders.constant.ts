@@ -21,3 +21,4 @@ export const DELIVERY_TYPE = {
   regular: 'regular',
   instant: 'instant',
 } as const;
+

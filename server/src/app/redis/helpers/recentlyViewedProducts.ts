@@ -35,3 +35,4 @@ export const getRecentlyViewedProductIds = async (userId: string) => {
 
   return redis.zrevrange(key, 0, RECENTLY_VIEWED_LIMIT - 1);
 };
+

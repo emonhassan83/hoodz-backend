@@ -20,3 +20,4 @@ export type TChangeKycStatusPayload = {
   status: string;
   rejectedReason?: string;
 };
+

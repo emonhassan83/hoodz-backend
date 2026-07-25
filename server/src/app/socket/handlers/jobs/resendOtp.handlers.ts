@@ -37,3 +37,4 @@ export const resendOtpHandler = eventHandler<TResendOtpPayload>(
     });
   }
 );
+

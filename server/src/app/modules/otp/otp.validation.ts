@@ -37,3 +37,4 @@ export const OtpValidations = {
   verifyOtpZodSchema,
   resentOtpInPhone,
 };
+

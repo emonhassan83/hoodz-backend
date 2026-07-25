@@ -52,3 +52,4 @@ export const typesenseRequest = async <T>({
     throw error;
   }
 };
+

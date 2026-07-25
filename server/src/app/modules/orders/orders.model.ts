@@ -93,3 +93,4 @@ ordersSchema.index({ user: 1, isDeleted: 1, createdAt: -1 });
 ordersSchema.index({ author: 1, isDeleted: 1, createdAt: -1 });
 
 export const Orders = model<IOrders, IOrdersModel>('Order', ordersSchema);
+

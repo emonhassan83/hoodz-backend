@@ -30,3 +30,4 @@ export const socketAuth = (socket: Socket, next: (err?: Error) => void) => {
     next(new ApiError(HttpStatusCode.Unauthorized, 'you are not authorized!'))
   }
 }
+

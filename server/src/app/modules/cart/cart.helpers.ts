@@ -136,3 +136,4 @@ export const clearCart = async (userId: string) => {
   await Cart.findOneAndUpdate({ userId }, { items: [] }, { upsert: true });
   await clearCartCache(userId);
 };
+

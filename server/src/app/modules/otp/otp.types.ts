@@ -3,3 +3,4 @@ export type TSendOtpPhonePayload = {
 };
 
 export type TVerifyOtpQuery = Record<string, unknown>;
+

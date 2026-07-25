@@ -28,3 +28,4 @@ export const JOB_DEPOSIT_STATUS = {
   submitted: 'submitted',
   verified: 'verified',
 } as const;
+

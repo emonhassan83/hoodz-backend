@@ -41,3 +41,4 @@ export type TEnrichedCartItem = TCartItem & {
   unitPrice: number;
   totalPrice: number;
 };
+

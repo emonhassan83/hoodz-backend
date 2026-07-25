@@ -37,3 +37,4 @@ chatSchema.index(
 );
 
 export const Chat = model<IChat, IChatModel>('Chat', chatSchema);
+

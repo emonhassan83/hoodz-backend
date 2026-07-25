@@ -59,3 +59,4 @@ export const Messages = model<IMessages, IMessagesModel>(
   'Messages',
   messagesSchema
 );
+
