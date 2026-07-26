@@ -12,6 +12,11 @@ export type TCartItem = {
   quantity: number;
 };
 
+export type TCartActor = {
+  userId?: string;
+  guestId?: string;
+};
+
 export type TCartItemIdentity = {
   productId: string;
   size?: string | null;

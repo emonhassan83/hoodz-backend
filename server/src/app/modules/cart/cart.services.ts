@@ -2,11 +2,14 @@ import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
 import {
+  assertCartActorExists,
   assertVariantStock,
+  buildCartActorFilter,
   buildCartItemMatch,
   buildCartItem,
   clearCart,
   findProductVariantOrThrow,
+  getCartActorCacheKey,
   getCartItemsOrEmpty,
   isSameCartItem,
   syncCartCacheFromMongo,
@@ -14,26 +17,32 @@ import {
 import { Cart } from '@/app/modules/cart/cart.model';
 import {
   TAddCartItemPayload,
+  TCartActor,
   TEnrichedCartItem,
   TRemoveCartItemPayload,
   TUpdateCartItemPayload,
 } from '@/app/modules/cart/cart.types';
 import { Product } from '@/app/modules/product/product.model';
-import { getCartItemsFromCache } from '@/app/redis/helpers/cart';
+import {
+  clearCartCache,
+  getCartItemsFromCache,
+} from '@/app/redis/helpers/cart';
 
 /** Adds a product variant to cart or increments quantity if it already exists. */
 const add = async (
   traceId: string,
-  userId: string,
+  actor: TCartActor,
   payload: TAddCartItemPayload
 ) => {
+  assertCartActorExists(traceId, actor);
   const { product, variant } = await findProductVariantOrThrow(
     traceId,
     payload.productId,
     payload
   );
 
-  const cart = await Cart.findOne({ userId }).lean();
+  const ownerFilter = buildCartActorFilter(actor);
+  const cart = await Cart.findOne(ownerFilter).lean();
   const existingItem = cart?.items.find(
     (item) => isSameCartItem(item, payload)
   );
@@ -43,7 +52,7 @@ const add = async (
   if (existingItem) {
     await Cart.updateOne(
       {
-        userId,
+        ...ownerFilter,
         items: {
           $elemMatch: buildCartItemMatch(payload),
         },
@@ -52,8 +61,9 @@ const add = async (
     );
   } else {
     await Cart.findOneAndUpdate(
-      { userId },
+      ownerFilter,
       {
+        $setOnInsert: actor,
         $push: {
           items: buildCartItem(
             product._id.toString(),
@@ -66,17 +76,19 @@ const add = async (
     );
   }
 
-  await syncCartCacheFromMongo(userId);
-  return getCart(userId);
+  await syncCartCacheFromMongo(actor);
+  return getCart(actor);
 };
 
 /** Updates the quantity of an existing cart item. */
 const update = async (
   traceId: string,
-  userId: string,
+  actor: TCartActor,
   payload: TUpdateCartItemPayload
 ) => {
-  const cart = await Cart.findOne({ userId });
+  assertCartActorExists(traceId, actor);
+  const ownerFilter = buildCartActorFilter(actor);
+  const cart = await Cart.findOne(ownerFilter);
   const item = cart?.items.find((cartItem) => isSameCartItem(cartItem, payload));
   if (!item) {
     throw new ApiError(HttpStatusCode.NotFound, 'Cart item not found', traceId);
@@ -91,7 +103,7 @@ const update = async (
 
   await Cart.updateOne(
       {
-        userId,
+        ...ownerFilter,
         items: {
           $elemMatch: buildCartItemMatch(payload),
         },
@@ -99,18 +111,19 @@ const update = async (
     { $set: { 'items.$.quantity': payload.quantity } }
   );
 
-  await syncCartCacheFromMongo(userId);
-  return getCart(userId);
+  await syncCartCacheFromMongo(actor);
+  return getCart(actor);
 };
 
 /** Removes a product variant from the user's cart. */
 const remove = async (
-  _traceId: string,
-  userId: string,
+  traceId: string,
+  actor: TCartActor,
   payload: TRemoveCartItemPayload
 ) => {
+  assertCartActorExists(traceId, actor);
   await Cart.updateOne(
-    { userId },
+    buildCartActorFilter(actor),
     {
       $pull: {
         items: buildCartItemMatch(payload),
@@ -118,15 +131,16 @@ const remove = async (
     }
   );
 
-  await syncCartCacheFromMongo(userId);
-  return getCart(userId);
+  await syncCartCacheFromMongo(actor);
+  return getCart(actor);
 };
 
 /** Returns cart items enriched with latest product price and media details. */
-const getCart = async (userId: string) => {
-  let items = await getCartItemsFromCache(userId);
+const getCart = async (actor: TCartActor) => {
+  const cacheKey = getCartActorCacheKey(actor);
+  let items = await getCartItemsFromCache(cacheKey);
   if (items.length === 0) {
-    items = await getCartItemsOrEmpty(userId);
+    items = await getCartItemsOrEmpty(actor);
   }
 
   if (items.length === 0) {
@@ -186,14 +200,55 @@ const getCart = async (userId: string) => {
   };
 };
 
-/** Clears all items from the user's cart. */
-const clear = async (userId: string) => {
-  await clearCart(userId);
+/** Clears all items from the current user or guest cart. */
+const clear = async (traceId: string, actor: TCartActor) => {
+  assertCartActorExists(traceId, actor);
+  await clearCart(actor);
   return {
     items: [],
     totalItems: 0,
     subTotal: 0,
   };
+};
+
+/** Merges anonymous guest cart into the authenticated user's cart. */
+const mergeGuestCart = async (guestId: string | undefined, userId: string) => {
+  if (!guestId?.trim() || !userId) return { merged: 0 };
+
+  const guestActor = { guestId: guestId.trim() };
+  const userActor = { userId };
+  const guestItems = await getCartItemsOrEmpty(guestActor);
+  if (!guestItems.length) return { merged: 0 };
+
+  const userItems = await getCartItemsOrEmpty(userActor);
+  for (const guestItem of guestItems) {
+    const existing = userItems.find((item) =>
+      isSameCartItem(item, {
+        productId: guestItem.productId.toString(),
+        size: guestItem.size,
+        color: guestItem.color,
+      })
+    );
+
+    if (existing) {
+      existing.quantity += guestItem.quantity;
+    } else {
+      userItems.push(guestItem);
+    }
+  }
+
+  await Cart.findOneAndUpdate(
+    { userId },
+    { $setOnInsert: { userId }, $set: { items: userItems } },
+    { upsert: true }
+  );
+  await Cart.deleteOne({ guestId: guestId.trim() });
+  await Promise.all([
+    syncCartCacheFromMongo(userActor),
+    clearCartCache(getCartActorCacheKey(guestActor)),
+  ]);
+
+  return { merged: guestItems.length };
 };
 
 export const CartService = {
@@ -202,5 +257,6 @@ export const CartService = {
   remove,
   getCart,
   clear,
+  mergeGuestCart,
 };
 

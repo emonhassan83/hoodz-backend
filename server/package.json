@@ -19,6 +19,7 @@
     "create:module": "node ./scripts/createModule.js",
     "create:admin": "node ./scripts/createAdmin.js",
     "create:subscriptionFeature": "node ./scripts/addSubscriptionFeature.js",
+    "migrate:cart-guest-indexes": "node ./scripts/migrateCartGuestIndexes.js",
     "seed:settings": "node ./scripts/seedSettings.js"
   },
   "dependencies": {

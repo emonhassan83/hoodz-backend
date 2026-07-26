@@ -7,11 +7,47 @@ import {
   TCartItem,
   TCartItemIdentity,
   TCartColor,
+  TCartActor,
 } from '@/app/modules/cart/cart.types';
 import { PRODUCT_INVENTORY_TYPE } from '@/app/modules/product/product.constant';
 import { Product } from '@/app/modules/product/product.model';
 import { TProductVariant } from '@/app/modules/product/product.types';
 import { clearCartCache, syncCartItemsToCache } from '@/app/redis/helpers/cart';
+
+/** Resolves cart owner where authenticated user takes priority over guest id. */
+export const resolveCartActor = (
+  userId?: string,
+  guestId?: string | string[]
+): TCartActor => {
+  if (userId) return { userId };
+  const rawGuestId = Array.isArray(guestId) ? guestId[0] : guestId;
+  return rawGuestId?.trim() ? { guestId: rawGuestId.trim() } : {};
+};
+
+/** Throws when cart operation has neither authenticated user nor guest id. */
+export const assertCartActorExists = (
+  traceId: string,
+  actor: TCartActor
+) => {
+  if (!actor.userId && !actor.guestId) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'x-guest-id header or authentication is required for cart',
+      traceId
+    );
+  }
+};
+
+/** Builds Mongo cart ownership filter for user or guest cart. */
+export const buildCartActorFilter = (actor: TCartActor) =>
+  actor.userId ? { userId: actor.userId } : { guestId: actor.guestId };
+
+/** Returns stable cache key scope for user or guest cart. */
+export const getCartActorCacheKey = (actor: TCartActor) => {
+  if (actor.userId) return `user:${actor.userId}`;
+  if (actor.guestId) return `guest:${actor.guestId}`;
+  return 'anonymous';
+};
 
 /** Finds a product variant by size and color or throws a traceable API error. */
 export const findProductVariantOrThrow = async (
@@ -120,20 +156,24 @@ export const isSameCartItem = (
   (item.color?.code ?? null) === (payload.color?.code ?? null);
 
 /** Returns existing cart items or an empty list for new carts. */
-export const getCartItemsOrEmpty = async (userId: string) => {
-  const cart = await Cart.findOne({ userId }).lean();
+export const getCartItemsOrEmpty = async (actor: TCartActor) => {
+  const cart = await Cart.findOne(buildCartActorFilter(actor)).lean();
   return cart?.items ?? [];
 };
 
 /** Refreshes Redis cart cache from the current MongoDB cart document. */
-export const syncCartCacheFromMongo = async (userId: string) => {
-  const items = await getCartItemsOrEmpty(userId);
-  await syncCartItemsToCache(userId, items);
+export const syncCartCacheFromMongo = async (actor: TCartActor) => {
+  const items = await getCartItemsOrEmpty(actor);
+  await syncCartItemsToCache(getCartActorCacheKey(actor), items);
 };
 
 /** Clears a user's cart from both MongoDB and Redis cache. */
-export const clearCart = async (userId: string) => {
-  await Cart.findOneAndUpdate({ userId }, { items: [] }, { upsert: true });
-  await clearCartCache(userId);
+export const clearCart = async (actor: TCartActor) => {
+  await Cart.findOneAndUpdate(
+    buildCartActorFilter(actor),
+    { $setOnInsert: actor, $set: { items: [] } },
+    { upsert: true }
+  );
+  await clearCartCache(getCartActorCacheKey(actor));
 };
 

@@ -41,8 +41,11 @@ const cartSchema = new Schema<ICart, ICartModel>(
     userId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
-      unique: true,
+      index: true,
+    },
+    guestId: {
+      type: String,
+      trim: true,
       index: true,
     },
     items: {
@@ -55,7 +58,16 @@ const cartSchema = new Schema<ICart, ICartModel>(
   }
 );
 
+cartSchema.index(
+  { userId: 1 },
+  { unique: true, partialFilterExpression: { userId: { $exists: true } } }
+);
+cartSchema.index(
+  { guestId: 1 },
+  { unique: true, partialFilterExpression: { guestId: { $exists: true } } }
+);
 cartSchema.index({ userId: 1, 'items.productId': 1, 'items.size': 1, 'items.color.code': 1 });
+cartSchema.index({ guestId: 1, 'items.productId': 1, 'items.size': 1, 'items.color.code': 1 });
 
 export const Cart = model<ICart, ICartModel>('Cart', cartSchema);
 
