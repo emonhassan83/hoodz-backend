@@ -23,6 +23,12 @@ export type TEnv = {
   S3_REGION: string;
   S3_BUCKET_NAME: string;
   STRIPE_API_SECRET_KEY: string;
+  PAYMOB_API_KEY?: string;
+  PAYMOB_INTEGRATION_ID?: string;
+  PAYMOB_IFRAME_ID?: string;
+  PAYMOB_HMAC_SECRET?: string;
+  PAYMOB_CURRENCY?: string;
+  PAYMOB_BASE_URL?: string;
   SERVER_URL: string;
   DASHBOARD_URL: string;
   GOOGLE_MAPS_API_KEY: string;

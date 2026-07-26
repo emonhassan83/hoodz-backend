@@ -14,6 +14,7 @@ import { MessagesRoutes } from '@/app/modules/messages/messages.routes';
 import { NotificationRoutes } from '@/app/modules/notification/notification.routes';
 import { OrdersRoutes } from '@/app/modules/orders/orders.routes';
 import { OtpRoutes } from '@/app/modules/otp/otp.routes';
+import { PaymentRoutes } from '@/app/modules/payment/payment.routes';
 import { ProductRoutes } from '@/app/modules/product/product.routes';
 import { RiderWalletRoutes } from '@/app/modules/riderWallet/riderWallet.routes';
 import { SearchRoutes } from '@/app/modules/search/search.routes';
@@ -94,6 +95,10 @@ const apiRoutes = [
     route: OrdersRoutes,
   },
   {
+    path: '/payments',
+    route: PaymentRoutes,
+  },
+  {
     path: '/jobs',
     route: JobRoutes,
   },
@@ -114,4 +119,3 @@ const apiRoutes = [
 apiRoutes.forEach((route) => router.use(route.path, route.route));
 
 export default router;
-

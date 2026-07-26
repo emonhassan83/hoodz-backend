@@ -1,8 +1,11 @@
 import { HttpStatusCode } from 'axios';
+import mongoose from 'mongoose';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
+import { Cart } from '@/app/modules/cart/cart.model';
 import { getFollowedVendorIdSet } from '@/app/modules/follow/follow.helpers';
+import { Items } from '@/app/modules/items/items.model';
 import {
   assertCategoryExists,
   assertProductAccess,
@@ -28,6 +31,7 @@ import {
   Product,
   ProductStockNotify,
 } from '@/app/modules/product/product.model';
+import { Wishlist } from '@/app/modules/wishlist/wishlist.model';
 import {
   TAdminProductPayload,
   TProductFilterQuery,
@@ -410,7 +414,7 @@ const getShopProducts = async (
 ) => {
   await assertVendorExists(traceId, vendorId);
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `shop:${vendorId}:${userId ?? 'anonymous'}:cards:v1:${JSON.stringify(query)}`
+    `shop:${vendorId}:${userId ?? 'anonymous'}:cards:v3:${JSON.stringify(query)}`
   );
   const cached = await getCache<{
     meta: TProductPaginationMeta;
@@ -432,18 +436,81 @@ const getShopProducts = async (
     .sort()
     .paginate();
 
-  const [allProducts, meta, recommends] = await Promise.all([
+  const [allProducts, meta, shopProducts, wishlistSignals, cart, orderSignals] = await Promise.all([
     allProductsQuery.modelQuery,
     allProductsQuery.countTotal(),
     Product.find(baseFilter)
       .populate(productPopulate)
       .select(productListSelect)
-      .sort({ avgRating: -1, ratingCount: -1, sold: -1, createdAt: -1 })
-      .limit(12)
       .lean(),
+    userId
+      ? Wishlist.find({ user: userId }).select('product -_id').lean()
+      : Promise.resolve([]),
+    userId
+      ? Cart.findOne({ userId }).select('items.productId').lean()
+      : Promise.resolve(null),
+    userId
+      ? Items.aggregate([
+          {
+            $match: {
+              author: new mongoose.Types.ObjectId(vendorId),
+            },
+          },
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'order',
+              foreignField: '_id',
+              as: 'order',
+            },
+          },
+          { $unwind: '$order' },
+          {
+            $match: {
+              'order.user': new mongoose.Types.ObjectId(userId),
+              'order.isDeleted': false,
+            },
+          },
+          { $group: { _id: '$product', count: { $sum: '$quantity' } } },
+        ])
+      : Promise.resolve([]),
   ]);
 
   const wishlistIds = await getWishlistProductIdSet(userId);
+  const wishlistSignalIds = new Set(
+    wishlistSignals.map((item: any) => item.product.toString())
+  );
+  const cartSignalIds = new Set(
+    (cart?.items ?? []).map((item: any) => item.productId.toString())
+  );
+  const orderedSignalCount = new Map(
+    orderSignals.map((item: any) => [item._id.toString(), item.count])
+  );
+
+  const recommends = [...shopProducts]
+    .map((product: any) => {
+      const productId = product._id.toString();
+      const score =
+        (wishlistSignalIds.has(productId) ? 1000 : 0) +
+        (cartSignalIds.has(productId) ? 800 : 0) +
+        ((orderedSignalCount.get(productId) as number | undefined) ?? 0) * 120 +
+        (product.avgRating ?? 0) * 30 +
+        (product.ratingCount ?? 0) * 2 +
+        (product.sold ?? 0);
+
+      return { product, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return (
+        new Date(b.product.createdAt).getTime() -
+        new Date(a.product.createdAt).getTime()
+      );
+    })
+    .slice(0, 12)
+    .map((item) => item.product);
+
   const result = {
     meta,
     data: {
