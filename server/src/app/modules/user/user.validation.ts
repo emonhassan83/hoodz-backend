@@ -109,6 +109,16 @@ const nearbyShopsValidationSchema = z.object({
   }),
 });
 
+const shopDetailsValidationSchema = z.object({
+  params: z.object({
+    vendorId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid vendor id'),
+  }),
+  query: z.object({
+    latitude: z.coerce.number().min(-90).max(90).optional(),
+    longitude: z.coerce.number().min(-180).max(180).optional(),
+  }),
+});
+
 export const UserValidation = {
   updateUserValidationSchema,
   changeStatusValidationSchema,
@@ -120,5 +130,6 @@ export const UserValidation = {
   inviteAgentValidationSchema: invitePlatformUserValidationSchema,
   changeEmailZodSchema,
   nearbyShopsValidationSchema,
+  shopDetailsValidationSchema,
 };
 

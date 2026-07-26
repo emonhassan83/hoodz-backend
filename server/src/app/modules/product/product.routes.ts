@@ -39,10 +39,7 @@ router
 
 router
   .route('/recently-viewed')
-  .get(
-    auth(USER_ROLE.user, USER_ROLE.rider, USER_ROLE.vendor, USER_ROLE.agent),
-    ProductController.getRecentlyViewedProducts
-  );
+  .get(optionalAuth, ProductController.getRecentlyViewedProducts);
 
 router
   .route('/notify-me/:productId')
@@ -55,9 +52,17 @@ router
 router
   .route('/viewed/:productId')
   .patch(
-    auth(USER_ROLE.user, USER_ROLE.rider, USER_ROLE.vendor, USER_ROLE.agent),
+    optionalAuth,
     validateRequest(ProductValidation.markProductViewedValidationSchema),
     ProductController.markProductViewed
+  );
+
+router
+  .route('/shop/:vendorId')
+  .get(
+    optionalAuth,
+    validateRequest(ProductValidation.shopProductsValidationSchema),
+    ProductController.getShopProducts
   );
 
 router

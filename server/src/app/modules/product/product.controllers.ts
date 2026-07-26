@@ -4,6 +4,16 @@ import { getTraceId } from '@/app/configs/requestContext.configs';
 import { ProductService } from '@/app/modules/product/product.services';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
+const getGuestId = (req: Request) => {
+  const guestId = req.headers['x-guest-id'];
+  return Array.isArray(guestId) ? guestId[0] : guestId;
+};
+
+const getProductActor = (req: Request) => ({
+  ...(req.user?.userId ? { userId: req.user.userId } : {}),
+  ...(!req.user?.userId && getGuestId(req) ? { guestId: getGuestId(req) } : {}),
+});
+
 const generateSku = asyncHandler(async (_req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await ProductService.generateSku();
@@ -51,7 +61,7 @@ const markProductViewed = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await ProductService.markProductViewed(
     traceId,
-    req.user.userId,
+    getProductActor(req),
     req.params.productId as string
   );
 
@@ -68,7 +78,7 @@ const getRecentlyViewedProducts = asyncHandler(
   async (req: Request, res: Response) => {
     const traceId = getTraceId();
     const result = await ProductService.getRecentlyViewedProducts(
-      req.user.userId,
+      getProductActor(req),
       req.query
     );
 
@@ -94,6 +104,25 @@ const getTrendingProducts = asyncHandler(async (req: Request, res: Response) => 
     success: true,
     statusCode: 200,
     message: 'Trending products fetched successfully',
+    meta: result.meta,
+    data: result.data,
+    traceId,
+  });
+});
+
+const getShopProducts = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const result = await ProductService.getShopProducts(
+    traceId,
+    req.params.vendorId as string,
+    req.query,
+    req.user?.userId
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Shop products fetched successfully',
     meta: result.meta,
     data: result.data,
     traceId,
@@ -211,6 +240,7 @@ export const ProductController = {
   createProduct,
   createProductByAdmin,
   getAllProduct,
+  getShopProducts,
   getMyProducts,
   getProductById,
   updateProduct,

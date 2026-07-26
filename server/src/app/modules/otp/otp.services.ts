@@ -3,6 +3,7 @@ import { HttpStatusCode } from 'axios';
 import ApiError from '@/app/errors/ApiError';
 import { generateTokens } from '@/app/modules/auth/auth.helpers';
 import { CartService } from '@/app/modules/cart/cart.services';
+import { ProductService } from '@/app/modules/product/product.services';
 import {
   createOtpToken,
   deleteOtpFromRedis,
@@ -77,6 +78,7 @@ export const verifyOTP = async (
   if (['login', 'signup', 'forgot'].includes(type as string)) {
     await SearchService.mergeGuestSearchHistory(guestId, user._id.toString());
     await CartService.mergeGuestCart(guestId, user._id.toString());
+    await ProductService.mergeGuestRecentlyViewed(guestId, user._id.toString());
     return generateTokens(user);
   }
 

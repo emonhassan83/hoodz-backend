@@ -36,3 +36,25 @@ export const getRecentlyViewedProductIds = async (userId: string) => {
   return redis.zrevrange(key, 0, RECENTLY_VIEWED_LIMIT - 1);
 };
 
+export const mergeRecentlyViewedProducts = async (
+  guestKey: string,
+  userKey: string
+) => {
+  const redis = getRedisClient();
+  const guestRedisKey = REDIS_KEYS.RECENTLY_VIEWED_PRODUCTS(guestKey);
+  const userRedisKey = REDIS_KEYS.RECENTLY_VIEWED_PRODUCTS(userKey);
+  const guestItems = await redis.zrevrange(guestRedisKey, 0, -1, 'WITHSCORES');
+
+  if (guestItems.length === 0) return { merged: 0 };
+
+  const pipeline = redis.pipeline();
+  for (let index = 0; index < guestItems.length; index += 2) {
+    pipeline.zadd(userRedisKey, guestItems[index + 1], guestItems[index]);
+  }
+  pipeline.zremrangebyrank(userRedisKey, 0, -RECENTLY_VIEWED_LIMIT - 1);
+  pipeline.del(guestRedisKey);
+  await pipeline.exec();
+
+  return { merged: guestItems.length / 2 };
+};
+

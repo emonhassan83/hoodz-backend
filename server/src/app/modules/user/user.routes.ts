@@ -90,6 +90,14 @@ router
   .get(optionalAuth, UserControllers.getFeaturedVendors);
 
 router
+  .route('/shops/:vendorId/details')
+  .get(
+    optionalAuth,
+    validateRequest(UserValidation.shopDetailsValidationSchema),
+    UserControllers.getShopDetails
+  );
+
+router
   .route('/:userId')
   .get(auth(...AUTHENTICATED_ROLES), UserControllers.getAUser)
   .put(

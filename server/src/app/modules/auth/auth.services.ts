@@ -23,6 +23,7 @@ import {
 } from '@/app/modules/auth/auth.types';
 import { CartService } from '@/app/modules/cart/cart.services';
 import { OtpServices } from '@/app/modules/otp/otp.services';
+import { ProductService } from '@/app/modules/product/product.services';
 import { SearchService } from '@/app/modules/search/search.services';
 import { REGISTER_WITH, USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { ISignUpWithEmail, ISignUpWithPhone } from '@/app/modules/user/user.interface';
@@ -111,6 +112,7 @@ const registerWithSocialAuth = async (
     const authUser = (updatedUser ?? user) as any;
     await SearchService.mergeGuestSearchHistory(guestId, authUser._id.toString());
     await CartService.mergeGuestCart(guestId, authUser._id.toString());
+    await ProductService.mergeGuestRecentlyViewed(guestId, authUser._id.toString());
     return generateTokens(authUser);
   }
 
@@ -128,6 +130,7 @@ const registerWithSocialAuth = async (
 
   await SearchService.mergeGuestSearchHistory(guestId, newUser._id.toString());
   await CartService.mergeGuestCart(guestId, newUser._id.toString());
+  await ProductService.mergeGuestRecentlyViewed(guestId, newUser._id.toString());
   return generateTokens(newUser);
 };
 
@@ -174,6 +177,7 @@ export const loginWithEmail = async (
 
   await SearchService.mergeGuestSearchHistory(guestId, user._id.toString());
   await CartService.mergeGuestCart(guestId, user._id.toString());
+  await ProductService.mergeGuestRecentlyViewed(guestId, user._id.toString());
   return generateTokens(user as any);
 };
 

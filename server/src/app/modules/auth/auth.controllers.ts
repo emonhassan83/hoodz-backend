@@ -5,6 +5,7 @@ import { getTraceId } from '@/app/configs/requestContext.configs';
 import { AuthService } from '@/app/modules/auth/auth.services';
 import { CartService } from '@/app/modules/cart/cart.services';
 import { OtpServices } from '@/app/modules/otp/otp.services';
+import { ProductService } from '@/app/modules/product/product.services';
 import { SearchService } from '@/app/modules/search/search.services';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
@@ -31,6 +32,7 @@ const signupWithEmail = asyncHandler(async (req: Request, res: Response) => {
   const data = await AuthService.signupWithEmail(traceId, req.body);
   await SearchService.mergeGuestSearchHistory(getGuestId(req), data._id.toString());
   await CartService.mergeGuestCart(getGuestId(req), data._id.toString());
+  await ProductService.mergeGuestRecentlyViewed(getGuestId(req), data._id.toString());
   const sendOtp = await OtpServices.sendOtpInEmail(traceId, data._id.toString(), data?.email);
   const { _id, id, name, email, role, status, isProfileSetUp } = data
 
@@ -51,6 +53,7 @@ const signupWithPhone = asyncHandler(async (req: Request, res: Response) => {
   const data = await AuthService.signupWithPhone(traceId, req.body);
   await SearchService.mergeGuestSearchHistory(getGuestId(req), data._id.toString());
   await CartService.mergeGuestCart(getGuestId(req), data._id.toString());
+  await ProductService.mergeGuestRecentlyViewed(getGuestId(req), data._id.toString());
 
   sendResponse(res, {
     success: true,

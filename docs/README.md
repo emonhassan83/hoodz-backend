@@ -17,6 +17,7 @@ This folder contains the comprehensive development documentation for the reposit
    - [API_GUIDELINES.md](API_GUIDELINES.md): Response serialization, error formatting, and routing.
    - [guideline/SEARCH_API_GUIDE.md](guideline/SEARCH_API_GUIDE.md): Frontend search flow, guest history, suggestions, and payload examples.
    - [guideline/CART_API_GUIDE.md](guideline/CART_API_GUIDE.md): Frontend cart flow, guest cart, merge behavior, and payload examples.
+   - [guideline/SHOP_API_GUIDE.md](guideline/SHOP_API_GUIDE.md): Shop details, shop products, and recently viewed flows.
    - [DATABASE_SEEDING.md](DATABASE_SEEDING.md): Seeding rules, database models, and mock pipelines.
    - [DEPLOYMENT.md](DEPLOYMENT.md): Docker Stack configs, replica sets, and volumes.
    - [TESTING_WORKFLOW.md](TESTING_WORKFLOW.md): Verification checklists and test implementation guidelines.
@@ -34,6 +35,7 @@ This folder contains the comprehensive development documentation for the reposit
 | **API Conventions** | [API_GUIDELINES.md](API_GUIDELINES.md) | JSON response payloads & exception handling schemas |
 | **Search APIs** | [guideline/SEARCH_API_GUIDE.md](guideline/SEARCH_API_GUIDE.md) | Frontend search flow, guest history, suggestions, and payloads |
 | **Cart APIs** | [guideline/CART_API_GUIDE.md](guideline/CART_API_GUIDE.md) | Frontend cart flow, guest cart, merge behavior, and payloads |
+| **Shop APIs** | [guideline/SHOP_API_GUIDE.md](guideline/SHOP_API_GUIDE.md) | Shop details, products, and recently viewed flows |
 | **Style & Standard** | [CODING_RULES.md](CODING_RULES.md) | Formatting controls, TypeScript structures, and naming |
 | **Data & Seeding** | [DATABASE_SEEDING.md](DATABASE_SEEDING.md) | Mongoose collections seeding scripts & idempotency rules |
 | **Containers** | [DEPLOYMENT.md](DEPLOYMENT.md) | Docker networks, MongoDB replica sets, and volumes |

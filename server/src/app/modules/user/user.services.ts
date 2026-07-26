@@ -11,6 +11,8 @@ import {
   withFollowingFlag,
 } from '@/app/modules/follow/follow.helpers';
 import { Kyc } from '@/app/modules/kyc/kyc.model';
+import { Product } from '@/app/modules/product/product.model';
+import { SettingService } from '@/app/modules/settings/settings.services';
 import {
   deleteShopFromTypesense,
   upsertShopToTypesense,
@@ -190,6 +192,115 @@ const getFeaturedVendors = async (userId?: string) => {
 
   const followedVendorIds = await getFollowedVendorIdSet(userId);
   return vendors.map((vendor) => withFollowingFlag(vendor, followedVendorIds));
+};
+
+const getShopDetails = async (
+  traceId: string,
+  vendorId: string,
+  query: { latitude?: number; longitude?: number },
+  userId?: string
+) => {
+  const vendor = await User.findOne({
+    _id: vendorId,
+    role: USER_ROLE.vendor,
+    status: 'active',
+    isDeleted: false,
+  })
+    .select(
+      '_id id name email phone profileAvatar coverPhoto description address location avgRating ratingCount followers createdAt'
+    )
+    .lean();
+
+  if (!vendor) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Shop not found', traceId);
+  }
+
+  const [longitude, latitude] = vendor.location?.coordinates ?? [0, 0];
+  let distance = null as null | {
+    distanceKm: number;
+    distanceText: string | null;
+    durationMinutes: number | null;
+    durationText: string | null;
+  };
+
+  if (
+    query.latitude !== undefined &&
+    query.longitude !== undefined &&
+    latitude !== 0 &&
+    longitude !== 0
+  ) {
+    const origin = { latitude: query.latitude, longitude: query.longitude };
+    try {
+      const [element] = await getGoogleDistanceMatrix(origin, [
+        { latitude, longitude },
+      ]);
+      const fallbackDistanceKm = Number(
+        calculateDistanceKm(origin, { latitude, longitude }).toFixed(2)
+      );
+      distance = {
+        distanceKm:
+          element?.status === 'OK' && element.distance?.value !== undefined
+            ? Number((element.distance.value / 1000).toFixed(2))
+            : fallbackDistanceKm,
+        distanceText:
+          element?.status === 'OK' && element.distance?.text
+            ? element.distance.text
+            : `${fallbackDistanceKm} km`,
+        durationMinutes:
+          element?.status === 'OK' && element.duration?.value !== undefined
+            ? Math.ceil(element.duration.value / 60)
+            : null,
+        durationText:
+          element?.status === 'OK' && element.duration?.text
+            ? element.duration.text
+            : null,
+      };
+    } catch (error) {
+      const fallbackDistanceKm = Number(
+        calculateDistanceKm(origin, { latitude, longitude }).toFixed(2)
+      );
+      distance = {
+        distanceKm: fallbackDistanceKm,
+        distanceText: `${fallbackDistanceKm} km`,
+        durationMinutes: null,
+        durationText: null,
+      };
+    }
+  }
+
+  const [categories, policies, followedVendorIds] = await Promise.all([
+    Product.aggregate([
+      { $match: { vendorId: new mongoose.Types.ObjectId(vendorId), isDeleted: false } },
+      { $group: { _id: '$category', productCount: { $sum: 1 } } },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'category',
+        },
+      },
+      { $unwind: '$category' },
+      {
+        $project: {
+          _id: '$category._id',
+          title: '$category.title',
+          icon: '$category.icon',
+          productCount: 1,
+        },
+      },
+      { $sort: { productCount: -1, title: 1 } },
+    ]),
+    SettingService.getSettingGenerals(traceId, vendorId).catch(() => null),
+    getFollowedVendorIdSet(userId),
+  ]);
+
+  return {
+    shop: withFollowingFlag(vendor, followedVendorIds),
+    distance,
+    categories,
+    policies,
+  };
 };
 
 /** Changes a user's email after OTP verification. */
@@ -568,6 +679,7 @@ export const UserService = {
   getSingleUser,
   getNearbyShops,
   getFeaturedVendors,
+  getShopDetails,
   changeEmail,
   updateUserProfile,
   updateUserStatus,

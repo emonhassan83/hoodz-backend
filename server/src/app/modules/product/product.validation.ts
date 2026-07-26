@@ -149,11 +149,18 @@ const notifyMeValidationSchema = z.object({
   }),
 });
 
+const shopProductsValidationSchema = z.object({
+  params: z.object({
+    vendorId: objectIdSchema,
+  }),
+});
+
 export const ProductValidation = {
   createProductValidationSchema,
   createProductByAdminValidationSchema,
   updateProductValidationSchema,
   markProductViewedValidationSchema,
+  shopProductsValidationSchema,
   notifyMeValidationSchema,
 };
 
