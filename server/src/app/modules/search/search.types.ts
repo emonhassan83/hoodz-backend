@@ -1,19 +1,25 @@
 import { Types } from 'mongoose';
 
-import { SEARCH_TYPE } from '@/app/modules/search/search.constant';
+import { SEARCH_SOURCE } from '@/app/modules/search/search.constant';
 
 export type TSearch = {
   _id?: string;
-  userId: Types.ObjectId;
-  modelType: SEARCH_TYPE;
-  refId: Types.ObjectId;
+  userId?: Types.ObjectId;
+  guestId?: string;
+  query: string;
+  normalizedQuery: string;
+  source: SEARCH_SOURCE;
+  resultCount: number;
+  lastSearchedAt: Date;
+};
+
+export type TSearchActor = {
+  userId?: string;
+  guestId?: string;
 };
 
 export type TSearchQuery = {
   searchTerm?: string;
-  limit?: string | number;
-  page?: string | number;
-  perPage?: string | number;
   category?: string;
   brand?: string;
   collectionType?: string;
@@ -26,8 +32,8 @@ export type TSearchQuery = {
 };
 
 export type TInsertSearchPayload = {
-  modelType: SEARCH_TYPE;
-  refId: string;
+  query: string;
+  source?: SEARCH_SOURCE;
 };
 
 export type TTypesenseProductDocument = {
@@ -52,16 +58,6 @@ export type TTypesenseProductDocument = {
   sold: number;
   inStock: boolean;
   seoKeywords: string[];
-  createdAt: number;
-};
-
-export type TTypesenseShopDocument = {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  profileAvatar: string;
   createdAt: number;
 };
 

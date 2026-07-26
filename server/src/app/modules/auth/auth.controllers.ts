@@ -4,6 +4,7 @@ import { env } from '@/app/configs/env.configs';
 import { getTraceId } from '@/app/configs/requestContext.configs';
 import { AuthService } from '@/app/modules/auth/auth.services';
 import { OtpServices } from '@/app/modules/otp/otp.services';
+import { SearchService } from '@/app/modules/search/search.services';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
 // DRY: single place for refresh-token cookie config
@@ -16,11 +17,18 @@ const setRefreshTokenCookie = (res: Response, refreshToken: string) => {
   });
 };
 
+/** Reads the mobile/web guest id used for anonymous search history. */
+const getGuestId = (req: Request) => {
+  const guestId = req.headers['x-guest-id'];
+  return Array.isArray(guestId) ? guestId[0] : guestId;
+};
+
 // ─── Signup ────────────────────────────────────────────────────────────────
 
 const signupWithEmail = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await AuthService.signupWithEmail(traceId, req.body);
+  await SearchService.mergeGuestSearchHistory(getGuestId(req), data._id.toString());
   const sendOtp = await OtpServices.sendOtpInEmail(traceId, data._id.toString(), data?.email);
   const { _id, id, name, email, role, status, isProfileSetUp } = data
 
@@ -39,6 +47,7 @@ const signupWithEmail = asyncHandler(async (req: Request, res: Response) => {
 const signupWithPhone = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await AuthService.signupWithPhone(traceId, req.body);
+  await SearchService.mergeGuestSearchHistory(getGuestId(req), data._id.toString());
 
   sendResponse(res, {
     success: true,
@@ -53,7 +62,7 @@ const signupWithPhone = asyncHandler(async (req: Request, res: Response) => {
 
 const registerWithGoogle = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const result = await AuthService.registerWithGoogle(traceId, req.body);
+  const result = await AuthService.registerWithGoogle(traceId, req.body, getGuestId(req));
   setRefreshTokenCookie(res, result.refreshToken);
 
   sendResponse(res, {
@@ -67,7 +76,7 @@ const registerWithGoogle = asyncHandler(async (req: Request, res: Response) => {
 
 const registerWithApple = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const result = await AuthService.registerWithApple(traceId, req.body);
+  const result = await AuthService.registerWithApple(traceId, req.body, getGuestId(req));
   setRefreshTokenCookie(res, result.refreshToken);
 
   sendResponse(res, {
@@ -83,7 +92,7 @@ const registerWithApple = asyncHandler(async (req: Request, res: Response) => {
 
 const loginWithEmail = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const result = await AuthService.loginWithEmail(traceId, req.body);
+  const result = await AuthService.loginWithEmail(traceId, req.body, getGuestId(req));
   setRefreshTokenCookie(res, result.refreshToken);
 
   sendResponse(res, {

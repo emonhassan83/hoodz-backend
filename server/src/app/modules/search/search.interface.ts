@@ -1,12 +1,16 @@
 import { Model, Types } from 'mongoose';
 
-import { SEARCH_TYPE } from '@/app/modules/search/search.constant';
+import { SEARCH_SOURCE } from '@/app/modules/search/search.constant';
 
 export interface ISearch {
   _id: Types.ObjectId;
-  userId: Types.ObjectId;
-  modelType: SEARCH_TYPE;
-  refId: Types.ObjectId;
+  userId?: Types.ObjectId;
+  guestId?: string;
+  query: string;
+  normalizedQuery: string;
+  source: SEARCH_SOURCE;
+  resultCount: number;
+  lastSearchedAt: Date;
   createdAt: Date;
   updatedAt: Date;
 }

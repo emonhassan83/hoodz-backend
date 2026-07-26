@@ -1,29 +1,23 @@
 import { z } from 'zod';
 
-import { SEARCH_TYPE } from '@/app/modules/search/search.constant';
-
-const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
+import { SEARCH_SOURCE } from '@/app/modules/search/search.constant';
 
 const searchDataValidationSchema = z.object({
   query: z.object({
     searchTerm: z.string().trim().min(1, 'Search term is required'),
-    limit: z
-      .string()
-      .optional()
-      .or(z.number().int().positive().optional()),
   }),
 });
 
 const insertSearchValidationSchema = z.object({
   body: z.object({
-    modelType: z.nativeEnum(SEARCH_TYPE),
-    refId: objectIdSchema,
+    query: z.string().trim().min(1, 'Search query is required'),
+    source: z.nativeEnum(SEARCH_SOURCE).optional(),
   }),
 });
 
 const deleteSearchValidationSchema = z.object({
   params: z.object({
-    id: objectIdSchema,
+    id: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id'),
   }),
 });
 

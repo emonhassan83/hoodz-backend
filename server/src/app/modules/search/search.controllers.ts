@@ -1,32 +1,39 @@
 import { Request, Response } from 'express';
 
 import { getTraceId } from '@/app/configs/requestContext.configs';
+import { resolveSearchActor } from '@/app/modules/search/search.helpers';
 import { SearchService } from '@/app/modules/search/search.services';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
+/** Reads authenticated user or guest header for search history scope. */
+const getSearchActorFromRequest = (req: Request) =>
+  resolveSearchActor(req.user?.userId, req.headers['x-guest-id']);
+
 const searchDataIntoDB = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
+  const actor = getSearchActorFromRequest(req);
   const data = await SearchService.searchDataIntoDB(
     traceId,
     req.query,
-    req.user.userId
+    actor
   );
 
   sendResponse(res, {
     success: true,
     statusCode: 200,
     message: 'Search data fetched successfully',
-    data,
+    data: data,
     traceId,
   });
 });
 
 const insertIntoDB = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
+  const actor = getSearchActorFromRequest(req);
   const data = await SearchService.insertIntoDB(
     traceId,
     req.body,
-    req.user.userId
+    actor
   );
 
   sendResponse(res, {
@@ -40,17 +47,24 @@ const insertIntoDB = asyncHandler(async (req: Request, res: Response) => {
 
 const getAllIntoDB = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await SearchService.getAllIntoDB(
-    traceId,
-    req.query,
-    req.user.userId
-  );
+  const actor = getSearchActorFromRequest(req);
+  const result = (await SearchService.getAllIntoDB(req.query, actor)) as {
+    popularCategories?: unknown;
+    featuredVendors?: unknown;
+    searchHistory?: unknown;
+    meta: unknown;
+  };
 
   sendResponse(res, {
     success: true,
     statusCode: 200,
     message: 'Search history fetched successfully',
-    data,
+    data: {
+      popularCategories: result.popularCategories ?? [],
+      featuredVendors: result.featuredVendors ?? [],
+      searchHistory: result.searchHistory ?? [],
+    },
+    meta: result.meta,
     traceId,
   });
 });
@@ -58,9 +72,10 @@ const getAllIntoDB = asyncHandler(async (req: Request, res: Response) => {
 const clearSearchHistory = asyncHandler(
   async (req: Request, res: Response) => {
     const traceId = getTraceId();
+    const actor = getSearchActorFromRequest(req);
     const data = await SearchService.clearSearchHistory(
       traceId,
-      req.user.userId
+      actor
     );
 
     sendResponse(res, {
@@ -75,10 +90,11 @@ const clearSearchHistory = asyncHandler(
 
 const deleteAIntoDB = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
+  const actor = getSearchActorFromRequest(req);
   const data = await SearchService.deleteAIntoDB(
     traceId,
     req.params.id as string,
-    req.user.userId
+    actor
   );
 
   sendResponse(res, {
@@ -111,4 +127,3 @@ export const SearchController = {
   deleteAIntoDB,
   reindexIntoTypesense,
 };
-

@@ -1,5 +1,8 @@
 import { Query } from 'mongoose'
 
+const escapeRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 class QueryBuilder<T> {
   public modelQuery: Query<T[], T>
   public query: Record<string, unknown>
@@ -12,9 +15,10 @@ class QueryBuilder<T> {
   search(searchableFields: string[]) {
     const searchTerm = this?.query?.searchTerm as string
     if (searchTerm) {
+      const safeSearchTerm = escapeRegex(searchTerm)
       this.modelQuery = this.modelQuery.find({
         $or: searchableFields.map((field) => ({
-          [field]: { $regex: searchTerm, $options: 'i' },
+          [field]: { $regex: safeSearchTerm, $options: 'i' },
         })),
       })
     }

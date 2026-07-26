@@ -1,5 +1,5 @@
-export enum SEARCH_TYPE {
-  User = 'User',
-  Product = 'Product',
+export enum SEARCH_SOURCE {
+  manual = 'manual',
+  suggestion = 'suggestion',
 }
 

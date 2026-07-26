@@ -22,6 +22,7 @@ import {
   TChangePasswordPayload,
 } from '@/app/modules/auth/auth.types';
 import { OtpServices } from '@/app/modules/otp/otp.services';
+import { SearchService } from '@/app/modules/search/search.services';
 import { REGISTER_WITH, USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { ISignUpWithEmail, ISignUpWithPhone } from '@/app/modules/user/user.interface';
 import { User } from '@/app/modules/user/user.model';
@@ -42,7 +43,8 @@ export const signupWithPhone = (traceId: string, payload: ISignUpWithPhone) =>
 const registerWithSocialAuth = async (
   traceId: string,
   provider: typeof REGISTER_WITH.google | typeof REGISTER_WITH.apple,
-  payload: TGoogleLoginPayload | TAppleLoginPayload
+  payload: TGoogleLoginPayload | TAppleLoginPayload,
+  guestId?: string
 ) => {
   const role = payload.role ?? USER_ROLE.user;
   if (![USER_ROLE.user, USER_ROLE.rider].includes(role as any)) {
@@ -105,7 +107,9 @@ const registerWithSocialAuth = async (
       );
     }
 
-    return generateTokens((updatedUser ?? user) as any);
+    const authUser = (updatedUser ?? user) as any;
+    await SearchService.mergeGuestSearchHistory(guestId, authUser._id.toString());
+    return generateTokens(authUser);
   }
 
   const newUser = await User.create({
@@ -120,21 +124,32 @@ const registerWithSocialAuth = async (
     throw new ApiError(HttpStatusCode.InternalServerError, 'Failed to create user!', traceId);
   }
 
+  await SearchService.mergeGuestSearchHistory(guestId, newUser._id.toString());
   return generateTokens(newUser);
 };
 
 /** Registers or logs in a user with Google auth. */
-export const registerWithGoogle = (traceId: string, payload: TGoogleLoginPayload) =>
-  registerWithSocialAuth(traceId, REGISTER_WITH.google, payload);
+export const registerWithGoogle = (
+  traceId: string,
+  payload: TGoogleLoginPayload,
+  guestId?: string
+) => registerWithSocialAuth(traceId, REGISTER_WITH.google, payload, guestId);
 
 /** Registers or logs in a user with Apple auth. */
-export const registerWithApple = (traceId: string, payload: TAppleLoginPayload) =>
-  registerWithSocialAuth(traceId, REGISTER_WITH.apple, payload);
+export const registerWithApple = (
+  traceId: string,
+  payload: TAppleLoginPayload,
+  guestId?: string
+) => registerWithSocialAuth(traceId, REGISTER_WITH.apple, payload, guestId);
 
 // ─── Login ─────────────────────────────────────────────────────────────────
 
 /** Logs in a user with email and password. */
-export const loginWithEmail = async (traceId: string, payload: TLoginWithEmail) => {
+export const loginWithEmail = async (
+  traceId: string,
+  payload: TLoginWithEmail,
+  guestId?: string
+) => {
   const { email, password, fcmToken } = payload;
 
   const user = await User.findOne({ email }).select('+password');
@@ -154,6 +169,7 @@ export const loginWithEmail = async (traceId: string, payload: TLoginWithEmail) 
     await User.findByIdAndUpdate(user._id, { fcmToken });
   }
 
+  await SearchService.mergeGuestSearchHistory(guestId, user._id.toString());
   return generateTokens(user as any);
 };
 

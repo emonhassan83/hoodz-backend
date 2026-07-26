@@ -1,9 +1,10 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
+import { Category } from '@/app/modules/category/category.model';
 import { Product } from '@/app/modules/product/product.model';
-import { SEARCH_TYPE } from '@/app/modules/search/search.constant';
-import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
+import { TSearchActor } from '@/app/modules/search/search.types';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import { deleteCachePattern } from '@/app/redis/helpers';
 
@@ -23,6 +24,10 @@ export const normalizeSearchTerm = (
   return searchTerm.trim();
 };
 
+/** Converts a query into a stable, duplicate-safe history key. */
+export const normalizeSearchQuery = (query: string) =>
+  query.trim().replace(/\s+/g, ' ').toLowerCase();
+
 /** Escapes user input before building a regex search. */
 export const escapeRegex = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -34,46 +39,116 @@ export const resolveSearchLimit = (limit: unknown, fallback = 10) => {
   return Math.min(parsed, 30);
 };
 
-/** Ensures the requesting user exists and is not deleted. */
-export const assertSearchUserExists = async (
-  traceId: string,
-  userId: string
-) => {
-  const user = await User.findById(userId).select('role isDeleted').lean();
-  if (!user || user.isDeleted) {
-    throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
-  }
-
-  return user;
+/** Resolves a cache/history actor where auth user takes priority over guest id. */
+export const resolveSearchActor = (
+  userId?: string,
+  guestId?: string | string[]
+): TSearchActor => {
+  if (userId) return { userId };
+  const rawGuestId = Array.isArray(guestId) ? guestId[0] : guestId;
+  return rawGuestId?.trim() ? { guestId: rawGuestId.trim() } : {};
 };
 
-/** Checks whether a selected search result still points to a valid record. */
-export const assertValidSearchReference = async (
-  traceId: string,
-  modelType: SEARCH_TYPE,
-  refId: string
-) => {
-  const exists =
-    modelType === SEARCH_TYPE.User
-      ? await User.exists({
-          _id: refId,
-          role: USER_ROLE.vendor,
-          status: USER_STATUS.active,
-          isDeleted: false,
-        })
-      : await Product.exists({ _id: refId, isDeleted: false });
+/** Returns a stable actor key for Redis cache scopes. */
+export const getSearchActorCacheKey = (actor: TSearchActor) => {
+  if (actor.userId) return `user:${actor.userId}`;
+  if (actor.guestId) return `guest:${actor.guestId}`;
+  return 'anonymous';
+};
 
-  if (!exists) {
+/** Throws when an endpoint requires a user or guest identity. */
+export const assertSearchActorExists = (
+  traceId: string,
+  actor: TSearchActor
+) => {
+  if (!actor.userId && !actor.guestId) {
     throw new ApiError(
-      HttpStatusCode.NotFound,
-      `Invalid ${modelType} reference ID`,
+      HttpStatusCode.BadRequest,
+      'x-guest-id header or authentication is required for search history',
       traceId
     );
   }
 };
 
-/** Clears cached search data for a single user after history changes. */
-export const invalidateUserSearchCache = async (userId: string) => {
-  await deleteCachePattern(`search:*:${userId}:*`);
+/** Builds a Mongo filter scoped to the current user or guest identity. */
+export const buildSearchActorFilter = (actor: TSearchActor) =>
+  actor.userId ? { userId: actor.userId } : { guestId: actor.guestId };
+
+/** Clears cached search data for a single search actor. */
+export const invalidateSearchActorCache = async (actor: TSearchActor) => {
+  await deleteCachePattern(`search:history:${getSearchActorCacheKey(actor)}*`);
 };
 
+/** Builds title phrase suggestions from matched product-like documents. */
+export const buildProductSuggestions = (
+  products: Array<{ title?: string; brand?: string }>,
+  limit = 8
+) => {
+  const seen = new Set<string>();
+  const suggestions: Array<{ query: string; resultCount: number }> = [];
+
+  for (const product of products) {
+    const phrases = [product.title, [product.brand, product.title].filter(Boolean).join(' ')];
+    for (const phrase of phrases) {
+      if (!phrase) continue;
+      const query = phrase.trim().replace(/\s+/g, ' ');
+      const normalized = normalizeSearchQuery(query);
+      if (!normalized || seen.has(normalized)) continue;
+      seen.add(normalized);
+      suggestions.push({ query, resultCount: 1 });
+      if (suggestions.length >= limit) return suggestions;
+    }
+  }
+
+  return suggestions;
+};
+
+/** Returns max 10 categories ranked by product count, sold amount, and recency. */
+export const getPopularCategories = async () => {
+  const categories = await Product.aggregate([
+    { $match: { isDeleted: false, category: { $ne: null } } },
+    {
+      $group: {
+        _id: '$category',
+        productCount: { $sum: 1 },
+        totalSold: { $sum: { $ifNull: ['$sold', 0] } },
+        latestProductAt: { $max: '$createdAt' },
+      },
+    },
+    { $sort: { productCount: -1, totalSold: -1, latestProductAt: -1 } },
+    { $limit: 10 },
+    {
+      $lookup: {
+        from: Category.collection.name,
+        localField: '_id',
+        foreignField: '_id',
+        as: 'category',
+      },
+    },
+    { $unwind: '$category' },
+    {
+      $project: {
+        _id: '$category._id',
+        title: '$category.title',
+        icon: '$category.icon',
+        productCount: 1,
+        totalSold: 1,
+      },
+    },
+  ]);
+
+  return categories;
+};
+
+/** Returns max 5 high-rated vendors for search screen discovery. */
+export const getFeaturedSearchVendors = async () =>
+  User.find({
+    role: USER_ROLE.vendor,
+    status: 'active',
+    isDeleted: false,
+    avgRating: { $gt: 4 },
+  })
+    .select('_id id name profileAvatar coverPhoto address location avgRating ratingCount followers')
+    .sort({ avgRating: -1, ratingCount: -1, createdAt: -1 })
+    .limit(5)
+    .lean();

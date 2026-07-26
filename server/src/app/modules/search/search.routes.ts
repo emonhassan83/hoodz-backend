@@ -1,27 +1,27 @@
 import { Router } from 'express';
 
-import auth from '@/app/middlewares/auth';
+import auth, { optionalAuth } from '@/app/middlewares/auth';
 import { SearchController } from '@/app/modules/search/search.controllers';
 import { SearchValidation } from '@/app/modules/search/search.validation';
-import { AUTHENTICATED_ROLES, USER_ROLE } from '@/app/modules/user/user.constant';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
 import validateRequest from '@/app/utils/validateRequest';
 
 const router = Router();
 
 router
   .route('/')
-  .get(auth(...AUTHENTICATED_ROLES), SearchController.getAllIntoDB)
+  .get(optionalAuth, SearchController.getAllIntoDB)
   .post(
-    auth(...AUTHENTICATED_ROLES),
+    optionalAuth,
     validateRequest(SearchValidation.insertSearchValidationSchema),
     SearchController.insertIntoDB
   )
-  .delete(auth(...AUTHENTICATED_ROLES), SearchController.clearSearchHistory);
+  .delete(optionalAuth, SearchController.clearSearchHistory);
 
 router
   .route('/data')
   .get(
-    auth(...AUTHENTICATED_ROLES),
+    optionalAuth,
     validateRequest(SearchValidation.searchDataValidationSchema),
     SearchController.searchDataIntoDB
   );
@@ -33,7 +33,7 @@ router
 router
   .route('/:id')
   .delete(
-    auth(...AUTHENTICATED_ROLES),
+    optionalAuth,
     validateRequest(SearchValidation.deleteSearchValidationSchema),
     SearchController.deleteAIntoDB
   );

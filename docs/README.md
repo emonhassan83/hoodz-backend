@@ -15,6 +15,7 @@ This folder contains the comprehensive development documentation for the reposit
 4. **Operations & Deployment**:
    - [AUTHENTICATION.md](AUTHENTICATION.md): Auth procedures, JWT session lifecycles, and OTP checks.
    - [API_GUIDELINES.md](API_GUIDELINES.md): Response serialization, error formatting, and routing.
+   - [SEARCH_API_GUIDE.md](SEARCH_API_GUIDE.md): Frontend search flow, guest history, suggestions, and payload examples.
    - [DATABASE_SEEDING.md](DATABASE_SEEDING.md): Seeding rules, database models, and mock pipelines.
    - [DEPLOYMENT.md](DEPLOYMENT.md): Docker Stack configs, replica sets, and volumes.
    - [TESTING_WORKFLOW.md](TESTING_WORKFLOW.md): Verification checklists and test implementation guidelines.
@@ -30,6 +31,7 @@ This folder contains the comprehensive development documentation for the reposit
 | **System Design** | [ARCHITECTURE.md](ARCHITECTURE.md) | System-level architecture & sequence diagrams |
 | **Auth & Security** | [AUTHENTICATION.md](AUTHENTICATION.md) | Token structures, session actions, and auth controls |
 | **API Conventions** | [API_GUIDELINES.md](API_GUIDELINES.md) | JSON response payloads & exception handling schemas |
+| **Search APIs** | [SEARCH_API_GUIDE.md](SEARCH_API_GUIDE.md) | Frontend search flow, guest history, suggestions, and payloads |
 | **Style & Standard** | [CODING_RULES.md](CODING_RULES.md) | Formatting controls, TypeScript structures, and naming |
 | **Data & Seeding** | [DATABASE_SEEDING.md](DATABASE_SEEDING.md) | Mongoose collections seeding scripts & idempotency rules |
 | **Containers** | [DEPLOYMENT.md](DEPLOYMENT.md) | Docker networks, MongoDB replica sets, and volumes |

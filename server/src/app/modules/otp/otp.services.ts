@@ -26,6 +26,7 @@ import {
   TSendOtpPhonePayload,
   TVerifyOtpQuery,
 } from '@/app/modules/otp/otp.types';
+import { SearchService } from '@/app/modules/search/search.services';
 
 // ─── Verify OTP ────────────────────────────────────────────────────────────
 // S (SRP): owns only verification decision — token decode, Redis check, DB update
@@ -34,7 +35,8 @@ export const verifyOTP = async (
   traceId: string,
   tokenWithBearer: string | undefined,
   otp: string | number,
-  query: TVerifyOtpQuery
+  query: TVerifyOtpQuery,
+  guestId?: string
 ) => {
   const { type } = query;
 
@@ -72,6 +74,7 @@ export const verifyOTP = async (
   }
 
   if (['login', 'signup', 'forgot'].includes(type as string)) {
+    await SearchService.mergeGuestSearchHistory(guestId, user._id.toString());
     return generateTokens(user);
   }
 

@@ -2,45 +2,48 @@ import { HttpStatusCode } from 'axios';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
+import { getFollowedVendorIdSet, withFollowingFlag } from '@/app/modules/follow/follow.helpers';
 import { Product } from '@/app/modules/product/product.model';
 import {
-  assertSearchUserExists,
-  assertValidSearchReference,
+  assertSearchActorExists,
+  buildProductSuggestions,
+  buildSearchActorFilter,
   escapeRegex,
-  invalidateUserSearchCache,
+  getFeaturedSearchVendors,
+  getPopularCategories,
+  getSearchActorCacheKey,
+  invalidateSearchActorCache,
+  normalizeSearchQuery,
   normalizeSearchTerm,
-  resolveSearchLimit,
 } from '@/app/modules/search/search.helpers';
 import { Search } from '@/app/modules/search/search.model';
 import {
   TInsertSearchPayload,
+  TSearchActor,
   TSearchQuery,
 } from '@/app/modules/search/search.types';
 import {
   reindexTypesense,
   searchTypesense,
 } from '@/app/modules/search/search.typesense';
-import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
-import { User } from '@/app/modules/user/user.model';
 import {
   getCache,
   setCache,
 } from '@/app/redis/helpers';
 import { REDIS_KEYS } from '@/app/redis/keys';
 
-/** Searches active vendor shops and available products by one search term. */
+const SEARCH_SUGGESTION_SOURCE_LIMIT = 15;
+
+/** Searches products and returns product-title suggestions for grouped result clicks. */
 const searchDataIntoDB = async (
   traceId: string,
   query: TSearchQuery,
-  userId: string
+  actor: TSearchActor
 ) => {
-  await assertSearchUserExists(traceId, userId);
-
   const searchTerm = normalizeSearchTerm(traceId, query.searchTerm);
-  const limit = resolveSearchLimit(query.limit);
   const cacheKey = REDIS_KEYS.SEARCH_RESULT(
-    userId,
-    `${searchTerm.toLowerCase()}:${limit}`
+    getSearchActorCacheKey(actor),
+    `suggestions:v2:${searchTerm.toLowerCase()}:${JSON.stringify(query)}`
   );
   const cached = await getCache(cacheKey);
   if (cached) return cached;
@@ -51,161 +54,158 @@ const searchDataIntoDB = async (
     return typesenseResult;
   } catch (error) {
     console.warn(
-      '[Typesense] Search failed, using MongoDB fallback:',
+      '[Typesense] Product search failed, using MongoDB fallback:',
       error instanceof Error ? error.message : error
     );
   }
 
   const searchRegex = new RegExp(escapeRegex(searchTerm), 'i');
 
-  const [shops, products] = await Promise.all([
-    User.find({
-      role: USER_ROLE.vendor,
-      status: USER_STATUS.active,
-      isDeleted: false,
-      $or: [
-        { name: searchRegex },
-        { email: searchRegex },
-        { phone: searchRegex },
-      ],
-    })
-      .select('_id name email phone profileAvatar address location')
-      .limit(limit)
-      .lean(),
-    Product.find({
-      isDeleted: false,
-      $or: [
-        { title: searchRegex },
-        { brand: searchRegex },
-        { description: searchRegex },
-        { sku: searchRegex },
-      ],
-    })
-      .populate([
-        { path: 'vendorId', select: 'name profileAvatar' },
-        { path: 'category', select: 'title icon' },
-      ])
-      .select('title brand images price discountPrice stock vendorId category')
-      .sort({ stock: -1, createdAt: -1 })
-      .limit(limit)
-      .lean(),
-  ]);
+  const productFilter: Record<string, unknown> = {
+    isDeleted: false,
+    ...(query.inStock === false || query.inStock === 'false'
+      ? {}
+      : { stock: { $gt: 0 } }),
+    ...(query.brand ? { brand: query.brand } : {}),
+    ...(query.collectionType ? { collectionType: query.collectionType } : {}),
+    ...(query.category ? { category: query.category } : {}),
+    ...(query.size ? { sizes: query.size } : {}),
+    ...(query.color ? { 'colors.name': query.color } : {}),
+    ...(query.minPrice || query.maxPrice
+      ? {
+          discountPrice: {
+            ...(query.minPrice ? { $gte: Number(query.minPrice) } : {}),
+            ...(query.maxPrice ? { $lte: Number(query.maxPrice) } : {}),
+          },
+        }
+      : {}),
+    $or: [
+      { title: searchRegex },
+      { brand: searchRegex },
+      { description: searchRegex },
+      { sku: searchRegex },
+      { 'seo.metaKeywords': searchRegex },
+    ],
+  };
+
+  const products = await Product.find(productFilter)
+    .select('title brand')
+    .sort({ stock: -1, createdAt: -1 })
+    .limit(SEARCH_SUGGESTION_SOURCE_LIMIT)
+    .lean();
 
   const result = {
-    shops,
-    products,
-    facets: [],
-    found: {
-      shops: shops.length,
-      products: products.length,
-    },
+    suggestions: buildProductSuggestions(products),
     fallback: 'mongodb',
   };
+
   await setCache(cacheKey, result, 120);
   return result;
 };
 
-/** Stores or refreshes a clicked search result in user history. */
+/** Stores or refreshes a user/guest search phrase in history. */
 const insertIntoDB = async (
   traceId: string,
   payload: TInsertSearchPayload,
-  userId: string
+  actor: TSearchActor
 ) => {
-  await assertSearchUserExists(traceId, userId);
-  await assertValidSearchReference(traceId, payload.modelType, payload.refId);
+  assertSearchActorExists(traceId, actor);
+
+  const query = normalizeSearchTerm(traceId, payload.query);
+  const normalizedQuery = normalizeSearchQuery(query);
+  const resultCount = await Product.countDocuments({
+    isDeleted: false,
+    $or: [
+      { title: new RegExp(escapeRegex(query), 'i') },
+      { brand: new RegExp(escapeRegex(query), 'i') },
+      { description: new RegExp(escapeRegex(query), 'i') },
+      { sku: new RegExp(escapeRegex(query), 'i') },
+      { 'seo.metaKeywords': new RegExp(escapeRegex(query), 'i') },
+    ],
+  });
 
   const history = await Search.findOneAndUpdate(
     {
-      userId,
-      modelType: payload.modelType,
-      refId: payload.refId,
+      ...buildSearchActorFilter(actor),
+      normalizedQuery,
     },
     {
-      $setOnInsert: { userId, modelType: payload.modelType, refId: payload.refId },
-      $set: { updatedAt: new Date() },
+      $setOnInsert: { ...actor, normalizedQuery },
+      $set: {
+        query,
+        source: payload.source,
+        resultCount,
+        lastSearchedAt: new Date(),
+      },
     },
     {
       upsert: true,
       returnDocument: 'after',
       setDefaultsOnInsert: true,
     }
-  )
-    .populate([{ path: 'refId', select: '_id name title profileAvatar images price discountPrice' }])
-    .select('-__v');
+  ).select('-__v');
 
-  await invalidateUserSearchCache(userId);
+  await invalidateSearchActorCache(actor);
   return history;
 };
 
-/** Returns suggested search data and the user's saved search history. */
+/** Returns search screen discovery data plus actor-scoped search history. */
 const getAllIntoDB = async (
-  traceId: string,
   query: Record<string, unknown>,
-  userId: string
+  actor: TSearchActor
 ) => {
-  await assertSearchUserExists(traceId, userId);
-
-  const cacheKey = REDIS_KEYS.SEARCH_HISTORY(userId, JSON.stringify(query));
+  const cacheKey = REDIS_KEYS.SEARCH_HISTORY(
+    getSearchActorCacheKey(actor),
+    JSON.stringify(query)
+  );
   const cached = await getCache(cacheKey);
   if (cached) return cached;
 
-  const [popularShops, popularProducts] = await Promise.all([
-    User.find({
-      role: USER_ROLE.vendor,
-      status: USER_STATUS.active,
-      isDeleted: false,
-    })
-      .select('_id name profileAvatar address')
-      .sort({ createdAt: -1 })
-      .limit(8)
-      .lean(),
-    Product.find({ isDeleted: false })
-      .select('_id title brand images price discountPrice stock')
-      .sort({ stock: -1, createdAt: -1 })
-      .limit(8)
-      .lean(),
-  ]);
+  const historyQuery = actor.userId || actor.guestId
+    ? new QueryBuilder(
+        Search.find(buildSearchActorFilter(actor))
+          .select('query normalizedQuery source resultCount lastSearchedAt createdAt updatedAt')
+          .lean(),
+        query
+      )
+        .filter()
+        .paginate()
+        .sort()
+        .fields()
+    : null;
 
-  const historyQuery = new QueryBuilder(
-    Search.find({ userId })
-      .populate([
-        {
-          path: 'refId',
-          select: '_id name title profileAvatar images price discountPrice',
-        },
-      ])
-      .select('modelType refId createdAt updatedAt')
-      .lean(),
-    query
-  )
-    .filter()
-    .paginate()
-    .sort()
-    .fields();
+  const [popularCategories, featuredVendors, searchHistory, meta] =
+    await Promise.all([
+      getPopularCategories(),
+      getFeaturedSearchVendors(),
+      historyQuery?.modelQuery ?? Promise.resolve([]),
+      historyQuery?.countTotal() ?? Promise.resolve({
+        page: 1,
+        limit: Number(query.limit || 10),
+        total: 0,
+        totalPage: 0,
+      }),
+    ]);
 
-  const [searchHistory, meta] = await Promise.all([
-    historyQuery.modelQuery,
-    historyQuery.countTotal(),
-  ]);
-
+  const followedVendorIds = await getFollowedVendorIdSet(actor.userId);
   const result = {
-    data: {
-      popularShops,
-      popularProducts,
-      searchHistory,
-    },
+    popularCategories,
+    featuredVendors: featuredVendors.map((vendor) =>
+      withFollowingFlag(vendor, followedVendorIds)
+    ),
+    searchHistory,
     meta,
   };
 
-  await setCache(cacheKey, result, 120);
+  await setCache(cacheKey, result);
   return result;
 };
 
-/** Clears all search history for the authenticated user. */
-const clearSearchHistory = async (traceId: string, userId: string) => {
-  await assertSearchUserExists(traceId, userId);
+/** Clears all search history for the current user or guest. */
+const clearSearchHistory = async (traceId: string, actor: TSearchActor) => {
+  assertSearchActorExists(traceId, actor);
 
-  const result = await Search.deleteMany({ userId });
+  const result = await Search.deleteMany(buildSearchActorFilter(actor));
   if (result.deletedCount === 0) {
     throw new ApiError(
       HttpStatusCode.NotFound,
@@ -214,17 +214,22 @@ const clearSearchHistory = async (traceId: string, userId: string) => {
     );
   }
 
-  await invalidateUserSearchCache(userId);
+  await invalidateSearchActorCache(actor);
   return result;
 };
 
-/** Deletes one search history item owned by the authenticated user. */
+/** Deletes one search history item owned by the current user or guest. */
 const deleteAIntoDB = async (
   traceId: string,
   id: string,
-  userId: string
+  actor: TSearchActor
 ) => {
-  const result = await Search.findOneAndDelete({ _id: id, userId });
+  assertSearchActorExists(traceId, actor);
+
+  const result = await Search.findOneAndDelete({
+    _id: id,
+    ...buildSearchActorFilter(actor),
+  });
   if (!result) {
     throw new ApiError(
       HttpStatusCode.BadRequest,
@@ -233,11 +238,48 @@ const deleteAIntoDB = async (
     );
   }
 
-  await invalidateUserSearchCache(userId);
+  await invalidateSearchActorCache(actor);
   return result;
 };
 
-/** Rebuilds Typesense indexes from MongoDB for products and shops. */
+/** Merges guest search history into the authenticated user's history. */
+const mergeGuestSearchHistory = async (guestId: string | undefined, userId: string) => {
+  if (!guestId?.trim() || !userId) return { merged: 0 };
+
+  const guestHistory = await Search.find({ guestId: guestId.trim() }).lean();
+  if (!guestHistory.length) return { merged: 0 };
+
+  await Promise.all(
+    guestHistory.map((history) =>
+      Search.findOneAndUpdate(
+        { userId, normalizedQuery: history.normalizedQuery },
+        {
+          $setOnInsert: {
+            userId,
+            normalizedQuery: history.normalizedQuery,
+          },
+          $set: {
+            query: history.query,
+            source: history.source,
+            resultCount: history.resultCount,
+            lastSearchedAt: history.lastSearchedAt,
+          },
+        },
+        { upsert: true, setDefaultsOnInsert: true }
+      )
+    )
+  );
+
+  await Search.deleteMany({ guestId: guestId.trim() });
+  await Promise.all([
+    invalidateSearchActorCache({ guestId: guestId.trim() }),
+    invalidateSearchActorCache({ userId }),
+  ]);
+
+  return { merged: guestHistory.length };
+};
+
+/** Rebuilds the Typesense product index from MongoDB. */
 const reindexIntoTypesense = async () => reindexTypesense();
 
 export const SearchService = {
@@ -246,6 +288,6 @@ export const SearchService = {
   getAllIntoDB,
   clearSearchHistory,
   deleteAIntoDB,
+  mergeGuestSearchHistory,
   reindexIntoTypesense,
 };
-

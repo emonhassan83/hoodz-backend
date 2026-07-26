@@ -4,13 +4,10 @@ import {
   TSearchQuery,
   TTypesenseProductDocument,
   TTypesenseSearchResult,
-  TTypesenseShopDocument,
 } from '@/app/modules/search/search.types';
-import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
-import { User } from '@/app/modules/user/user.model';
 
 const PRODUCT_COLLECTION = 'hoodz_products';
-const SHOP_COLLECTION = 'hoodz_shops';
+const SEARCH_SUGGESTION_SOURCE_LIMIT = 15;
 
 const productSchema = {
   name: PRODUCT_COLLECTION,
@@ -40,19 +37,6 @@ const productSchema = {
   default_sorting_field: 'createdAt',
 };
 
-const shopSchema = {
-  name: SHOP_COLLECTION,
-  fields: [
-    { name: 'name', type: 'string' },
-    { name: 'email', type: 'string' },
-    { name: 'phone', type: 'string' },
-    { name: 'address', type: 'string' },
-    { name: 'profileAvatar', type: 'string' },
-    { name: 'createdAt', type: 'int64' },
-  ],
-  default_sorting_field: 'createdAt',
-};
-
 /** Creates a Typesense collection if it does not already exist. */
 const ensureCollection = async (name: string, schema: Record<string, unknown>) => {
   try {
@@ -67,12 +51,9 @@ const ensureCollection = async (name: string, schema: Record<string, unknown>) =
   }
 };
 
-/** Ensures both Hoodz product and shop search collections exist. */
+/** Ensures the Hoodz product search collection exists. */
 export const ensureTypesenseCollections = async () => {
-  await Promise.all([
-    ensureCollection(PRODUCT_COLLECTION, productSchema),
-    ensureCollection(SHOP_COLLECTION, shopSchema),
-  ]);
+  await ensureCollection(PRODUCT_COLLECTION, productSchema);
 };
 
 /** Converts a Mongo product document into a Typesense product document. */
@@ -102,19 +83,6 @@ export const buildTypesenseProductDocument = (product: any): TTypesenseProductDo
   seoKeywords: product.seo?.metaKeywords ?? [],
   createdAt: product.createdAt
     ? Math.floor(new Date(product.createdAt).getTime() / 1000)
-    : Math.floor(Date.now() / 1000),
-});
-
-/** Converts a vendor user document into a Typesense shop document. */
-export const buildTypesenseShopDocument = (user: any): TTypesenseShopDocument => ({
-  id: user._id.toString(),
-  name: user.name ?? '',
-  email: user.email ?? '',
-  phone: user.phone ?? '',
-  address: user.address ?? '',
-  profileAvatar: user.profileAvatar ?? '',
-  createdAt: user.createdAt
-    ? Math.floor(new Date(user.createdAt).getTime() / 1000)
     : Math.floor(Date.now() / 1000),
 });
 
@@ -153,79 +121,35 @@ export const deleteProductFromTypesense = async (productId: string) => {
   }
 };
 
-/** Upserts one active vendor shop into Typesense. */
-export const upsertShopToTypesense = async (userId: string) => {
-  await ensureTypesenseCollections();
-  const user = await User.findOne({
-    _id: userId,
-    role: USER_ROLE.vendor,
-    status: USER_STATUS.active,
-    isDeleted: false,
-  }).lean();
+/** Kept for vendor flows; shop search indexing is disabled for product-only search. */
+export const upsertShopToTypesense = async (_userId: string) => null;
 
-  if (!user) return deleteShopFromTypesense(userId);
+/** Kept for vendor flows; shop search indexing is disabled for product-only search. */
+export const deleteShopFromTypesense = async (_userId: string) => null;
 
-  return typesenseRequest({
-    method: 'POST',
-    path: `/collections/${SHOP_COLLECTION}/documents`,
-    params: { action: 'upsert' },
-    data: buildTypesenseShopDocument(user),
-  });
-};
-
-/** Removes one shop document from Typesense. */
-export const deleteShopFromTypesense = async (userId: string) => {
-  await ensureTypesenseCollections();
-  try {
-    await typesenseRequest({
-      method: 'DELETE',
-      path: `/collections/${SHOP_COLLECTION}/documents/${userId}`,
-    });
-  } catch (error) {
-    if (!(error instanceof TypesenseHttpError && error.status === 404)) {
-      throw error;
-    }
-  }
-};
-
-/** Rebuilds Typesense indexes from MongoDB for products and shops. */
+/** Rebuilds the Typesense index from MongoDB products. */
 export const reindexTypesense = async () => {
   await ensureTypesenseCollections();
 
-  const [products, shops] = await Promise.all([
-    Product.find({ isDeleted: false })
-      .populate([
-        { path: 'vendorId', select: 'name' },
-        { path: 'category', select: 'title' },
-      ])
-      .lean(),
-    User.find({
-      role: USER_ROLE.vendor,
-      status: USER_STATUS.active,
-      isDeleted: false,
-    }).lean(),
-  ]);
+  const products = await Product.find({ isDeleted: false })
+    .populate([
+      { path: 'vendorId', select: 'name' },
+      { path: 'category', select: 'title' },
+    ])
+    .lean();
 
-  await Promise.all([
-    ...products.map((product) =>
+  await Promise.all(
+    products.map((product) =>
       typesenseRequest({
         method: 'POST',
         path: `/collections/${PRODUCT_COLLECTION}/documents`,
         params: { action: 'upsert' },
         data: buildTypesenseProductDocument(product),
       })
-    ),
-    ...shops.map((shop) =>
-      typesenseRequest({
-        method: 'POST',
-        path: `/collections/${SHOP_COLLECTION}/documents`,
-        params: { action: 'upsert' },
-        data: buildTypesenseShopDocument(shop),
-      })
-    ),
-  ]);
+    )
+  );
 
-  return { products: products.length, shops: shops.length };
+  return { products: products.length };
 };
 
 /** Builds Typesense product filters from e-commerce search query params. */
@@ -254,57 +178,46 @@ const resolveSortBy = (sortBy?: TSearchQuery['sortBy']) => {
   return '_text_match:desc,inStock:desc,createdAt:desc';
 };
 
-/** Searches Typesense product and shop indexes with facets. */
+/** Searches the Typesense product index with facets and product-title suggestions. */
 export const searchTypesense = async (
   searchTerm: string,
   query: TSearchQuery
 ) => {
   await ensureTypesenseCollections();
 
-  const page = Number(query.page || 1);
-  const perPage = Math.min(Number(query.perPage || query.limit || 12), 30);
+  const productResult = await typesenseRequest<TTypesenseSearchResult<TTypesenseProductDocument>>({
+    method: 'GET',
+    path: `/collections/${PRODUCT_COLLECTION}/documents/search`,
+    params: {
+      q: searchTerm,
+      query_by: 'title,brand,categoryTitle,vendorName,seoKeywords,description,sku',
+      query_by_weights: '8,5,4,3,3,1,1',
+      filter_by: buildProductFilter(query),
+      facet_by: 'brand,categoryTitle,sizes,colors,collectionType,inStock',
+      sort_by: resolveSortBy(query.sortBy),
+      page: 1,
+      per_page: SEARCH_SUGGESTION_SOURCE_LIMIT,
+      num_typos: '2,1,1,1,1,1,0',
+      prefix: true,
+    },
+  });
 
-  const [productResult, shopResult] = await Promise.all([
-    typesenseRequest<TTypesenseSearchResult<TTypesenseProductDocument>>({
-      method: 'GET',
-      path: `/collections/${PRODUCT_COLLECTION}/documents/search`,
-      params: {
-        q: searchTerm,
-        query_by: 'title,brand,categoryTitle,vendorName,seoKeywords,description,sku',
-        query_by_weights: '8,5,4,3,3,1,1',
-        filter_by: buildProductFilter(query),
-        facet_by: 'brand,categoryTitle,sizes,colors,collectionType,inStock',
-        sort_by: resolveSortBy(query.sortBy),
-        page,
-        per_page: perPage,
-        num_typos: '2,1,1,1,1,1,0',
-        prefix: true,
-      },
-    }),
-    typesenseRequest<TTypesenseSearchResult<TTypesenseShopDocument>>({
-      method: 'GET',
-      path: `/collections/${SHOP_COLLECTION}/documents/search`,
-      params: {
-        q: searchTerm,
-        query_by: 'name,email,phone,address',
-        query_by_weights: '8,2,2,1',
-        page: 1,
-        per_page: 8,
-        num_typos: '2,1,0,1',
-        prefix: true,
-      },
-    }),
-  ]);
+  const products = productResult.hits?.map((hit) => hit.document) ?? [];
+  const suggestionMap = new Map<string, { query: string; resultCount: number }>();
+
+  products.forEach((product) => {
+    const suggestion = product.title.trim().replace(/\s+/g, ' ');
+    const key = suggestion.toLowerCase();
+    if (!key) return;
+    const current = suggestionMap.get(key);
+    suggestionMap.set(key, {
+      query: suggestion,
+      resultCount: (current?.resultCount ?? 0) + 1,
+    });
+  });
 
   return {
-    products: productResult.hits?.map((hit) => hit.document) ?? [],
-    shops: shopResult.hits?.map((hit) => hit.document) ?? [],
-    facets: productResult.facet_counts ?? [],
-    found: {
-      products: productResult.found,
-      shops: shopResult.found,
-    },
-    page: productResult.page,
+    suggestions: [...suggestionMap.values()].slice(0, 8),
   };
 };
 

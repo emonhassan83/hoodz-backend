@@ -7,11 +7,13 @@ import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const token = req?.headers?.authorization;
+  const guestId = req.headers['x-guest-id'];
   const data = await OtpServices.verifyOTP(
     traceId,
     token,
     req.body.otp,
-    req.query
+    req.query,
+    Array.isArray(guestId) ? guestId[0] : guestId
   );
 
   sendResponse(res, {

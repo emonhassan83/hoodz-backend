@@ -237,7 +237,7 @@ const getAllProduct = async (
 ) => {
   const productQuery = query as TProductFilterQuery;
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `all:${userId ?? 'anonymous'}:cards:v3:${JSON.stringify(query)}`
+    `all:${userId ?? 'anonymous'}:cards:v5:${JSON.stringify(query)}`
   );
   const cached = await getCache<TProductListResponse>(cacheKey);
   if (cached) return cached;
@@ -269,6 +269,7 @@ const getAllProduct = async (
       .lean(),
     query
   )
+    .search(['title', 'brand', 'sku'])
     .sort()
     .paginate();
 
