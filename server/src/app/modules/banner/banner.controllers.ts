@@ -30,6 +30,40 @@ const viewAllBanner = asyncHandler(async (_req: Request, res: Response) => {
   });
 });
 
+const update = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await BannerService.update(
+    traceId,
+    req.params.bannerId as string,
+    req.body
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Banner updated successfully',
+    data,
+    traceId,
+  });
+});
+
+const toggleStatus = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await BannerService.toggleStatus(
+    traceId,
+    req.params.bannerId as string,
+    req.body
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Banner status updated successfully',
+    data,
+    traceId,
+  });
+});
+
 const remove = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await BannerService.remove(traceId, req.params.bannerId as string);
@@ -46,6 +80,8 @@ const remove = asyncHandler(async (req: Request, res: Response) => {
 export const BannerController = {
   add,
   viewAllBanner,
+  update,
+  toggleStatus,
   remove,
 };
 

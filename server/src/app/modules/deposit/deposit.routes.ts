@@ -17,7 +17,4 @@ router.get(
   DepositController.getById
 );
 
-export const DepositRoutes = router;
-
-
-
+export const DepositRoutes = router

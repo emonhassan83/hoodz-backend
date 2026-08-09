@@ -19,10 +19,23 @@ router
 
 router
   .route('/:bannerId')
+  .put(
+    auth(USER_ROLE.admin),
+    validateRequest(BannerValidation.updateBannerValidationSchema),
+    BannerController.update
+  )
   .delete(
     auth(USER_ROLE.admin),
     validateRequest(BannerValidation.removeBannerValidationSchema),
     BannerController.remove
+  );
+
+router
+  .route('/toggle/:bannerId')
+  .patch(
+    auth(USER_ROLE.admin),
+    validateRequest(BannerValidation.toggleBannerStatusValidationSchema),
+    BannerController.toggleStatus
   );
 
 export const BannerRoutes = router;

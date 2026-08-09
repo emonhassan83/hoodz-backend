@@ -1,5 +1,9 @@
 import { Schema, model } from 'mongoose';
 
+import {
+  BANNER_STATUS,
+  SECTION_TYPE,
+} from '@/app/modules/banner/banner.constant';
 import { IBanner, IBannerModel } from '@/app/modules/banner/banner.interface';
 
 const bannerSchema = new Schema<IBanner, IBannerModel>(
@@ -11,14 +15,25 @@ const bannerSchema = new Schema<IBanner, IBannerModel>(
     },
     reference: {
       type: String,
-      required: true,
+      default: null,
       trim: true,
+    },
+    section: {
+      type: String,
+      enum: Object.values(SECTION_TYPE),
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: Object.values(BANNER_STATUS),
+      default: BANNER_STATUS.active,
     },
   },
   { timestamps: true }
 );
 
 bannerSchema.index({ createdAt: -1 });
+bannerSchema.index({ section: 1, status: 1 });
 
 export const Banner = model<IBanner, IBannerModel>('Banner', bannerSchema);
 
