@@ -18,6 +18,8 @@ export interface IPayment {
   order: Types.ObjectId;
   transactionId?: string | null;
   paymentIntentId?: string | null;
+  savedCard?: Types.ObjectId | null;
+  saveCardRequested?: boolean;
   amount: number;
   status: IPaymentStatus;
   paymentMethod: IPaymentMethod;

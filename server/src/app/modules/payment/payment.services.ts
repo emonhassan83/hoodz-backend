@@ -11,6 +11,7 @@ import {
   createPaymobPaymentKey,
   getPaymobAuthToken,
   getPaymobTransaction,
+  payWithPaymobCardToken,
   resolvePaymentStatusFromPaymob,
   toPaymobCents,
   verifyPaymobWebhookHmac,
@@ -26,11 +27,17 @@ import {
   ORDER_STATUS,
   PAYMENT_STATUS as ORDER_PAYMENT_STATUS,
 } from '@/app/modules/orders/orders.constant';
+import {
+  decryptCardToken,
+  resolvePaymobRedirectUrl,
+} from '@/app/modules/savedCard/savedCard.helpers';
+import { SavedCardService } from '@/app/modules/savedCard/savedCard.services';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 
 const paymentPopulate = [
   { path: 'account', select: 'name email phone profileAvatar' },
   { path: 'order', select: 'id totalAmount paymentStatus status billingDetails' },
+  { path: 'savedCard', select: 'maskedPan last4 cardBrand cardSubType isDefault' },
 ];
 
 const getOrderForPayment = async (
@@ -89,6 +96,55 @@ const initiatePayment = async (
 
   assertPaymobConfig(traceId);
   const amountCents = toPaymobCents(order.totalAmount);
+
+  if (payload.savedCardId) {
+    const savedCard = await SavedCardService.getUsableCardById(
+      traceId,
+      userId,
+      payload.savedCardId
+    );
+    const cardToken = decryptCardToken(savedCard.paymobCardToken, traceId);
+    const payment = await Payment.findOneAndUpdate(
+      { account: userId, order: order._id, paymentMethod: PAYMENT_METHOD.card },
+      {
+        account: userId,
+        order: order._id,
+        amount: order.totalAmount,
+        paymentMethod: PAYMENT_METHOD.card,
+        status: PAYMENT_STATUS.pending,
+        isPaid: false,
+        savedCard: savedCard._id,
+        saveCardRequested: false,
+      },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+    );
+
+    const authToken = await getPaymobAuthToken();
+    const paymobOrder = await createPaymobOrder(
+      authToken,
+      `${payment._id.toString()}-${Date.now()}`,
+      amountCents
+    );
+    const paymentKey = await createPaymobPaymentKey(
+      authToken,
+      amountCents,
+      paymobOrder.id,
+      buildPaymobBillingData(order.billingDetails),
+      { cardToken }
+    );
+    const charge = await payWithPaymobCardToken(paymentKey, cardToken);
+
+    payment.paymentIntentId = String(paymobOrder.id);
+    await payment.save();
+
+    return {
+      payment,
+      paymentUrl: resolvePaymobRedirectUrl(charge),
+      paymentIntentId: payment.paymentIntentId,
+      charge,
+    };
+  }
+
   const payment = await Payment.findOneAndUpdate(
     { account: userId, order: order._id, paymentMethod: PAYMENT_METHOD.card },
     {
@@ -98,6 +154,8 @@ const initiatePayment = async (
       paymentMethod: PAYMENT_METHOD.card,
       status: PAYMENT_STATUS.pending,
       isPaid: false,
+      savedCard: null,
+      saveCardRequested: payload.saveCard ?? false,
     },
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );
@@ -112,7 +170,8 @@ const initiatePayment = async (
     authToken,
     amountCents,
     paymobOrder.id,
-    buildPaymobBillingData(order.billingDetails)
+    buildPaymobBillingData(order.billingDetails),
+    { tokenization: payload.saveCard ?? false }
   );
 
   payment.paymentIntentId = String(paymobOrder.id);
@@ -186,6 +245,14 @@ const confirmPaymentByWebhook = async (
   }
 
   const transaction = payload.obj ?? payload;
+  const setupResult = await SavedCardService.processSetupWebhook(
+    traceId,
+    transaction
+  );
+  if (setupResult?.handled) {
+    return setupResult;
+  }
+
   const paymentIntentId =
     typeof transaction?.order === 'object' && transaction.order?.id
       ? String(transaction.order.id)
@@ -208,6 +275,19 @@ const confirmPaymentByWebhook = async (
   payment.isPaid = status === PAYMENT_STATUS.paid;
   payment.transactionId = transactionId ?? payment.transactionId;
   await payment.save();
+
+  if (status === PAYMENT_STATUS.paid && payment.saveCardRequested) {
+    try {
+      await SavedCardService.saveCardFromPaymobTransaction(
+        traceId,
+        payment.account.toString(),
+        transaction
+      );
+    } catch {
+      // Payment confirmation must remain source-of-truth even if tokenization
+      // metadata is missing or card saving fails.
+    }
+  }
 
   const orderUpdate =
     status === PAYMENT_STATUS.paid

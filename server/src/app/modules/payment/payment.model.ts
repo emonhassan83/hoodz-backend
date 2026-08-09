@@ -37,6 +37,15 @@ const paymentSchema = new Schema<IPayment, IPaymentModel>(
       default: null,
       index: true,
     },
+    savedCard: {
+      type: Schema.Types.ObjectId,
+      ref: 'SavedCard',
+      default: null,
+    },
+    saveCardRequested: {
+      type: Boolean,
+      default: false,
+    },
     amount: {
       type: Number,
       required: true,

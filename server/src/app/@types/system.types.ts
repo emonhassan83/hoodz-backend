@@ -29,6 +29,9 @@ export type TEnv = {
   PAYMOB_HMAC_SECRET?: string;
   PAYMOB_CURRENCY?: string;
   PAYMOB_BASE_URL?: string;
+  PAYMOB_CARD_SETUP_AMOUNT_CENTS?: number;
+  SAVED_CARD_ENCRYPTION_KEY?: string;
+  SAVED_CARD_HASH_SECRET?: string;
   SERVER_URL: string;
   DASHBOARD_URL: string;
   GOOGLE_MAPS_API_KEY: string;

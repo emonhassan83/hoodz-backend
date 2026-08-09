@@ -12,6 +12,8 @@ export type TPaymentMethod =
 export type TInitiatePaymentPayload = {
   orderId: string;
   paymentMethod: TPaymentMethod;
+  saveCard?: boolean;
+  savedCardId?: string;
 };
 
 export type TConfirmPaymentPayload = {

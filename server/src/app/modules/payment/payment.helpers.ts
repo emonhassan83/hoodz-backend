@@ -86,7 +86,8 @@ export const createPaymobPaymentKey = async (
   authToken: string,
   amountCents: number,
   paymobOrderId: number,
-  billingData: TPaymobBillingData
+  billingData: TPaymobBillingData,
+  options: { tokenization?: boolean; cardToken?: string } = {}
 ) => {
   const response = await axios.post(`${getPaymobBaseUrl()}/acceptance/payment_keys`, {
     auth_token: authToken,
@@ -96,6 +97,8 @@ export const createPaymobPaymentKey = async (
     billing_data: billingData,
     currency: env.PAYMOB_CURRENCY || 'EGP',
     integration_id: Number(env.PAYMOB_INTEGRATION_ID),
+    ...(options.tokenization ? { tokenization: true } : {}),
+    ...(options.cardToken ? { token: options.cardToken } : {}),
   });
 
   return response.data.token as string;
@@ -112,6 +115,24 @@ export const getPaymobTransaction = async (
     `${getPaymobBaseUrl()}/acceptance/transactions/${transactionId}`,
     { params: { token: authToken } }
   );
+  return response.data;
+};
+
+export const payWithPaymobCardToken = async (
+  paymentToken: string,
+  cardToken: string
+) => {
+  const response = await axios.post(
+    `${getPaymobBaseUrl()}/acceptance/payments/pay`,
+    {
+      payment_token: paymentToken,
+      source: {
+        identifier: cardToken,
+        subtype: 'TOKEN',
+      },
+    }
+  );
+
   return response.data;
 };
 

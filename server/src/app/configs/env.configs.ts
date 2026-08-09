@@ -33,6 +33,11 @@ export const env: TEnv = {
   PAYMOB_HMAC_SECRET: process.env.PAYMOB_HMAC_SECRET,
   PAYMOB_CURRENCY: process.env.PAYMOB_CURRENCY || 'EGP',
   PAYMOB_BASE_URL: process.env.PAYMOB_BASE_URL || 'https://accept.paymob.com/api',
+  PAYMOB_CARD_SETUP_AMOUNT_CENTS: Number(
+    process.env.PAYMOB_CARD_SETUP_AMOUNT_CENTS || 100
+  ),
+  SAVED_CARD_ENCRYPTION_KEY: process.env.SAVED_CARD_ENCRYPTION_KEY,
+  SAVED_CARD_HASH_SECRET: process.env.SAVED_CARD_HASH_SECRET,
   SERVER_URL: process.env.SERVER_URL || 'http://localhost:5029/api/v1',
   DASHBOARD_URL: process.env.DASHBOARD_URL || 'http://localhost:3000',
   GOOGLE_MAPS_API_KEY: getEnv('GOOGLE_MAPS_API_KEY'),

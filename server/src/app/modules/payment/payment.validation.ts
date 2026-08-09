@@ -8,6 +8,8 @@ const initiatePaymentValidationSchema = z.object({
   body: z.object({
     orderId: objectIdSchema,
     paymentMethod: z.enum(Object.values(PAYMENT_METHOD) as [string, ...string[]]),
+    saveCard: z.boolean().optional(),
+    savedCardId: objectIdSchema.optional(),
   }),
 });
 
