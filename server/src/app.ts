@@ -67,3 +67,4 @@ app.use((req: Request, res: Response) => {
 app.use(globalErrorMiddleware);
 
 export default app;
+

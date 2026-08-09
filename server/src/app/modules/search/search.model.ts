@@ -60,3 +60,4 @@ searchSchema.index({ guestId: 1, lastSearchedAt: -1 });
 
 export const Search = model<ISearch, ISearchModel>('Search', searchSchema);
 
+

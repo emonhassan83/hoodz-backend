@@ -49,10 +49,10 @@ export const SOCKET_EMIT = {
   jobOtpSent: 'job:otp-sent',
   jobOtpVerified: 'job:otp-verified',
   jobDelivered: 'job:delivered',
-  walletUpdated: 'wallet:updated',
   depositPending: 'deposit:pending',
   depositSubmitted: 'deposit:submitted',
   depositVerified: 'deposit:verified',
   depositRejected: 'deposit:rejected',
 } as const;
+
 

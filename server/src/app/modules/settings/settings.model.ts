@@ -26,3 +26,4 @@ export const Setting = mongoose.model<ISetting, ISettingModules>(
   settingsSchema,
 );
 
+

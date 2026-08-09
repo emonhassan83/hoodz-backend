@@ -10,3 +10,4 @@ export interface IWishlist {
 
 export type IWishlistModel = Model<IWishlist, Record<string, unknown>>;
 
+

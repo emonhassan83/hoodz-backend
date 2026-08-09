@@ -47,3 +47,4 @@ export type TEnrichedCartItem = TCartItem & {
   totalPrice: number;
 };
 
+

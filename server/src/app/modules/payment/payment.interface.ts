@@ -28,3 +28,4 @@ export interface IPayment {
 }
 
 export type IPaymentModel = Model<IPayment, Record<string, unknown>>;
+

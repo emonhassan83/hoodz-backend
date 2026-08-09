@@ -16,11 +16,11 @@ import { OrdersRoutes } from '@/app/modules/orders/orders.routes';
 import { OtpRoutes } from '@/app/modules/otp/otp.routes';
 import { PaymentRoutes } from '@/app/modules/payment/payment.routes';
 import { ProductRoutes } from '@/app/modules/product/product.routes';
-import { RiderWalletRoutes } from '@/app/modules/riderWallet/riderWallet.routes';
 import { SearchRoutes } from '@/app/modules/search/search.routes';
 import { SettingsRoutes } from '@/app/modules/settings/settings.routes';
 import { UploadRoutes } from '@/app/modules/upload/upload.routes';
 import { UserRoutes } from '@/app/modules/user/user.routes';
+import { WalletRoutes } from '@/app/modules/wallet/wallet.routes';
 import { WishlistRoutes } from '@/app/modules/wishlist/wishlist.routes';
 
 const router = Router();
@@ -103,8 +103,8 @@ const apiRoutes = [
     route: JobRoutes,
   },
   {
-    path: '/rider-wallet',
-    route: RiderWalletRoutes,
+    path: '/wallet',
+    route: WalletRoutes,
   },
   {
     path: '/deposits',
@@ -119,3 +119,4 @@ const apiRoutes = [
 apiRoutes.forEach((route) => router.use(route.path, route.route));
 
 export default router;
+

@@ -12,3 +12,4 @@ const s3Client = new S3Client({
 
 export default s3Client;
 
+

@@ -16,3 +16,4 @@ export interface IKyc {
 
 export type IKycModel = Model<IKyc, Record<string, unknown>>;
 
+

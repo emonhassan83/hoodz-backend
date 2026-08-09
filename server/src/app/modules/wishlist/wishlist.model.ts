@@ -30,3 +30,4 @@ export const Wishlist = model<IWishlist, IWishlistModel>(
   wishlistSchema
 );
 
+

@@ -11,3 +11,4 @@ export const PAYMENT_METHOD = {
   wallet: 'wallet',
   cod: 'cod',
 } as const;
+

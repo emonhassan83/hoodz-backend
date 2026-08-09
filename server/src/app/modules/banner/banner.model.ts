@@ -37,3 +37,4 @@ bannerSchema.index({ section: 1, status: 1 });
 
 export const Banner = model<IBanner, IBannerModel>('Banner', bannerSchema);
 
+

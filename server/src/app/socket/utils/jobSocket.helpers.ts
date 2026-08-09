@@ -3,7 +3,6 @@ import { HttpStatusCode } from 'axios';
 import ApiError from '@/app/errors/ApiError';
 import { IJob } from '@/app/modules/job/job.interface';
 import { Job } from '@/app/modules/job/job.model';
-import { RiderWalletService } from '@/app/modules/riderWallet/riderWallet.services';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import { getIO } from '@/app/socket/socket.init';
@@ -58,12 +57,6 @@ export const emitJobToAudience = async (
   audienceIds.forEach((userId) => io.to(userId).emit(event, payload));
 };
 
-/** Emits wallet summary to a rider room. */
-export const emitRiderWalletSummary = async (riderId: string) => {
-  const summary = await RiderWalletService.getSummary(riderId);
-  getIO().to(riderId).emit(SOCKET_EMIT.walletUpdated, summary);
-};
-
 /** Returns job id from a populated or plain job result. */
 export const resolveJobId = (job: unknown) => String((job as IJob)?._id ?? '');
 
@@ -75,5 +68,6 @@ export const emitToAdmins = (event: string, payload: unknown) => {
 export const socketAdminRoles = [USER_ROLE.admin];
 export const socketVendorAdminRoles = [USER_ROLE.vendor, USER_ROLE.admin];
 export const socketRiderRoles = [USER_ROLE.rider];
+
 
 

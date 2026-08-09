@@ -5,3 +5,4 @@ export const NOTIFICATION_MODEL_TYPE = {
   Product: 'Product',
 } as const
 
+

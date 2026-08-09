@@ -23,3 +23,4 @@ const eventHandler = <TData = any>(handler: TSocketHandler<TData>) => {
 };
 
 export default eventHandler;
+

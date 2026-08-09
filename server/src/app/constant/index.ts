@@ -63,3 +63,4 @@ export const OTP_GENERATE_CONFIG = {
   upperCaseAlphabets: false,
 } as const;
 
+

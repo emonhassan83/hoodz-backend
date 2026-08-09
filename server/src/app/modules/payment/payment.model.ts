@@ -74,3 +74,4 @@ paymentSchema.index({ account: 1, createdAt: -1 });
 paymentSchema.index({ order: 1, isDeleted: 1 });
 
 export const Payment = model<IPayment, IPaymentModel>('Payment', paymentSchema);
+

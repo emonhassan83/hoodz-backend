@@ -26,3 +26,4 @@ followSchema.index({ follower: 1, following: 1 }, { unique: true });
 
 export const Follow = model<IFollow, IFollowModel>('Follow', followSchema);
 
+

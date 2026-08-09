@@ -44,3 +44,4 @@ export const withFollowingFlag = <T extends { _id: unknown }>(
   isFollowing: followedVendorIds.has(String(vendor._id)),
 });
 
+

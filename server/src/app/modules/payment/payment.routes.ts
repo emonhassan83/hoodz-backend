@@ -33,3 +33,4 @@ router
   .get(auth(...AUTHENTICATED_ROLES), PaymentController.getAllPayments);
 
 export const PaymentRoutes = router;
+

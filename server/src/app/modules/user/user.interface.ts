@@ -33,6 +33,8 @@ export interface IUser extends Document {
   avgRating: number
   ratingCount: number
   points: number
+  balance: number
+  walletBalance: number
   followers: number
 
   passwordChangedAt?: Date
@@ -91,4 +93,5 @@ export interface ISignUpWithPhone {
   fcmToken?: string
   isLegalTermsAccepted: boolean
 }
+
 

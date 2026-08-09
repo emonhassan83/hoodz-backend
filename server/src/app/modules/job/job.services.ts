@@ -35,7 +35,6 @@ import {
 } from '@/app/modules/job/job.types';
 import { ORDER_STATUS } from '@/app/modules/orders/orders.constant';
 import { Orders } from '@/app/modules/orders/orders.model';
-import { RiderWalletService } from '@/app/modules/riderWallet/riderWallet.services';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { RiderAvailabilitySocketHelper } from '@/app/socket/utils/riderAvailability.helpers';
 
@@ -310,10 +309,7 @@ const deliveredJob = async (
     await order.save({ session });
 
     await session.commitTransaction();
-    await Promise.all([
-      RiderWalletService.createJobEarning(riderId, job._id.toString(), job.earning),
-      RiderAvailabilitySocketHelper.setActiveJob(riderId, null),
-    ]);
+    await RiderAvailabilitySocketHelper.setActiveJob(riderId, null);
 
     return Job.findById(job._id).populate(jobPopulate);
   } catch (error) {
@@ -448,4 +444,5 @@ export const JobService = {
   getJobById,
   getJobByOrderId,
 };
+
 

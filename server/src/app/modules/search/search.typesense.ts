@@ -221,3 +221,4 @@ export const searchTypesense = async (
   };
 };
 
+

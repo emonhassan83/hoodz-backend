@@ -22,3 +22,4 @@ export type TConfirmPaymentPayload = {
 };
 
 export type TPaymobWebhookPayload = Record<string, any>;
+

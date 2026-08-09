@@ -52,3 +52,4 @@ export const PRODUCT_INVENTORY_TYPE = {
 } as const;
 
 export type TCollection = keyof typeof COLLECTION_TYPE;
+

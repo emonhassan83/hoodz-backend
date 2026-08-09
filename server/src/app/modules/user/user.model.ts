@@ -73,6 +73,8 @@ const userSchema = new Schema<IUser, IUserModal>(
     avgRating: { type: Number, default: 0, min: 0 },
     ratingCount: { type: Number, default: 0, min: 0 },
     points: { type: Number, default: 0 },
+    balance: { type: Number, default: 0, min: 0 },
+    walletBalance: { type: Number, default: 0, min: 0 },
     followers: { type: Number, default: 0 },
 
     status: {
@@ -166,4 +168,5 @@ userSchema.pre('save', async function () {
 });
 
 export const User: IUserModal = model<IUser, IUserModal>('User', userSchema);
+
 

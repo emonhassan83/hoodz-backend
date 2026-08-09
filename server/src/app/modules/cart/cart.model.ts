@@ -71,3 +71,4 @@ cartSchema.index({ guestId: 1, 'items.productId': 1, 'items.size': 1, 'items.col
 
 export const Cart = model<ICart, ICartModel>('Cart', cartSchema);
 
+

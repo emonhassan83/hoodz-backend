@@ -258,3 +258,4 @@ export const PaymentService = {
   confirmPaymentByWebhook,
   getAllPayments,
 };
+

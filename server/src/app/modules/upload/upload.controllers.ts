@@ -32,3 +32,4 @@ const multiple = asyncHandler(async (req: Request, res: Response) => {
 
 export const UploadController = { single, multiple };
 
+

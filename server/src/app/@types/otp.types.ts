@@ -41,3 +41,4 @@ export interface IOtpUtils {
   compareOtp(kwargs: TCompareOtpArgs): boolean;
 }
 
+

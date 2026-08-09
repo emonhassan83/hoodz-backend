@@ -58,3 +58,4 @@ export const mergeRecentlyViewedProducts = async (
   return { merged: guestItems.length / 2 };
 };
 
+

@@ -16,3 +16,4 @@ export const getEmailQueueInstance = async () => {
 export const resetEmailQueueInstance = () => {
   emailQueueInstance = null;
 };
+

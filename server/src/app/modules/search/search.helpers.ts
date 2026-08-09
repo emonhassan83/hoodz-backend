@@ -152,3 +152,4 @@ export const getFeaturedSearchVendors = async () =>
     .sort({ avgRating: -1, ratingCount: -1, createdAt: -1 })
     .limit(5)
     .lean();
+

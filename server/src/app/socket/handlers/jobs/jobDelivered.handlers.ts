@@ -6,7 +6,6 @@ import eventHandler from '@/app/socket/utils/eventHandler';
 import {
   assertSocketRole,
   emitJobToAudience,
-  emitRiderWalletSummary,
   resolveJobId,
   sendJobAck,
   socketRiderRoles,
@@ -24,7 +23,6 @@ export const jobDeliveredHandler = eventHandler<TJobDeliveredPayload>(
 
     await emitJobToAudience(jobId, SOCKET_EMIT.jobDelivered, data);
     await emitJobToAudience(jobId, SOCKET_EMIT.jobUpdated, data);
-    await emitRiderWalletSummary(socket.auth._id);
     if ((data as any)?.paymentMethod === JOB_PAYMENT_METHOD.cod) {
       await emitJobToAudience(jobId, SOCKET_EMIT.depositPending, data);
     }
@@ -32,5 +30,6 @@ export const jobDeliveredHandler = eventHandler<TJobDeliveredPayload>(
     sendJobAck(callback, { success: true, status: 200, message: 'Job delivered', data });
   }
 );
+
 
 

@@ -29,3 +29,4 @@ export const JOB_DEPOSIT_STATUS = {
   verified: 'verified',
 } as const;
 
+

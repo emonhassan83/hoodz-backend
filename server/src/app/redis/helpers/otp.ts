@@ -20,3 +20,4 @@ export const OtpRedisService = {
     await getRedisClient().del(REDIS_KEYS.REGISTER_OTP(email));
   }
 };
+

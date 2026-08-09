@@ -7,3 +7,4 @@ export type TGeneralSettings = Record<
 
 export type TGeneralKey = (typeof GENERAL_KEYS)[number];
 
+

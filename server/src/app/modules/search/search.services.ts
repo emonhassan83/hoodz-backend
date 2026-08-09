@@ -291,3 +291,4 @@ export const SearchService = {
   mergeGuestSearchHistory,
   reindexIntoTypesense,
 };
+
