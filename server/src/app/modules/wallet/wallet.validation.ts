@@ -12,10 +12,10 @@ const walletAccountTypeSchema = z.enum([
   WALLET_ACCOUNT_TYPE.bank_account,
 ]);
 const mobileWalletProviderSchema = z.enum([
-  MOBILE_WALLET_PROVIDER.vodafoneCash,
-  MOBILE_WALLET_PROVIDER.orangeCash,
-  MOBILE_WALLET_PROVIDER.etisalatCash,
-  MOBILE_WALLET_PROVIDER.wePay,
+  MOBILE_WALLET_PROVIDER.vodafone_cash,
+  MOBILE_WALLET_PROVIDER.orange_cash,
+  MOBILE_WALLET_PROVIDER.etisalat_cash,
+  MOBILE_WALLET_PROVIDER.we_pay,
 ]);
 const walletAccountDetailsSchema = z.object({
   walletProvider: mobileWalletProviderSchema.optional(),
@@ -85,8 +85,7 @@ const updateWalletAccountValidationSchema = z
     body: z
       .object({
         type: walletAccountTypeSchema.optional(),
-        details: walletAccountDetailsSchema.optional(),
-        isActive: z.boolean().optional(),
+        details: walletAccountDetailsSchema.optional()
       })
       .refine((data) => Object.keys(data).length > 0, {
         message: 'At least one field is required',
@@ -104,12 +103,6 @@ const toggleWalletActivityValidationSchema = z.object({
   params: z.object({
     walletId: objectIdSchema,
   }),
-  body: z
-    .object({
-      isActive: z.boolean().optional(),
-    })
-    .optional()
-    .default({}),
 });
 
 export const WalletValidation = {

@@ -1,9 +1,9 @@
 import { Router } from 'express';
 
 import auth from '@/app/middlewares/auth';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { WalletController } from '@/app/modules/wallet/wallet.controllers';
 import { WalletValidation } from '@/app/modules/wallet/wallet.validation';
-import { USER_ROLE } from '@/app/modules/user/user.constant';
 import validateRequest from '@/app/utils/validateRequest';
 
 const router = Router();
@@ -28,7 +28,7 @@ router
   );
 
 router.patch(
-  '/:walletId/toggle-activity',
+  '/toggle/:walletId',
   auth(USER_ROLE.admin, USER_ROLE.rider),
   validateRequest(WalletValidation.toggleWalletActivityValidationSchema),
   WalletController.toggleActivity
@@ -36,7 +36,7 @@ router.patch(
 
 router
   .route('/:walletId')
-  .patch(
+  .put(
     auth(USER_ROLE.admin, USER_ROLE.rider),
     validateRequest(WalletValidation.updateWalletAccountValidationSchema),
     WalletController.updateWallet
