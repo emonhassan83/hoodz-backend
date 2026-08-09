@@ -1,5 +1,6 @@
 import { HttpStatusCode } from 'axios';
 
+import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import { BANNER_STATUS } from '@/app/modules/banner/banner.constant';
 import { Banner } from '@/app/modules/banner/banner.model';
@@ -13,9 +14,21 @@ import {
 export const createBanner = (payload: TBannerPayload) =>
   Banner.create(payload);
 
-/** Returns all banners newest first. */
-export const findBanners = () =>
-  Banner.find().sort({ createdAt: -1 }).select('-__v').lean();
+/** Returns paginated banners with query filters applied. */
+export const findBanners = async (query: Record<string, unknown>) => {
+  const bannerQuery = new QueryBuilder(Banner.find().lean(), query)
+    .filter()
+    .sort()
+    .paginate()
+    .fields();
+
+  const [banners, meta] = await Promise.all([
+    bannerQuery.modelQuery,
+    bannerQuery.countTotal(),
+  ]);
+
+  return { meta, data: banners };
+};
 
 /** Deletes one banner by id. */
 export const deleteBannerById = (bannerId: string) =>

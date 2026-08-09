@@ -16,8 +16,9 @@ import {
 const add = async (_traceId: string, payload: TBannerPayload) =>
   createBanner(payload);
 
-/** Returns every banner for app display. */
-const viewAllBanner = async () => findBanners();
+/** Returns paginated banners for app display. */
+const viewAllBanner = async (query: Record<string, unknown>) =>
+  findBanners(query);
 
 /** Updates one banner by id. */
 const update = async (

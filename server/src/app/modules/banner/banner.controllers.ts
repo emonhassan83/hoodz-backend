@@ -17,15 +17,16 @@ const add = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-const viewAllBanner = asyncHandler(async (_req: Request, res: Response) => {
+const viewAllBanner = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await BannerService.viewAllBanner();
+  const result = await BannerService.viewAllBanner(req.query);
 
   sendResponse(res, {
     success: true,
     statusCode: 200,
     message: 'Banners fetched successfully',
-    data,
+    meta: result.meta,
+    data: result.data,
     traceId,
   });
 });
