@@ -46,13 +46,17 @@ const createOrUpdate = asyncHandler(async (req: Request, res: Response) => {
 
 const updateGenerals = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  await SettingService.updateGenerals(traceId, req.user.userId, req.body);
+  const data = await SettingService.updateGenerals(
+    traceId,
+    req.user.userId,
+    req.body
+  );
 
   sendResponse(res, {
     success: true,
     statusCode: 200,
     message: 'General settings updated successfully',
-    data: null,
+    data,
     traceId,
   });
 });

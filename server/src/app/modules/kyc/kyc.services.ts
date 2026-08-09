@@ -1,5 +1,6 @@
 import { HttpStatusCode } from 'axios';
 
+import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import { KYC_STATUS } from '@/app/modules/kyc/kyc.constant';
 import {
@@ -47,12 +48,27 @@ const addKycRequest = async (
   return kyc;
 };
 
-/** Returns all KYC requests for admin review. */
-const getAll = async () =>
-  Kyc.find()
-    .populate('user', 'name email countryCode phone status profileAvatar')
-    .sort({ createdAt: -1 })
-    .select('-__v');
+/** Returns paginated KYC requests for admin review. */
+const getAll = async (query: Record<string, unknown>) => {
+  const kycQuery = new QueryBuilder(
+    Kyc.find().populate(
+      'user',
+      'name email countryCode phone status profileAvatar'
+    ),
+    query
+  )
+    .filter()
+    .sort()
+    .paginate()
+    .fields();
+
+  const [kycs, meta] = await Promise.all([
+    kycQuery.modelQuery,
+    kycQuery.countTotal(),
+  ]);
+
+  return { meta, data: kycs };
+};
 
 /** Returns one KYC request after requester ownership/access check. */
 const getA = async (traceId: string, kycId: string, requester: TKycRequester) => {

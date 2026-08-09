@@ -55,8 +55,8 @@ const userSchema = new Schema<IUser, IUserModal>(
         default: [0, 0],
       },
     },
-    deliveryTime: { type: String, default: null },
-    deliveryZone: { type: [String], default: [] },
+    // deliveryTime: { type: String, default: null },
+    // deliveryZone: { type: [String], default: [] },
     timeZone: { type: String, default: 'UTC' },
     role: {
       type: String,
@@ -69,10 +69,6 @@ const userSchema = new Schema<IUser, IUserModal>(
       type: String,
       enum: registerWith,
       default: REGISTER_WITH.credentials,
-    },
-    stripeCustomerId: {
-      type: String,
-      default: null,
     },
     avgRating: { type: Number, default: 0, min: 0 },
     ratingCount: { type: Number, default: 0, min: 0 },

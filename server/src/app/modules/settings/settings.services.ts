@@ -153,6 +153,8 @@ const updateGenerals = async (
       deleteCache(REDIS_KEYS.SETTINGS_SINGLE(key, vendorId))
     ),
   ]);
+
+  return getSettingGenerals(traceId, vendorId);
 };
 
 export const SettingService = {

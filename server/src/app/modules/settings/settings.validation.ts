@@ -2,9 +2,43 @@ import { z } from 'zod';
 
 import {
   ADMIN_SETTING_KEYS,
+  SETTING_TIME_UNIT,
 } from '@/app/modules/settings/settings.constant';
 
 const positiveIntegerSchema = z.number().int().nonnegative();
+const weekdaySchema = z.enum([
+  'sun',
+  'mon',
+  'tue',
+  'wed',
+  'thu',
+  'fri',
+  'sat',
+]);
+const settingTimeUnitSchema = z.enum([
+  SETTING_TIME_UNIT.minute,
+  SETTING_TIME_UNIT.hour,
+  SETTING_TIME_UNIT.day,
+]);
+const timeValueSchema = z.object({
+  time: positiveIntegerSchema,
+  unit: settingTimeUnitSchema,
+});
+const clockTimeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Time must be HH:mm');
+
+const timeValueToMinutes = (value?: z.infer<typeof timeValueSchema>) => {
+  if (!value) return null;
+
+  const multipliers = {
+    [SETTING_TIME_UNIT.minute]: 1,
+    [SETTING_TIME_UNIT.hour]: 60,
+    [SETTING_TIME_UNIT.day]: 1440,
+  } as const;
+
+  return value.time * multipliers[value.unit];
+};
 
 const deliveryChargeSchema = z
   .array(
@@ -55,39 +89,40 @@ export const createOrUpdateSettingZodSchema = z
 export const updateGeneralsZodSchema = z.object({
   body: z
     .object({
-      returnPolicyDays: positiveIntegerSchema.optional(),
-      deliveryMinDays: positiveIntegerSchema.optional(),
-      deliveryMaxDays: positiveIntegerSchema.optional(),
-      instantDeliveryMaxDays: positiveIntegerSchema.optional(),
-      instantDeliveryMinDays: positiveIntegerSchema.optional(),
+      returnPolicyTime: timeValueSchema.optional(),
+      deliveryMinTime: timeValueSchema.optional(),
+      deliveryMaxTime: timeValueSchema.optional(),
+      instantDeliveryMinTime: timeValueSchema.optional(),
+      instantDeliveryMaxTime: timeValueSchema.optional(),
       isInstantDeliveryAvailable: z.boolean().optional(),
+      openingTime: clockTimeSchema.optional(),
+      closingTime: clockTimeSchema.optional(),
+      weekends: z.array(weekdaySchema).optional(),
+      timezone: z.string().trim().min(1).optional(),
     })
     .refine((data) => Object.keys(data).length > 0, {
       message: 'At least one general setting value must be provided',
     })
     .superRefine((data, context) => {
-      if (
-        data.deliveryMinDays !== undefined &&
-        data.deliveryMaxDays !== undefined &&
-        data.deliveryMinDays > data.deliveryMaxDays
-      ) {
+      const deliveryMinMinutes = timeValueToMinutes(data.deliveryMinTime);
+      const deliveryMaxMinutes = timeValueToMinutes(data.deliveryMaxTime);
+      const instantMinMinutes = timeValueToMinutes(data.instantDeliveryMinTime);
+      const instantMaxMinutes = timeValueToMinutes(data.instantDeliveryMaxTime);
+
+      if (deliveryMinMinutes !== null && deliveryMaxMinutes !== null && deliveryMinMinutes > deliveryMaxMinutes) {
         context.addIssue({
           code: 'custom',
-          path: ['deliveryMaxDays'],
-          message: 'deliveryMaxDays must be greater than or equal to deliveryMinDays',
+          path: ['deliveryMaxTime'],
+          message: 'deliveryMaxTime must be greater than or equal to deliveryMinTime',
         });
       }
 
-      if (
-        data.instantDeliveryMinDays !== undefined &&
-        data.instantDeliveryMaxDays !== undefined &&
-        data.instantDeliveryMinDays > data.instantDeliveryMaxDays
-      ) {
+      if (instantMinMinutes !== null && instantMaxMinutes !== null && instantMinMinutes > instantMaxMinutes) {
         context.addIssue({
           code: 'custom',
-          path: ['instantDeliveryMaxDays'],
+          path: ['instantDeliveryMaxTime'],
           message:
-            'instantDeliveryMaxDays must be greater than or equal to instantDeliveryMinDays',
+            'instantDeliveryMaxTime must be greater than or equal to instantDeliveryMinTime',
         });
       }
     }),

@@ -26,13 +26,10 @@ export interface IUser extends Document {
   location: IGeoLocation | null;
   deliveryAddress?: string | null;
   deliveryLocation?: IGeoLocation | null;
-  deliveryTime?: string | null;
-  deliveryZone?: string[];
   timeZone: string;
   role: IUserRole;
 
   registerWith: string
-  stripeCustomerId?: string
   avgRating: number
   ratingCount: number
   points: number

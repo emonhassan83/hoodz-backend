@@ -1,11 +1,21 @@
 export const VENDOR_GENERAL_KEYS = [
-  'returnPolicyDays',
-  'deliveryMinDays',
-  'deliveryMaxDays',
-  'instantDeliveryMaxDays',
-  'instantDeliveryMinDays',
-  'isInstantDeliveryAvailable'
+  'returnPolicyTime',
+  'deliveryMinTime',
+  'deliveryMaxTime',
+  'instantDeliveryMinTime',
+  'instantDeliveryMaxTime',
+  'isInstantDeliveryAvailable',
+  'openingTime',
+  'closingTime',
+  'weekends',
+  'timezone',
 ] as const;
+
+export const SETTING_TIME_UNIT = {
+  minute: 'minute',
+  hour: 'hour',
+  day: 'day',
+} as const;
 
 export const ADMIN_SETTING_KEYS = [
   'userTermsAndConditions',

@@ -17,15 +17,16 @@ const addKycRequest = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-const getAll = asyncHandler(async (_req: Request, res: Response) => {
+const getAll = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await KycService.getAll();
+  const result = await KycService.getAll(req.query);
 
   sendResponse(res, {
     success: true,
     statusCode: 200,
     message: 'KYC requests fetched successfully',
-    data,
+    meta: result.meta,
+    data: result.data,
     traceId,
   });
 });
