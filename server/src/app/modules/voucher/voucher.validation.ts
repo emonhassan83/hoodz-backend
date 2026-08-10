@@ -33,7 +33,7 @@ const voucherBodySchema = z
     status: z.enum(Object.values(VOUCHER_STATUS) as [string, ...string[]]).optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.voucherType === VOUCHER_TYPE.shopwise && !data.shop) {
+    if (data.voucherType === VOUCHER_TYPE.shop && !data.shop) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['shop'],
@@ -41,7 +41,7 @@ const voucherBodySchema = z
       });
     }
 
-    if (data.voucherType === VOUCHER_TYPE.compension && !data.user) {
+    if (data.voucherType === VOUCHER_TYPE.compensation && !data.user) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['user'],

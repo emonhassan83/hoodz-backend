@@ -21,5 +21,6 @@ export const WALLET_TRANSACTION_REFERENCE_TYPE = {
   Order: 'Order',
   Payment: 'Payment',
   Refund: 'Refund',
+  Grievance: 'Grievance',
   WalletTransaction: 'WalletTransaction',
 } as const;

@@ -80,7 +80,7 @@ const getShopwiseVoutures = async (
   const voucherQuery = new QueryBuilder(
     Voucher.find({
       ...activeVoucherFilter(),
-      voucherType: VOUCHER_TYPE.shopwise,
+      voucherType: VOUCHER_TYPE.shop,
       shop: vendorId,
     })
       .populate(voucherPopulate)
@@ -108,10 +108,10 @@ const getCompensionVoutures = async (
 ) => {
   const filter =
     requester.role === USER_ROLE.admin || requester.role === USER_ROLE.agent
-      ? { voucherType: VOUCHER_TYPE.compension, isDeleted: false }
+      ? { voucherType: VOUCHER_TYPE.compensation, isDeleted: false }
       : {
           ...activeVoucherFilter(),
-          voucherType: VOUCHER_TYPE.compension,
+          voucherType: VOUCHER_TYPE.compensation,
           user: requester.userId,
         };
 
@@ -145,7 +145,7 @@ const getAVouture = async (
 
   if (
     requester.role === USER_ROLE.user &&
-    voucher!.voucherType === VOUCHER_TYPE.compension &&
+    voucher!.voucherType === VOUCHER_TYPE.compensation &&
     voucher!.user?.toString() !== requester.userId
   ) {
     throw new ApiError(HttpStatusCode.Forbidden, 'You are not allowed to view this voucher', traceId);

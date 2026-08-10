@@ -8,6 +8,7 @@ import { CategoryRoutes } from '@/app/modules/category/category.routes';
 import { ChatRoutes } from '@/app/modules/chat/chat.routes';
 import { DepositRoutes } from '@/app/modules/deposit/deposit.routes';
 import { FollowRoutes } from '@/app/modules/follow/follow.routes';
+import { GrievanceRoutes } from '@/app/modules/grievance/grievance.routes';
 import { JobRoutes } from '@/app/modules/job/job.routes';
 import { KycRoutes } from '@/app/modules/kyc/kyc.routes';
 import { MessagesRoutes } from '@/app/modules/messages/messages.routes';
@@ -104,6 +105,10 @@ const apiRoutes = [
   {
     path: '/voucher',
     route: VoucherRoutes,
+  },
+  {
+    path: '/grievance',
+    route: GrievanceRoutes,
   },
 
   // ===============================

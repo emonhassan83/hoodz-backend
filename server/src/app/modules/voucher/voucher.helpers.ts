@@ -50,7 +50,7 @@ export const assertVoucherReferences = async (
   traceId: string,
   payload: Pick<TVoucherPayload, 'voucherType' | 'shop' | 'user'>
 ) => {
-  if (payload.voucherType === VOUCHER_TYPE.shopwise) {
+  if (payload.voucherType === VOUCHER_TYPE.shop) {
     if (!payload.shop) {
       throw new ApiError(HttpStatusCode.BadRequest, 'Shop is required for shopwise voucher', traceId);
     }
@@ -67,7 +67,7 @@ export const assertVoucherReferences = async (
     return;
   }
 
-  if (payload.voucherType === VOUCHER_TYPE.compension) {
+  if (payload.voucherType === VOUCHER_TYPE.compensation) {
     if (!payload.user) {
       throw new ApiError(HttpStatusCode.BadRequest, 'User is required for compension voucher', traceId);
     }
@@ -143,7 +143,7 @@ export const assertVoucherMutationAccess = (
 
   if (
     requester.role === USER_ROLE.vendor &&
-    voucher.voucherType === VOUCHER_TYPE.shopwise &&
+    voucher.voucherType === VOUCHER_TYPE.shop &&
     voucher.shop?.toString() === requester.userId
   ) {
     return;
@@ -152,7 +152,7 @@ export const assertVoucherMutationAccess = (
   if (
     requester.role === USER_ROLE.agent &&
     (voucher.voucherType === VOUCHER_TYPE.global ||
-      voucher.voucherType === VOUCHER_TYPE.compension)
+      voucher.voucherType === VOUCHER_TYPE.compensation)
   ) {
     return;
   }
@@ -181,7 +181,7 @@ export const normalizeVoucherPayload = <T extends TVoucherPayload | TUpdateVouch
     normalized.shop = null;
     normalized.user = null;
   }
-  if (payload.voucherType === VOUCHER_TYPE.shopwise) normalized.user = null;
-  if (payload.voucherType === VOUCHER_TYPE.compension) normalized.shop = null;
+  if (payload.voucherType === VOUCHER_TYPE.shop) normalized.user = null;
+  if (payload.voucherType === VOUCHER_TYPE.compensation) normalized.shop = null;
   return normalized as T;
 };

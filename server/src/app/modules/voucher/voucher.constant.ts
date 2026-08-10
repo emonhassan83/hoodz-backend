@@ -1,7 +1,7 @@
 export const VOUCHER_TYPE = {
-  shopwise: 'shopwise',
+  shop: 'shop',
   global: 'global',
-  compension: 'compension',
+  compensation: 'compensation',
 } as const;
 
 export const VOUCHER_DISCOUNT_TYPE = {
