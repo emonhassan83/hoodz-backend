@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 
 import { getTraceId } from '@/app/configs/requestContext.configs';
+import { buildPaymobReturnHtml } from '@/app/modules/payment/payment.helpers';
 import { PaymentService } from '@/app/modules/payment/payment.services';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
@@ -54,9 +55,10 @@ const getAllPayments = asyncHandler(async (req: Request, res: Response) => {
 
 const paymobWebhook = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
+  const payload = req.method === 'GET' ? req.query : req.body;
   const data = await PaymentService.confirmPaymentByWebhook(
     traceId,
-    req.body,
+    payload,
     (req.query.hmac as string | undefined) || req.body?.hmac
   );
 
@@ -69,10 +71,15 @@ const paymobWebhook = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const paymobReturnPage = asyncHandler(async (req: Request, res: Response) => {
+  res.status(200).type('html').send(buildPaymobReturnHtml(req.query));
+});
+
 export const PaymentController = {
   initiatePayment,
   confirmPayment,
   paymobWebhook,
+  paymobReturnPage,
   getAllPayments,
 };
 

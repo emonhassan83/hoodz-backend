@@ -111,6 +111,12 @@ export const resolvePaymobOrderId = (transaction: Record<string, any>) => {
   return undefined;
 };
 
+/** Resolves merchant order reference from Paymob callback payload. */
+export const resolvePaymobMerchantOrderId = (transaction: Record<string, any>) =>
+  transaction?.merchant_order_id ??
+  transaction?.order?.merchant_order_id ??
+  transaction?.order?.merchantOrderId;
+
 /** Resolves a redirect URL from Paymob saved-card charge response. */
 export const resolvePaymobRedirectUrl = (response: Record<string, any>) =>
   response?.redirect_url ??

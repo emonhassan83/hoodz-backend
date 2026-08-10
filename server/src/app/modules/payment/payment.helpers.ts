@@ -22,6 +22,9 @@ type TPaymobBillingData = {
 const getPaymobBaseUrl = () =>
   env.PAYMOB_BASE_URL || 'https://accept.paymob.com/api';
 
+export const buildPaymobReturnUrl = () =>
+  `${env.SERVER_URL.replace(/\/$/, '')}/payments/paymob/return`;
+
 export const assertPaymobConfig = (traceId: string) => {
   if (!env.PAYMOB_API_KEY || !env.PAYMOB_INTEGRATION_ID || !env.PAYMOB_IFRAME_ID) {
     throw new ApiError(
@@ -107,6 +110,43 @@ export const createPaymobPaymentKey = async (
 export const buildPaymobIframeUrl = (paymentToken: string) =>
   `https://accept.paymob.com/api/acceptance/iframes/${env.PAYMOB_IFRAME_ID}?payment_token=${paymentToken}`;
 
+export const buildPaymobReturnHtml = (query: Record<string, any>) => {
+  const success = query.success === 'true' || query.success === true;
+  const statusText = success ? 'Payment received' : 'Payment processing';
+  const title = success ? 'Payment Successful' : 'Payment Status';
+  const message = success
+    ? 'Your payment response was received. You can now return to the app.'
+    : 'Your payment response was received. Final confirmation may take a moment.';
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${title}</title>
+    <style>
+      body { margin: 0; font-family: Arial, sans-serif; background: #f7f7f8; color: #1f2937; }
+      .wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+      .box { max-width: 460px; width: 100%; background: #fff; border-radius: 12px; padding: 28px; box-shadow: 0 12px 30px rgba(0,0,0,.08); text-align: center; }
+      .badge { display: inline-block; padding: 8px 14px; border-radius: 999px; color: #fff; background: ${success ? '#16a34a' : '#f97316'}; font-size: 13px; font-weight: 700; }
+      h1 { margin: 18px 0 10px; font-size: 24px; }
+      p { margin: 0; color: #6b7280; line-height: 1.5; }
+      .hint { margin-top: 18px; font-size: 13px; color: #9ca3af; }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="box">
+        <span class="badge">${statusText}</span>
+        <h1>${title}</h1>
+        <p>${message}</p>
+        <div class="hint">Hoodz Backend payment callback page</div>
+      </section>
+    </main>
+  </body>
+</html>`;
+};
+
 export const getPaymobTransaction = async (
   authToken: string,
   transactionId: string
@@ -169,6 +209,28 @@ const PAYMOB_HMAC_KEYS = [
 const getNestedValue = (payload: Record<string, any>, path: string) =>
   path.split('.').reduce((value, key) => value?.[key], payload);
 
+export const normalizePaymobCallbackPayload = (payload: Record<string, any>) => {
+  const normalized = { ...payload };
+
+  Object.entries(payload).forEach(([key, value]) => {
+    if (!key.includes('.')) return;
+
+    const parts = key.split('.');
+    let cursor = normalized as Record<string, any>;
+    parts.forEach((part, index) => {
+      if (index === parts.length - 1) {
+        cursor[part] = value;
+        return;
+      }
+
+      cursor[part] = cursor[part] ?? {};
+      cursor = cursor[part];
+    });
+  });
+
+  return normalized;
+};
+
 export const verifyPaymobWebhookHmac = (
   payload: Record<string, any>,
   hmac?: string
@@ -177,7 +239,10 @@ export const verifyPaymobWebhookHmac = (
   if (!hmac) return false;
 
   const raw = PAYMOB_HMAC_KEYS.map((key) => {
-    const value = getNestedValue(payload, key);
+    const value =
+      key === 'order.id'
+        ? getNestedValue(payload, key) ?? payload.order
+        : getNestedValue(payload, key);
     if (value === undefined || value === null) return '';
     return String(value);
   }).join('');

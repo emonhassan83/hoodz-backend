@@ -26,7 +26,12 @@ router
 
 router
   .route('/webhook/paymob')
+  .get(PaymentController.paymobWebhook)
   .post(PaymentController.paymobWebhook);
+
+router
+  .route('/paymob/return')
+  .get(PaymentController.paymobReturnPage);
 
 router
   .route('/')

@@ -6,6 +6,7 @@ import {
   assertPaymobConfig,
   buildPaymobBillingData,
   buildPaymobIframeUrl,
+  buildPaymobReturnUrl,
   createPaymobOrder,
   createPaymobPaymentKey,
   getPaymobAuthToken,
@@ -18,6 +19,7 @@ import {
   encryptCardToken,
   extractSavedCardWebhookData,
   hashCardToken,
+  resolvePaymobMerchantOrderId,
   resolvePaymobOrderId,
 } from '@/app/modules/savedCard/savedCard.helpers';
 import {
@@ -81,6 +83,7 @@ const setupSavedCard = async (
   return {
     setupId: setupSession._id,
     setupUrl: buildPaymobIframeUrl(paymentKey),
+    returnUrl: buildPaymobReturnUrl(),
   };
 };
 
@@ -147,9 +150,15 @@ const processSetupWebhook = async (
   transaction: Record<string, any>
 ) => {
   const paymobOrderId = resolvePaymobOrderId(transaction);
-  if (!paymobOrderId) return null;
+  const merchantOrderId = resolvePaymobMerchantOrderId(transaction);
+  if (!paymobOrderId && !merchantOrderId) return null;
 
-  const setupSession = await SavedCardSetupSession.findOne({ paymobOrderId });
+  const setupSession = await SavedCardSetupSession.findOne({
+    $or: [
+      ...(paymobOrderId ? [{ paymobOrderId }] : []),
+      ...(merchantOrderId ? [{ merchantOrderId }] : []),
+    ],
+  });
   if (!setupSession) return null;
 
   const status = resolvePaymentStatusFromPaymob(transaction);

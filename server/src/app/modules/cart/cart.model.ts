@@ -41,12 +41,10 @@ const cartSchema = new Schema<ICart, ICartModel>(
     userId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      index: true,
     },
     guestId: {
       type: String,
       trim: true,
-      index: true,
     },
     items: {
       type: [cartItemSchema],

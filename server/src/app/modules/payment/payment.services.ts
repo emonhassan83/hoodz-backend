@@ -7,10 +7,12 @@ import {
   assertPaymobConfig,
   buildPaymobBillingData,
   buildPaymobIframeUrl,
+  buildPaymobReturnUrl,
   createPaymobOrder,
   createPaymobPaymentKey,
   getPaymobAuthToken,
   getPaymobTransaction,
+  normalizePaymobCallbackPayload,
   payWithPaymobCardToken,
   resolvePaymentStatusFromPaymob,
   toPaymobCents,
@@ -140,6 +142,7 @@ const initiatePayment = async (
     return {
       payment,
       paymentUrl: resolvePaymobRedirectUrl(charge),
+      returnUrl: buildPaymobReturnUrl(),
       paymentIntentId: payment.paymentIntentId,
       charge,
     };
@@ -180,6 +183,7 @@ const initiatePayment = async (
   return {
     payment,
     paymentUrl: buildPaymobIframeUrl(paymentKey),
+    returnUrl: buildPaymobReturnUrl(),
     paymentIntentId: payment.paymentIntentId,
   };
 };
@@ -240,11 +244,12 @@ const confirmPaymentByWebhook = async (
   payload: TPaymobWebhookPayload,
   hmac?: string
 ) => {
-  if (!verifyPaymobWebhookHmac(payload.obj ?? payload, hmac)) {
+  const normalizedPayload = normalizePaymobCallbackPayload(payload.obj ?? payload);
+  if (!verifyPaymobWebhookHmac(normalizedPayload, hmac)) {
     throw new ApiError(HttpStatusCode.Forbidden, 'Invalid Paymob webhook signature', traceId);
   }
 
-  const transaction = payload.obj ?? payload;
+  const transaction = normalizedPayload;
   const setupResult = await SavedCardService.processSetupWebhook(
     traceId,
     transaction
