@@ -22,6 +22,7 @@ import { SettingsRoutes } from '@/app/modules/settings/settings.routes';
 import { TopUpRoutes } from '@/app/modules/topUp/topUp.routes';
 import { UploadRoutes } from '@/app/modules/upload/upload.routes';
 import { UserRoutes } from '@/app/modules/user/user.routes';
+import { VoucherRoutes } from '@/app/modules/voucher/voucher.routes';
 import { WalletRoutes } from '@/app/modules/wallet/wallet.routes';
 import { WalletTransactionRoutes } from '@/app/modules/walletTransaction/walletTransaction.routes';
 import { WishlistRoutes } from '@/app/modules/wishlist/wishlist.routes';
@@ -56,7 +57,6 @@ const apiRoutes = [
   // ===============================
   //  User services routes
   // ===============================
-  // User services routes
   {
     path: '/notification',
     route: NotificationRoutes,
@@ -89,6 +89,10 @@ const apiRoutes = [
     path: '/search',
     route: SearchRoutes,
   },
+
+  // ==============================
+  //  Cart, wishlist and voucher routes
+  // ===============================
   {
     path: '/cart',
     route: CartRoutes,
@@ -96,6 +100,10 @@ const apiRoutes = [
   {
     path: '/wishlist',
     route: WishlistRoutes,
+  },
+  {
+    path: '/voucher',
+    route: VoucherRoutes,
   },
 
   // ===============================
@@ -143,7 +151,7 @@ const apiRoutes = [
   },
 
   // ===============================
-  //  Chat and AI assistant routes
+  //  Support and AI assistant routes
   // ===============================
   {
     path: '/chat',
