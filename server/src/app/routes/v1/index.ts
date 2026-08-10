@@ -17,6 +17,7 @@ import { OrdersRoutes } from '@/app/modules/orders/orders.routes';
 import { OtpRoutes } from '@/app/modules/otp/otp.routes';
 import { PaymentRoutes } from '@/app/modules/payment/payment.routes';
 import { ProductRoutes } from '@/app/modules/product/product.routes';
+import { ReviewRoutes } from '@/app/modules/review/review.routes';
 import { SavedCardRoutes } from '@/app/modules/savedCard/savedCard.routes';
 import { SearchRoutes } from '@/app/modules/search/search.routes';
 import { SettingsRoutes } from '@/app/modules/settings/settings.routes';
@@ -85,6 +86,10 @@ const apiRoutes = [
   {
     path: '/products',
     route: ProductRoutes,
+  },
+  {
+    path: '/reviews',
+    route: ReviewRoutes,
   },
   {
     path: '/search',
