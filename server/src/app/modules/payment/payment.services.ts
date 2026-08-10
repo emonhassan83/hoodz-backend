@@ -2,26 +2,18 @@ import { HttpStatusCode } from 'axios';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
-import { PAYMENT_METHOD, PAYMENT_STATUS } from '@/app/modules/payment/payment.constant';
+import { PAYMENT_STATUS } from '@/app/modules/payment/payment.constant';
 import {
   assertPaymobConfig,
-  buildPaymobBillingData,
-  buildPaymobIframeUrl,
-  buildPaymobReturnUrl,
-  createPaymobOrder,
-  createPaymobPaymentKey,
   getPaymobAuthToken,
   getPaymobTransaction,
   normalizePaymobCallbackPayload,
-  payWithPaymobCardToken,
   resolvePaymentStatusFromPaymob,
-  toPaymobCents,
   verifyPaymobWebhookHmac,
 } from '@/app/modules/payment/payment.helpers';
 import { Payment } from '@/app/modules/payment/payment.model';
 import {
   TConfirmPaymentPayload,
-  TInitiatePaymentPayload,
   TPaymobWebhookPayload,
 } from '@/app/modules/payment/payment.types';
 import { Orders } from '@/app/modules/orders/orders.model';
@@ -29,11 +21,8 @@ import {
   ORDER_STATUS,
   PAYMENT_STATUS as ORDER_PAYMENT_STATUS,
 } from '@/app/modules/orders/orders.constant';
-import {
-  decryptCardToken,
-  resolvePaymobRedirectUrl,
-} from '@/app/modules/savedCard/savedCard.helpers';
 import { SavedCardService } from '@/app/modules/savedCard/savedCard.services';
+import { TopUpService } from '@/app/modules/topUp/topUp.services';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 
 const paymentPopulate = [
@@ -41,152 +30,6 @@ const paymentPopulate = [
   { path: 'order', select: 'id totalAmount paymentStatus status billingDetails' },
   { path: 'savedCard', select: 'maskedPan last4 cardBrand cardSubType isDefault' },
 ];
-
-const getOrderForPayment = async (
-  traceId: string,
-  orderId: string,
-  userId: string
-) => {
-  const order = await Orders.findOne({
-    _id: orderId,
-    user: userId,
-    isDeleted: false,
-  });
-
-  if (!order) {
-    throw new ApiError(HttpStatusCode.NotFound, 'Order not found', traceId);
-  }
-
-  if (order.paymentStatus === ORDER_PAYMENT_STATUS.paid) {
-    throw new ApiError(HttpStatusCode.BadRequest, 'Order already paid', traceId);
-  }
-
-  return order;
-};
-
-const initiatePayment = async (
-  traceId: string,
-  userId: string,
-  payload: TInitiatePaymentPayload
-) => {
-  const order = await getOrderForPayment(traceId, payload.orderId, userId);
-
-  if (payload.paymentMethod === PAYMENT_METHOD.cod) {
-    const payment = await Payment.findOneAndUpdate(
-      { account: userId, order: order._id, paymentMethod: PAYMENT_METHOD.cod },
-      {
-        account: userId,
-        order: order._id,
-        amount: order.totalAmount,
-        paymentMethod: PAYMENT_METHOD.cod,
-        status: PAYMENT_STATUS.pending,
-        isPaid: false,
-      },
-      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
-    ).select('-__v');
-
-    return { payment, paymentUrl: null };
-  }
-
-  if (payload.paymentMethod !== PAYMENT_METHOD.card) {
-    throw new ApiError(
-      HttpStatusCode.BadRequest,
-      'Only card and cod payments are supported right now',
-      traceId
-    );
-  }
-
-  assertPaymobConfig(traceId);
-  const amountCents = toPaymobCents(order.totalAmount);
-
-  if (payload.savedCardId) {
-    const savedCard = await SavedCardService.getUsableCardById(
-      traceId,
-      userId,
-      payload.savedCardId
-    );
-    const cardToken = decryptCardToken(savedCard.paymobCardToken, traceId);
-    const payment = await Payment.findOneAndUpdate(
-      { account: userId, order: order._id, paymentMethod: PAYMENT_METHOD.card },
-      {
-        account: userId,
-        order: order._id,
-        amount: order.totalAmount,
-        paymentMethod: PAYMENT_METHOD.card,
-        status: PAYMENT_STATUS.pending,
-        isPaid: false,
-        savedCard: savedCard._id,
-        saveCardRequested: false,
-      },
-      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
-    );
-
-    const authToken = await getPaymobAuthToken();
-    const paymobOrder = await createPaymobOrder(
-      authToken,
-      `${payment._id.toString()}-${Date.now()}`,
-      amountCents
-    );
-    const paymentKey = await createPaymobPaymentKey(
-      authToken,
-      amountCents,
-      paymobOrder.id,
-      buildPaymobBillingData(order.billingDetails),
-      { cardToken }
-    );
-    const charge = await payWithPaymobCardToken(paymentKey, cardToken);
-
-    payment.paymentIntentId = String(paymobOrder.id);
-    await payment.save();
-
-    return {
-      payment,
-      paymentUrl: resolvePaymobRedirectUrl(charge),
-      returnUrl: buildPaymobReturnUrl(),
-      paymentIntentId: payment.paymentIntentId,
-      charge,
-    };
-  }
-
-  const payment = await Payment.findOneAndUpdate(
-    { account: userId, order: order._id, paymentMethod: PAYMENT_METHOD.card },
-    {
-      account: userId,
-      order: order._id,
-      amount: order.totalAmount,
-      paymentMethod: PAYMENT_METHOD.card,
-      status: PAYMENT_STATUS.pending,
-      isPaid: false,
-      savedCard: null,
-      saveCardRequested: payload.saveCard ?? false,
-    },
-    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
-  );
-
-  const authToken = await getPaymobAuthToken();
-  const paymobOrder = await createPaymobOrder(
-    authToken,
-    `${payment._id.toString()}-${Date.now()}`,
-    amountCents
-  );
-  const paymentKey = await createPaymobPaymentKey(
-    authToken,
-    amountCents,
-    paymobOrder.id,
-    buildPaymobBillingData(order.billingDetails),
-    { tokenization: payload.saveCard ?? false }
-  );
-
-  payment.paymentIntentId = String(paymobOrder.id);
-  await payment.save();
-
-  return {
-    payment,
-    paymentUrl: buildPaymobIframeUrl(paymentKey),
-    returnUrl: buildPaymobReturnUrl(),
-    paymentIntentId: payment.paymentIntentId,
-  };
-};
 
 const confirmPayment = async (
   traceId: string,
@@ -256,6 +99,11 @@ const confirmPaymentByWebhook = async (
   );
   if (setupResult?.handled) {
     return setupResult;
+  }
+
+  const topUpResult = await TopUpService.processTopUpWebhook(traceId, transaction);
+  if (topUpResult?.handled) {
+    return topUpResult;
   }
 
   const paymentIntentId =
@@ -338,7 +186,6 @@ const getAllPayments = async (
 };
 
 export const PaymentService = {
-  initiatePayment,
   confirmPayment,
   confirmPaymentByWebhook,
   getAllPayments,

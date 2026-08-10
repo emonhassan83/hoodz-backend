@@ -19,6 +19,7 @@ import { ProductRoutes } from '@/app/modules/product/product.routes';
 import { SavedCardRoutes } from '@/app/modules/savedCard/savedCard.routes';
 import { SearchRoutes } from '@/app/modules/search/search.routes';
 import { SettingsRoutes } from '@/app/modules/settings/settings.routes';
+import { TopUpRoutes } from '@/app/modules/topUp/topUp.routes';
 import { UploadRoutes } from '@/app/modules/upload/upload.routes';
 import { UserRoutes } from '@/app/modules/user/user.routes';
 import { WalletRoutes } from '@/app/modules/wallet/wallet.routes';
@@ -27,13 +28,12 @@ import { WishlistRoutes } from '@/app/modules/wishlist/wishlist.routes';
 const router = Router();
 
 const apiRoutes = [
+  // ===============================
+  //  Authentication routes
+  // ===============================
   {
     path: '/auth',
     route: AuthRoutes,
-  },
-  {
-    path: '/banner',
-    route: BannerRoutes,
   },
   {
     path: '/otp',
@@ -44,9 +44,18 @@ const apiRoutes = [
     route: UserRoutes,
   },
   {
+    path: '/kyc',
+    route: KycRoutes,
+  },
+  {
     path: '/upload',
     route: UploadRoutes,
   },
+
+  // ===============================
+  //  User services routes
+  // ===============================
+  // User services routes
   {
     path: '/notification',
     route: NotificationRoutes,
@@ -55,21 +64,17 @@ const apiRoutes = [
     path: '/settings',
     route: SettingsRoutes,
   },
+
+  // ===============================
+  //  E-commerce routes
+  // ===============================
   {
-    path: '/kyc',
-    route: KycRoutes,
+    path: '/banner',
+    route: BannerRoutes,
   },
   {
     path: '/category',
     route: CategoryRoutes,
-  },
-  {
-    path: '/chat',
-    route: ChatRoutes,
-  },
-  {
-    path: '/messages',
-    route: MessagesRoutes,
   },
   {
     path: '/connections',
@@ -80,6 +85,10 @@ const apiRoutes = [
     route: ProductRoutes,
   },
   {
+    path: '/search',
+    route: SearchRoutes,
+  },
+  {
     path: '/cart',
     route: CartRoutes,
   },
@@ -87,10 +96,26 @@ const apiRoutes = [
     path: '/wishlist',
     route: WishlistRoutes,
   },
+
+  // ===============================
+  //  Card management and wallet routes
+  // ===============================
   {
-    path: '/search',
-    route: SearchRoutes,
+    path: '/wallet',
+    route: WalletRoutes,
   },
+  {
+    path: '/saved-cards',
+    route: SavedCardRoutes,
+  },
+  {
+    path: '/top-up',
+    route: TopUpRoutes,
+  },
+
+  // ===============================
+  //  Payment and order routes
+  // ===============================
   {
     path: '/orders',
     route: OrdersRoutes,
@@ -99,21 +124,29 @@ const apiRoutes = [
     path: '/payments',
     route: PaymentRoutes,
   },
-  {
-    path: '/saved-cards',
-    route: SavedCardRoutes,
-  },
+
+  // ===============================
+  //  Rider job and deposit routes
+  // ===============================
   {
     path: '/jobs',
     route: JobRoutes,
   },
   {
-    path: '/wallet',
-    route: WalletRoutes,
-  },
-  {
     path: '/deposits',
     route: DepositRoutes,
+  },
+
+  // ===============================
+  //  Chat and AI assistant routes
+  // ===============================
+  {
+    path: '/chat',
+    route: ChatRoutes,
+  },
+  {
+    path: '/messages',
+    route: MessagesRoutes,
   },
   {
     path: '/ai-assistant',
