@@ -21,41 +21,6 @@ const addWalletMoney = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-const viewAllTranscrion = asyncHandler(async (req: Request, res: Response) => {
-  const traceId = getTraceId();
-  const result = await TopUpService.viewAllTranscrion(req.query, req.user);
-
-  sendResponse(res, {
-    success: true,
-    statusCode: 200,
-    message: 'Top-up transactions fetched successfully',
-    meta: result.meta,
-    data: result.data,
-    traceId,
-  });
-});
-
-const viewADetailsTransction = asyncHandler(
-  async (req: Request, res: Response) => {
-    const traceId = getTraceId();
-    const data = await TopUpService.viewADetailsTransction(
-      traceId,
-      req.params.topUpId as string,
-      req.user
-    );
-
-    sendResponse(res, {
-      success: true,
-      statusCode: 200,
-      message: 'Top-up transaction fetched successfully',
-      data,
-      traceId,
-    });
-  }
-);
-
 export const TopUpController = {
   addWalletMoney,
-  viewAllTranscrion,
-  viewADetailsTransction,
 };

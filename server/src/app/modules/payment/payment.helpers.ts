@@ -176,6 +176,23 @@ export const payWithPaymobCardToken = async (
   return response.data;
 };
 
+export const refundPaymobTransaction = async (
+  authToken: string,
+  transactionId: string,
+  amountCents: number
+) => {
+  const response = await axios.post(
+    `${getPaymobBaseUrl()}/acceptance/void_refund/refund`,
+    {
+      auth_token: authToken,
+      transaction_id: transactionId,
+      amount_cents: amountCents,
+    }
+  );
+
+  return response.data;
+};
+
 export const resolvePaymentStatusFromPaymob = (transaction: any) => {
   if (transaction?.success === true && transaction?.is_voided !== true && transaction?.is_refunded !== true) {
     return PAYMENT_STATUS.paid;

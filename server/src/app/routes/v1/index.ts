@@ -23,6 +23,7 @@ import { TopUpRoutes } from '@/app/modules/topUp/topUp.routes';
 import { UploadRoutes } from '@/app/modules/upload/upload.routes';
 import { UserRoutes } from '@/app/modules/user/user.routes';
 import { WalletRoutes } from '@/app/modules/wallet/wallet.routes';
+import { WalletTransactionRoutes } from '@/app/modules/walletTransaction/walletTransaction.routes';
 import { WishlistRoutes } from '@/app/modules/wishlist/wishlist.routes';
 
 const router = Router();
@@ -103,6 +104,10 @@ const apiRoutes = [
   {
     path: '/wallet',
     route: WalletRoutes,
+  },
+  {
+    path: '/wallet-transactions',
+    route: WalletTransactionRoutes,
   },
   {
     path: '/saved-cards',

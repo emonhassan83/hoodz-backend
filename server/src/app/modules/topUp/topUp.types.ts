@@ -15,8 +15,3 @@ export type TAddWalletMoneyPayload = {
   savedCardId?: string;
   saveCard?: boolean;
 };
-
-export type TTopUpRequester = {
-  userId: string;
-  role: string;
-};

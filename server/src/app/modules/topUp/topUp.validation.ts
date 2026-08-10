@@ -13,13 +13,6 @@ const addWalletMoneyValidationSchema = z.object({
   }),
 });
 
-const topUpIdParamValidationSchema = z.object({
-  params: z.object({
-    topUpId: objectIdSchema,
-  }),
-});
-
 export const TopUpValidation = {
   addWalletMoneyValidationSchema,
-  topUpIdParamValidationSchema,
 };

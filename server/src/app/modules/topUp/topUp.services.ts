@@ -1,6 +1,5 @@
 import { HttpStatusCode } from 'axios';
 
-import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import {
   assertPaymobConfig,
@@ -25,22 +24,18 @@ import { SavedCardService } from '@/app/modules/savedCard/savedCard.services';
 import { TOP_UP_STATUS } from '@/app/modules/topUp/topUp.constant';
 import {
   applyTopUpBalanceOnce,
-  assertTopUpAccess,
   buildTopUpMerchantOrderId,
   findTopUpByPaymobReference,
 } from '@/app/modules/topUp/topUp.helpers';
 import { TopUp } from '@/app/modules/topUp/topUp.model';
-import {
-  TAddWalletMoneyPayload,
-  TTopUpRequester,
-} from '@/app/modules/topUp/topUp.types';
-import { USER_ROLE } from '@/app/modules/user/user.constant';
+import { TAddWalletMoneyPayload } from '@/app/modules/topUp/topUp.types';
 import { User } from '@/app/modules/user/user.model';
-
-const topUpPopulate = [
-  { path: 'user', select: 'name email phone profileAvatar walletBalance balance' },
-  { path: 'savedCard', select: 'maskedPan last4 cardBrand cardSubType isDefault' },
-];
+import {
+  WALLET_TRANSACTION_DIRECTION,
+  WALLET_TRANSACTION_REFERENCE_TYPE,
+  WALLET_TRANSACTION_TYPE,
+} from '@/app/modules/walletTransaction/walletTransaction.constant';
+import { WalletTransactionService } from '@/app/modules/walletTransaction/walletTransaction.services';
 
 /** Starts a Paymob wallet top-up flow for a new or saved card. */
 const addWalletMoney = async (
@@ -171,6 +166,20 @@ const processTopUpWebhook = async (
     topUp.amount
   );
 
+  if (appliedTopUp) {
+    await WalletTransactionService.createWalletTransaction({
+      user: topUp.user.toString(),
+      type: WALLET_TRANSACTION_TYPE.top_up,
+      amount: topUp.amount,
+      direction: WALLET_TRANSACTION_DIRECTION.credit,
+      referenceType: WALLET_TRANSACTION_REFERENCE_TYPE.TopUp,
+      reference: topUp._id.toString(),
+      savedCard: topUp.savedCard?.toString() ?? null,
+      paymobTransactionId: topUp.transactionId ?? null,
+      note: 'Wallet balance credited from top-up',
+    });
+  }
+
   return {
     handled: true,
     topUpId: topUp._id,
@@ -179,53 +188,7 @@ const processTopUpWebhook = async (
   };
 };
 
-/** Returns paginated top-up transactions for user/admin. */
-const viewAllTranscrion = async (
-  query: Record<string, unknown>,
-  requester: TTopUpRequester
-) => {
-  const filter =
-    requester.role === USER_ROLE.admin
-      ? { isDeleted: false }
-      : { user: requester.userId, isDeleted: false };
-
-  const topUpQuery = new QueryBuilder(
-    TopUp.find(filter).populate(topUpPopulate).select('-__v').lean(),
-    query
-  )
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
-
-  const [data, meta] = await Promise.all([
-    topUpQuery.modelQuery,
-    topUpQuery.countTotal(),
-  ]);
-
-  return { meta, data };
-};
-
-/** Returns one top-up transaction after access verification. */
-const viewADetailsTransction = async (
-  traceId: string,
-  topUpId: string,
-  requester: TTopUpRequester
-) => {
-  const topUp = await TopUp.findOne({ _id: topUpId, isDeleted: false })
-    .populate(topUpPopulate)
-    .select('-__v');
-  if (!topUp) {
-    throw new ApiError(HttpStatusCode.NotFound, 'Top-up transaction not found', traceId);
-  }
-
-  assertTopUpAccess(traceId, topUp, requester);
-  return topUp;
-};
-
 export const TopUpService = {
   addWalletMoney,
   processTopUpWebhook,
-  viewAllTranscrion,
-  viewADetailsTransction,
 };
