@@ -16,6 +16,7 @@ import { NotificationRoutes } from '@/app/modules/notification/notification.rout
 import { OrdersRoutes } from '@/app/modules/orders/orders.routes';
 import { OtpRoutes } from '@/app/modules/otp/otp.routes';
 import { PaymentRoutes } from '@/app/modules/payment/payment.routes';
+import { PosOrderRoutes } from '@/app/modules/posOrder/posOrder.routes';
 import { ProductRoutes } from '@/app/modules/product/product.routes';
 import { ReviewRoutes } from '@/app/modules/review/review.routes';
 import { SavedCardRoutes } from '@/app/modules/savedCard/savedCard.routes';
@@ -142,6 +143,10 @@ const apiRoutes = [
   {
     path: '/orders',
     route: OrdersRoutes,
+  },
+  {
+    path: '/pos-orders',
+    route: PosOrderRoutes,
   },
   {
     path: '/payments',
