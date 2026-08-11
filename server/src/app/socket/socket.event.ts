@@ -13,12 +13,11 @@ import disconnectHandler from '@/app/socket/handlers/disconnect.handler';
 import { findOnlineRiderHandler } from '@/app/socket/handlers/jobs/findOnlineRider.handlers';
 import { jobAcceptHandler } from '@/app/socket/handlers/jobs/jobAccept.handlers';
 import { jobAssignHandler } from '@/app/socket/handlers/jobs/jobAssign.handlers';
-import { jobDeliveredHandler } from '@/app/socket/handlers/jobs/jobDelivered.handlers';
 import { jobGoPickupHandler } from '@/app/socket/handlers/jobs/jobGoPickup.handlers';
 import { jobOnTheWayHandler } from '@/app/socket/handlers/jobs/jobOnTheWay.handlers';
 import { jobPickupHandler } from '@/app/socket/handlers/jobs/jobPickUp.handlers';
 import { jobRejectHandler } from '@/app/socket/handlers/jobs/jobReject.handlers';
-import { resendOtpHandler } from '@/app/socket/handlers/jobs/resendOtp.handlers';
+import { markAsDeliveredHandler } from '@/app/socket/handlers/jobs/markAsDelivered.handlers';
 import { riderGoOfflineHandler } from '@/app/socket/handlers/jobs/riderGoOffline.handlers';
 import { riderGoOnlineHandler } from '@/app/socket/handlers/jobs/riderGoOnline.handlers';
 import { riderLocationUpdateHandler } from '@/app/socket/handlers/jobs/riderLocationUpdate.handlers';
@@ -52,9 +51,8 @@ export const registerSocketEvents = (socket: Socket) => {
   tSocket.on(SOCKET_LISTENER.jobPickup, jobPickupHandler);
   tSocket.on(SOCKET_LISTENER.jobOnTheWay, jobOnTheWayHandler);
   tSocket.on(SOCKET_LISTENER.jobSendDeliveryOtp, sendDeliveryOtpHandler);
-  tSocket.on(SOCKET_LISTENER.jobResendDeliveryOtp, resendOtpHandler);
   tSocket.on(SOCKET_LISTENER.jobVerifyDeliveryOtp, verifyDeliveryOtpHandler);
-  tSocket.on(SOCKET_LISTENER.jobDelivered, jobDeliveredHandler);
+  tSocket.on(SOCKET_LISTENER.jobDelivered, markAsDeliveredHandler);
 
   tSocket.on('disconnect', () => disconnectHandler.call(tSocket, undefined));
 };

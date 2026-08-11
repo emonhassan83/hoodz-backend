@@ -1,12 +1,11 @@
-import { ChatService } from '@/app/modules/chat/chat.services';
-import { sendAck } from '@/app/socket/handlers/chat/chatSocket.helpers';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
+import { getSocketMyChatList, sendAck } from '@/app/socket/utils/chatSocket.helpers';
 import eventHandler from '@/app/socket/utils/eventHandler';
 
 export const myChatListHandler = eventHandler(
   async (socket: TSocket, _payload, callback) => {
-    const data = await ChatService.getMyChatList({
+    const data = await getSocketMyChatList({
       userId: socket.auth._id.toString(),
       role: socket.auth.role || 'user',
     });

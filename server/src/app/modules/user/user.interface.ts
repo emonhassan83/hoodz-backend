@@ -10,6 +10,7 @@ export type IGeoLocation = {
 export interface IUser extends Document {
   _id: Types.ObjectId
   id: string
+  refferalCode: string
   name: string;
   email: string;
   password: string;

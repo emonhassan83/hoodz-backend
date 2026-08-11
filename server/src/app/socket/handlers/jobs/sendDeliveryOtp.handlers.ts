@@ -1,7 +1,8 @@
-import { JobService } from '@/app/modules/job/job.services';
+import { TJobIdSocketPayload } from '@/app/socket/interface/jobSocket.interface';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import eventHandler from '@/app/socket/utils/eventHandler';
+import { JobSocketActions } from '@/app/socket/utils/jobSocket.actions';
 import {
   assertSocketRole,
   emitJobToAudience,
@@ -11,17 +12,13 @@ import {
   socketVendorAdminRoles,
 } from '@/app/socket/utils/jobSocket.helpers';
 
-type TSendDeliveryOtpPayload = {
-  jobId: string;
-};
-
-export const sendDeliveryOtpHandler = eventHandler<TSendDeliveryOtpPayload>(
+export const sendDeliveryOtpHandler = eventHandler<TJobIdSocketPayload>(
   async (socket: TSocket, payload, callback) => {
     assertSocketRole(socket.auth.role, [
       ...socketRiderRoles,
       ...socketVendorAdminRoles,
     ]);
-    const data = await JobService.sendDeliveryOtp(
+    const data = await JobSocketActions.sendDeliveryOtp(
       'socket',
       { userId: socket.auth._id, role: socket.auth.role! },
       payload!
@@ -32,11 +29,8 @@ export const sendDeliveryOtpHandler = eventHandler<TSendDeliveryOtpPayload>(
     sendJobAck(callback, {
       success: true,
       status: 200,
-      message: 'Delivery OTP sent',
+      message: 'Delivery OTP sent or resent',
       data,
     });
   }
 );
-
-
-

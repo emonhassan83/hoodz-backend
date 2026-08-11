@@ -119,9 +119,11 @@ const assignJob = async (
     {
       order: payload.orderId,
       rider: payload.riderId,
-      assignedBy: requester.userId,
+      assignedBy:
+        assignmentType === JOB_ASSIGNMENT_TYPE.auto ? null : requester.userId,
       assignmentType,
       paymentMethod,
+      deliveryType: order.deliveryType,
       ...locationFields,
       ...moneyFields,
       hasDeliveryOtpVerified: false,

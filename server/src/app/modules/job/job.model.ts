@@ -1,6 +1,7 @@
 import { Schema, model } from 'mongoose';
 
 import {
+  DELIVERY_TYPE,
   JOB_ASSIGNMENT_TYPE,
   JOB_PAYMENT_METHOD,
   JOB_STATUS,
@@ -49,6 +50,12 @@ const jobSchema = new Schema<IJob, IJobModel>(
     paymentMethod: {
       type: String,
       enum: Object.values(JOB_PAYMENT_METHOD),
+      required: true,
+      index: true,
+    },
+    deliveryType: {
+      type: String,
+      enum: Object.values(DELIVERY_TYPE),
       required: true,
       index: true,
     },

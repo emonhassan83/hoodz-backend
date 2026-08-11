@@ -2,18 +2,21 @@ import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
 import { Chat } from '@/app/modules/chat/chat.model';
-import { ChatService } from '@/app/modules/chat/chat.services';
 import { Messages } from '@/app/modules/messages/messages.model';
+import {
+  attachParticipantsToChats,
+  getMyParticipantChatIds,
+} from '@/app/modules/participant/participant.helpers';
 import { Participant } from '@/app/modules/participant/participant.model';
 import { User } from '@/app/modules/user/user.model';
+import { TSocketRequester } from '@/app/socket/interface/chatSocket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import { getIO } from '@/app/socket/socket.init';
 import ackHandler from '@/app/socket/utils/ackHandler';
 
-export type TSocketRequester = {
-  userId: string;
-  role: string;
-};
+const chatPopulate = [
+  { path: 'order', select: 'id status paymentStatus totalAmount deliveryType' },
+];
 
 /** Returns active participant user ids for a chat. */
 export const getChatParticipantIds = async (chatId: string) => {
@@ -52,6 +55,18 @@ export const getSocketMessageById = async (messageId: unknown) => {
     .lean();
 };
 
+/** Returns chats where socket requester participates. */
+export const getSocketMyChatList = async (requester: TSocketRequester) => {
+  const chatIds = await getMyParticipantChatIds(requester.userId);
+  const chats = await Chat.find({ _id: { $in: chatIds } })
+    .populate(chatPopulate)
+    .sort({ updatedAt: -1 })
+    .select('-__v')
+    .lean();
+
+  return attachParticipantsToChats(chats);
+};
+
 /** Emits the latest chat list to every participant room. */
 export const emitChatListsToParticipants = async (
   participantIds: string[],
@@ -61,10 +76,7 @@ export const emitChatListsToParticipants = async (
 
   await Promise.all(
     participantIds.map(async (participantId) => {
-      const data = await ChatService.getMyChatList({
-        userId: participantId,
-        role,
-      });
+      const data = await getSocketMyChatList({ userId: participantId, role });
       io.to(participantId).emit(SOCKET_EMIT.chatList, data);
       io.to(participantId).emit('chat-list', data);
     })
@@ -112,6 +124,3 @@ export const getTypingUser = async (userId: string) => {
     profileAvatar: user?.profileAvatar || null,
   };
 };
-
-
-

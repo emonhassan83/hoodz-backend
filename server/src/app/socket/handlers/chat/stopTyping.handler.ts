@@ -1,19 +1,16 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
+import { TStopTypingPayload } from '@/app/socket/interface/chatSocket.interface';
+import { TSocket } from '@/app/socket/interface/socket.interface';
+import { SOCKET_EMIT } from '@/app/socket/socket.constant';
+import { getIO } from '@/app/socket/socket.init';
 import {
   assertSocketChatAccess,
   getTypingUser,
   sendAck,
-} from '@/app/socket/handlers/chat/chatSocket.helpers';
-import { TSocket } from '@/app/socket/interface/socket.interface';
-import { SOCKET_EMIT } from '@/app/socket/socket.constant';
-import { getIO } from '@/app/socket/socket.init';
+} from '@/app/socket/utils/chatSocket.helpers';
 import eventHandler from '@/app/socket/utils/eventHandler';
-
-type TStopTypingPayload = {
-  chatId: string;
-};
 
 export const stopTypingHandler = eventHandler<TStopTypingPayload>(
   async (socket: TSocket, payload, callback) => {

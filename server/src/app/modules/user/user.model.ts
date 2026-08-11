@@ -18,6 +18,12 @@ const userSchema = new Schema<IUser, IUserModal>(
       unique: true,
       default: () => generateCryptoString(4),
     },
+    refferalCode: {
+      type: String,
+      unique: true,
+      index: true,
+      default: () => generateCryptoString(8).toUpperCase(),
+    },
     name: { type: String, required: true },
     email: { type: String, required: true, index: true },
     password: { type: String, required: false, select: false },

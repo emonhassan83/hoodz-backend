@@ -1,7 +1,8 @@
-import { JobService } from '@/app/modules/job/job.services';
+import { TVerifyDeliveryOtpSocketPayload } from '@/app/socket/interface/jobSocket.interface';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import eventHandler from '@/app/socket/utils/eventHandler';
+import { JobSocketActions } from '@/app/socket/utils/jobSocket.actions';
 import {
   assertSocketRole,
   emitJobToAudience,
@@ -10,22 +11,24 @@ import {
   socketRiderRoles,
 } from '@/app/socket/utils/jobSocket.helpers';
 
-type TVerifyDeliveryOtpPayload = {
-  jobId: string;
-  otp: string;
-};
+export const verifyDeliveryOtpHandler =
+  eventHandler<TVerifyDeliveryOtpSocketPayload>(
+    async (socket: TSocket, payload, callback) => {
+      assertSocketRole(socket.auth.role, socketRiderRoles);
+      const data = await JobSocketActions.verifyDeliveryOtp(
+        'socket',
+        socket.auth._id,
+        payload!
+      );
+      const jobId = resolveJobId(data);
 
-export const verifyDeliveryOtpHandler = eventHandler<TVerifyDeliveryOtpPayload>(
-  async (socket: TSocket, payload, callback) => {
-    assertSocketRole(socket.auth.role, socketRiderRoles);
-    const data = await JobService.verifyDeliveryOtp('socket', socket.auth._id, payload!);
-    const jobId = resolveJobId(data);
-
-    await emitJobToAudience(jobId, SOCKET_EMIT.jobOtpVerified, data);
-    await emitJobToAudience(jobId, SOCKET_EMIT.jobUpdated, data);
-    sendJobAck(callback, { success: true, status: 200, message: 'Delivery OTP verified', data });
-  }
-);
-
-
-
+      await emitJobToAudience(jobId, SOCKET_EMIT.jobOtpVerified, data);
+      await emitJobToAudience(jobId, SOCKET_EMIT.jobUpdated, data);
+      sendJobAck(callback, {
+        success: true,
+        status: 200,
+        message: 'Delivery OTP verified',
+        data,
+      });
+    }
+  );

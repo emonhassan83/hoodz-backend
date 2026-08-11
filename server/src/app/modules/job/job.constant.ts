@@ -22,11 +22,15 @@ export const JOB_PAYMENT_METHOD = {
   cod: 'cod',
 } as const;
 
+export const DELIVERY_TYPE = {
+  regular: 'regular',
+  instant: 'instant',
+} as const;
+
 export const JOB_DEPOSIT_STATUS = {
   not_required: 'not_required',
   pending: 'pending',
   submitted: 'submitted',
   verified: 'verified',
 } as const;
-
 

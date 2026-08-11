@@ -2,21 +2,16 @@ import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
 import { Messages } from '@/app/modules/messages/messages.model';
+import { TEditMessagePayload } from '@/app/socket/interface/chatSocket.interface';
+import { TSocket } from '@/app/socket/interface/socket.interface';
+import { SOCKET_EMIT } from '@/app/socket/socket.constant';
+import { getIO } from '@/app/socket/socket.init';
 import {
   assertSocketChatAccess,
   getSocketMessageById,
   sendAck,
-} from '@/app/socket/handlers/chat/chatSocket.helpers';
-import { TSocket } from '@/app/socket/interface/socket.interface';
-import { SOCKET_EMIT } from '@/app/socket/socket.constant';
-import { getIO } from '@/app/socket/socket.init';
+} from '@/app/socket/utils/chatSocket.helpers';
 import eventHandler from '@/app/socket/utils/eventHandler';
-
-type TEditMessagePayload = {
-  messageId: string;
-  text?: string;
-  files?: string[];
-};
 
 export const editMessageHandler = eventHandler<TEditMessagePayload>(
   async (socket: TSocket, payload, callback) => {
@@ -32,7 +27,10 @@ export const editMessageHandler = eventHandler<TEditMessagePayload>(
       throw new ApiError(HttpStatusCode.NotFound, 'Message not found');
     }
     if (!message.sender || message.sender.toString() !== userId) {
-      throw new ApiError(HttpStatusCode.Forbidden, 'You can only edit your own message');
+      throw new ApiError(
+        HttpStatusCode.Forbidden,
+        'You can only edit your own message'
+      );
     }
 
     const { participantIds } = await assertSocketChatAccess(
@@ -61,6 +59,3 @@ export const editMessageHandler = eventHandler<TEditMessagePayload>(
     });
   }
 );
-
-
-

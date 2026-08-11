@@ -2,18 +2,12 @@ import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
 import { Messages } from '@/app/modules/messages/messages.model';
-import {
-  assertSocketChatAccess,
-  sendAck,
-} from '@/app/socket/handlers/chat/chatSocket.helpers';
+import { TDeleteMessagePayload } from '@/app/socket/interface/chatSocket.interface';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import { getIO } from '@/app/socket/socket.init';
+import { assertSocketChatAccess, sendAck } from '@/app/socket/utils/chatSocket.helpers';
 import eventHandler from '@/app/socket/utils/eventHandler';
-
-type TDeleteMessagePayload = {
-  messageId: string;
-};
 
 export const deleteMessageHandler = eventHandler<TDeleteMessagePayload>(
   async (socket: TSocket, payload, callback) => {
@@ -29,7 +23,10 @@ export const deleteMessageHandler = eventHandler<TDeleteMessagePayload>(
       throw new ApiError(HttpStatusCode.NotFound, 'Message not found');
     }
     if (!message.sender || message.sender.toString() !== userId) {
-      throw new ApiError(HttpStatusCode.Forbidden, 'You can only delete your own message');
+      throw new ApiError(
+        HttpStatusCode.Forbidden,
+        'You can only delete your own message'
+      );
     }
 
     const chatId = message.chat.toString();
@@ -60,6 +57,3 @@ export const deleteMessageHandler = eventHandler<TDeleteMessagePayload>(
     });
   }
 );
-
-
-

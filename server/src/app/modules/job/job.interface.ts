@@ -1,6 +1,7 @@
 import { Model, Types } from 'mongoose';
 
 import {
+  DELIVERY_TYPE,
   JOB_ASSIGNMENT_TYPE,
   JOB_PAYMENT_METHOD,
   JOB_STATUS,
@@ -11,6 +12,8 @@ export type TJobAssignmentType =
   (typeof JOB_ASSIGNMENT_TYPE)[keyof typeof JOB_ASSIGNMENT_TYPE];
 export type TJobPaymentMethod =
   (typeof JOB_PAYMENT_METHOD)[keyof typeof JOB_PAYMENT_METHOD];
+export type TJobDeliveryType =
+  (typeof DELIVERY_TYPE)[keyof typeof DELIVERY_TYPE];
 
 export type TJobPoint = {
   address: string;
@@ -25,6 +28,7 @@ export interface IJob {
   assignedBy?: Types.ObjectId | null;
   assignmentType: TJobAssignmentType;
   paymentMethod: TJobPaymentMethod;
+  deliveryType: TJobDeliveryType;
   pickup: TJobPoint;
   destination: TJobPoint;
   collectedMoney: number;

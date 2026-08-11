@@ -2,23 +2,18 @@ import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
 import { Messages } from '@/app/modules/messages/messages.model';
+import { TSendMessagePayload } from '@/app/socket/interface/chatSocket.interface';
+import { TSocket } from '@/app/socket/interface/socket.interface';
+import { SOCKET_EMIT } from '@/app/socket/socket.constant';
+import { getIO } from '@/app/socket/socket.init';
 import {
   assertSocketChatAccess,
   emitChatListsToParticipants,
   emitUnreadCountsToParticipants,
   getSocketMessageById,
   sendAck,
-} from '@/app/socket/handlers/chat/chatSocket.helpers';
-import { TSocket } from '@/app/socket/interface/socket.interface';
-import { SOCKET_EMIT } from '@/app/socket/socket.constant';
-import { getIO } from '@/app/socket/socket.init';
+} from '@/app/socket/utils/chatSocket.helpers';
 import eventHandler from '@/app/socket/utils/eventHandler';
-
-type TSendMessagePayload = {
-  chatId: string;
-  text?: string;
-  files?: string[];
-};
 
 export const sendMessageHandler = eventHandler<TSendMessagePayload>(
   async (socket: TSocket, payload, callback) => {

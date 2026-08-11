@@ -1,8 +1,9 @@
 import { JOB_PAYMENT_METHOD } from '@/app/modules/job/job.constant';
-import { JobService } from '@/app/modules/job/job.services';
+import { TJobIdSocketPayload } from '@/app/socket/interface/jobSocket.interface';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import eventHandler from '@/app/socket/utils/eventHandler';
+import { JobSocketActions } from '@/app/socket/utils/jobSocket.actions';
 import {
   assertSocketRole,
   emitJobToAudience,
@@ -11,14 +12,23 @@ import {
   socketRiderRoles,
 } from '@/app/socket/utils/jobSocket.helpers';
 
-type TJobDeliveredPayload = {
-  jobId: string;
-};
-
-export const jobDeliveredHandler = eventHandler<TJobDeliveredPayload>(
+export const markAsDeliveredHandler = eventHandler<TJobIdSocketPayload>(
   async (socket: TSocket, payload, callback) => {
     assertSocketRole(socket.auth.role, socketRiderRoles);
-    const data = await JobService.deliveredJob('socket', socket.auth._id, payload!);
+    if (!payload?.jobId) {
+      sendJobAck(callback, {
+        success: false,
+        status: 400,
+        message: 'jobId is required',
+      });
+      return;
+    }
+
+    const data = await JobSocketActions.deliveredJob(
+      'socket',
+      socket.auth._id,
+      payload
+    );
     const jobId = resolveJobId(data);
 
     await emitJobToAudience(jobId, SOCKET_EMIT.jobDelivered, data);
@@ -27,9 +37,11 @@ export const jobDeliveredHandler = eventHandler<TJobDeliveredPayload>(
       await emitJobToAudience(jobId, SOCKET_EMIT.depositPending, data);
     }
 
-    sendJobAck(callback, { success: true, status: 200, message: 'Job delivered', data });
+    sendJobAck(callback, {
+      success: true,
+      status: 200,
+      message: 'Job marked as delivered',
+      data,
+    });
   }
 );
-
-
-

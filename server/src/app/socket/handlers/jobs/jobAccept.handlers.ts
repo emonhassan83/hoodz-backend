@@ -1,7 +1,8 @@
-import { JobService } from '@/app/modules/job/job.services';
+import { TJobIdSocketPayload } from '@/app/socket/interface/jobSocket.interface';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import eventHandler from '@/app/socket/utils/eventHandler';
+import { JobSocketActions } from '@/app/socket/utils/jobSocket.actions';
 import {
   assertSocketRole,
   emitJobToAudience,
@@ -10,21 +11,23 @@ import {
   socketRiderRoles,
 } from '@/app/socket/utils/jobSocket.helpers';
 
-type TJobAcceptPayload = {
-  jobId: string;
-};
-
-export const jobAcceptHandler = eventHandler<TJobAcceptPayload>(
+export const jobAcceptHandler = eventHandler<TJobIdSocketPayload>(
   async (socket: TSocket, payload, callback) => {
     assertSocketRole(socket.auth.role, socketRiderRoles);
-    const data = await JobService.acceptJob('socket', socket.auth._id, payload!);
+    const data = await JobSocketActions.acceptJob(
+      'socket',
+      socket.auth._id,
+      payload!
+    );
     const jobId = resolveJobId(data);
 
     await emitJobToAudience(jobId, SOCKET_EMIT.jobAccepted, data);
     await emitJobToAudience(jobId, SOCKET_EMIT.jobUpdated, data);
-    sendJobAck(callback, { success: true, status: 200, message: 'Job accepted', data });
+    sendJobAck(callback, {
+      success: true,
+      status: 200,
+      message: 'Job accepted',
+      data,
+    });
   }
 );
-
-
-

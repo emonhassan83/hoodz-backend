@@ -3,7 +3,6 @@ export const ORDER_STATUS = {
   cancelled: 'cancelled',
   confirmed: 'confirmed',
   processing: 'processing',
-  shipped: 'shipped',
   rider_assigned: 'rider_assigned',
   picked_up: 'picked_up',
   on_the_way: 'on_the_way',

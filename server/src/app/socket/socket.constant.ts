@@ -18,7 +18,6 @@ export const SOCKET_LISTENER = {
   jobPickup: 'job:pickup',
   jobOnTheWay: 'job:on-the-way',
   jobSendDeliveryOtp: 'job:send-delivery-otp',
-  jobResendDeliveryOtp: 'job:resend-delivery-otp',
   jobVerifyDeliveryOtp: 'job:verify-delivery-otp',
   jobDelivered: 'job:delivered',
 } as const;
