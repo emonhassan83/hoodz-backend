@@ -29,6 +29,7 @@ import { VoucherRoutes } from '@/app/modules/voucher/voucher.routes';
 import { WalletRoutes } from '@/app/modules/wallet/wallet.routes';
 import { WalletTransactionRoutes } from '@/app/modules/walletTransaction/walletTransaction.routes';
 import { WishlistRoutes } from '@/app/modules/wishlist/wishlist.routes';
+import { WithdrawRoutes } from '@/app/modules/withdraw/withdraw.routes';
 
 const router = Router();
 
@@ -112,10 +113,6 @@ const apiRoutes = [
     path: '/voucher',
     route: VoucherRoutes,
   },
-  {
-    path: '/grievance',
-    route: GrievanceRoutes,
-  },
 
   // ===============================
   //  Card management and wallet routes
@@ -127,6 +124,10 @@ const apiRoutes = [
   {
     path: '/wallet-transactions',
     route: WalletTransactionRoutes,
+  },
+  {
+    path: '/withdraws',
+    route: WithdrawRoutes,
   },
   {
     path: '/saved-cards',
@@ -179,6 +180,10 @@ const apiRoutes = [
   {
     path: '/ai-assistant',
     route: AiAssistantRoutes,
+  },
+  {
+    path: '/grievance',
+    route: GrievanceRoutes,
   },
 ];
 

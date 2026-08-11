@@ -3,6 +3,7 @@ export const WALLET_TRANSACTION_TYPE = {
   purchase: 'purchase',
   refund_credit: 'refund_credit',
   refund_to_card: 'refund_to_card',
+  withdraw: 'withdraw',
 } as const;
 
 export const WALLET_TRANSACTION_DIRECTION = {
@@ -22,5 +23,6 @@ export const WALLET_TRANSACTION_REFERENCE_TYPE = {
   Payment: 'Payment',
   Refund: 'Refund',
   Grievance: 'Grievance',
+  Withdraw: 'Withdraw',
   WalletTransaction: 'WalletTransaction',
 } as const;
