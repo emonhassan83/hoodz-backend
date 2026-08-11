@@ -1,14 +1,16 @@
 import { TDepositStatus } from '@/app/modules/deposit/deposit.interface';
 
 export type TSubmitDepositPayload = {
-  jobId: string;
-  reference: string;
-  files?: string[];
+  jobIds: string[];
+  amount: number;
+  fawryRefNo: string;
+  receiptFiles: string[];
+  note?: string;
 };
 
 export type TVerifyDepositPayload = {
-  status: Extract<TDepositStatus, 'verified' | 'rejected'>;
-  reason?: string;
+  status: Extract<TDepositStatus, 'completed' | 'rejected'>;
+  note?: string;
 };
 
 export type TDepositRequester = {

@@ -2,9 +2,11 @@ import { compare, hash } from 'bcrypt';
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
+import { getRedisClient } from '@/app/configs/redis.config';
 import { JOB_PAYMENT_METHOD, JOB_STATUS } from '@/app/modules/job/job.constant';
 import { IJob } from '@/app/modules/job/job.interface';
 import { Orders } from '@/app/modules/orders/orders.model';
+import { REDIS_KEYS } from '@/app/redis/keys';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 
@@ -18,6 +20,24 @@ export const hashDeliveryOtp = async (otp: string) => hash(otp, 10);
 /** Compares delivery OTP with stored hash. */
 export const compareDeliveryOtp = async (otp: string, hashedOtp: string) =>
   compare(otp, hashedOtp);
+
+/** Stores delivery OTP hash in Redis for a short handoff window. */
+export const saveDeliveryOtpToRedis = async (
+  jobId: string,
+  hashedOtp: string,
+  ttlSeconds = 300
+) => {
+  await getRedisClient().set(REDIS_KEYS.DELIVERY_OTP(jobId), hashedOtp, 'EX', ttlSeconds);
+};
+
+/** Reads delivery OTP hash from Redis. */
+export const getDeliveryOtpFromRedis = async (jobId: string) =>
+  getRedisClient().get(REDIS_KEYS.DELIVERY_OTP(jobId));
+
+/** Deletes delivery OTP hash after successful verification. */
+export const deleteDeliveryOtpFromRedis = async (jobId: string) => {
+  await getRedisClient().del(REDIS_KEYS.DELIVERY_OTP(jobId));
+};
 
 /** Throws unless requester can manage an order assignment. */
 export const assertCanAssignOrder = (
@@ -35,17 +55,21 @@ export const assertCanAssignOrder = (
 };
 
 /** Throws unless requester can access a job. */
-export const assertJobAccess = (
+export const assertJobAccess = async (
   traceId: string,
-  job: Pick<IJob, 'rider' | 'vendor' | 'assignedBy'>,
+  job: Pick<IJob, 'rider' | 'assignedBy' | 'order'>,
   requester: { userId: string; role: string }
 ) => {
   const userId = requester.userId;
+  const orderId = String((job.order as any)?._id ?? job.order);
+  const isVendorOrder =
+    requester.role === USER_ROLE.vendor &&
+    Boolean(await Orders.exists({ _id: orderId, author: userId }));
   const canAccess =
     requester.role === USER_ROLE.admin ||
     String((job.rider as any)?._id ?? job.rider) === userId ||
-    String((job.vendor as any)?._id ?? job.vendor) === userId ||
-    String((job.assignedBy as any)?._id ?? job.assignedBy) === userId;
+    String((job.assignedBy as any)?._id ?? job.assignedBy) === userId ||
+    isVendorOrder;
 
   if (!canAccess) {
     throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this job', traceId);

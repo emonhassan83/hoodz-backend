@@ -21,8 +21,6 @@ export const SOCKET_LISTENER = {
   jobResendDeliveryOtp: 'job:resend-delivery-otp',
   jobVerifyDeliveryOtp: 'job:verify-delivery-otp',
   jobDelivered: 'job:delivered',
-  depositSubmitCompany: 'deposit:submit-company',
-  depositVerifyCompany: 'deposit:verify-company',
 } as const;
 
 export const SOCKET_EMIT = {

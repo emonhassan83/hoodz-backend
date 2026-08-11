@@ -1,7 +1,6 @@
 export const DEPOSIT_STATUS = {
   pending: 'pending',
-  submitted: 'submitted',
-  verified: 'verified',
+  completed: 'completed',
   rejected: 'rejected',
 } as const;
 

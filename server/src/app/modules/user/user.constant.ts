@@ -1,3 +1,5 @@
+import type { IUserRole } from '@/app/modules/user/user.types'
+
 export const REGISTER_WITH = {
   google: 'google',
   apple: 'apple',
@@ -23,8 +25,6 @@ export const USER_ROLE = {
   agent: 'agent',
   user: 'user',
 } as const
-
-import type { IUserRole } from '@/app/modules/user/user.types'
 
 export const AUTHENTICATED_ROLES: IUserRole[] = Object.values(USER_ROLE)
 

@@ -23,8 +23,6 @@ import { riderGoOfflineHandler } from '@/app/socket/handlers/jobs/riderGoOffline
 import { riderGoOnlineHandler } from '@/app/socket/handlers/jobs/riderGoOnline.handlers';
 import { riderLocationUpdateHandler } from '@/app/socket/handlers/jobs/riderLocationUpdate.handlers';
 import { sendDeliveryOtpHandler } from '@/app/socket/handlers/jobs/sendDeliveryOtp.handlers';
-import { submitDepositHandler } from '@/app/socket/handlers/jobs/submitDeposit.handlers';
-import { verifyDepositHandler } from '@/app/socket/handlers/jobs/verifyDeposit.handlers';
 import { verifyDeliveryOtpHandler } from '@/app/socket/handlers/jobs/verifyDeliveryOtp.handlers';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_LISTENER } from '@/app/socket/socket.constant';
@@ -57,8 +55,6 @@ export const registerSocketEvents = (socket: Socket) => {
   tSocket.on(SOCKET_LISTENER.jobResendDeliveryOtp, resendOtpHandler);
   tSocket.on(SOCKET_LISTENER.jobVerifyDeliveryOtp, verifyDeliveryOtpHandler);
   tSocket.on(SOCKET_LISTENER.jobDelivered, jobDeliveredHandler);
-  tSocket.on(SOCKET_LISTENER.depositSubmitCompany, submitDepositHandler);
-  tSocket.on(SOCKET_LISTENER.depositVerifyCompany, verifyDepositHandler);
 
   tSocket.on('disconnect', () => disconnectHandler.call(tSocket, undefined));
 };

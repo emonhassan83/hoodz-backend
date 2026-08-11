@@ -5,8 +5,7 @@ import ApiError from '@/app/errors/ApiError';
 import { DEPOSIT_STATUS } from '@/app/modules/deposit/deposit.constant';
 import {
   getDepositOrThrow,
-  getDepositableJobOrThrow,
-  resolveJobDepositStatus,
+  getDepositableJobsOrThrow,
 } from '@/app/modules/deposit/deposit.helpers';
 import { Deposit } from '@/app/modules/deposit/deposit.model';
 import {
@@ -14,15 +13,11 @@ import {
   TSubmitDepositPayload,
   TVerifyDepositPayload,
 } from '@/app/modules/deposit/deposit.types';
-import { JOB_DEPOSIT_STATUS } from '@/app/modules/job/job.constant';
-import { Job } from '@/app/modules/job/job.model';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 
 const depositPopulate = [
-  { path: 'rider', select: 'name email phone profileAvatar' },
-  { path: 'vendor', select: 'name email phone profileAvatar' },
-  { path: 'order', select: 'id totalAmount status paymentStatus' },
-  { path: 'job', select: 'id status depositStatus collectedMoney earning' },
+  { path: 'author', select: 'name email phone profileAvatar' },
+  { path: 'jobIds', select: 'id status collectedMoney earning order rider paymentMethod' },
 ];
 
 /** Rider submits COD deposit proof. */
@@ -31,54 +26,48 @@ const submitDeposit = async (
   riderId: string,
   payload: TSubmitDepositPayload
 ) => {
-  const job = await getDepositableJobOrThrow(traceId, payload.jobId, riderId);
+  const jobs = await getDepositableJobsOrThrow(traceId, payload.jobIds, riderId);
+  const calculatedAmount = Number(
+    jobs.reduce((total, job) => total + job.collectedMoney, 0).toFixed(2)
+  );
+  if (calculatedAmount !== Number(payload.amount.toFixed(2))) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Deposit amount does not match selected COD jobs amount',
+      traceId
+    );
+  }
 
-  const deposit = await Deposit.findOneAndUpdate(
-    { job: job._id },
-    {
-      rider: job.rider,
-      job: job._id,
-      order: job.order,
-      vendor: job.vendor,
-      amount: job.collectedMoney,
-      reference: payload.reference,
-      files: payload.files ?? [],
-      status: DEPOSIT_STATUS.submitted,
-      rejectionReason: null,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  ).populate(depositPopulate);
-
-  await Job.findByIdAndUpdate(job._id, {
-    depositStatus: JOB_DEPOSIT_STATUS.submitted,
-    depositReference: payload.reference,
-    depositedAt: new Date(),
+  const deposit = await Deposit.create({
+    author: riderId,
+    jobIds: jobs.map((job) => job._id),
+    amount: calculatedAmount,
+    fawryRefNo: payload.fawryRefNo,
+    receiptFiles: payload.receiptFiles,
+    status: DEPOSIT_STATUS.pending,
+    note: payload.note ?? null,
   });
 
-  return deposit;
+  return Deposit.findById(deposit._id).populate(depositPopulate);
 };
 
-/** Admin verifies or rejects submitted COD deposit. */
+/** Admin completes or rejects submitted COD deposit. */
 const verifyDeposit = async (
   traceId: string,
-  requester: TDepositRequester,
   depositId: string,
   payload: TVerifyDepositPayload
 ) => {
-  if (payload.status === DEPOSIT_STATUS.rejected && !payload.reason) {
-    throw new ApiError(HttpStatusCode.BadRequest, 'Rejection reason is required', traceId);
+  if (payload.status === DEPOSIT_STATUS.rejected && !payload.note) {
+    throw new ApiError(HttpStatusCode.BadRequest, 'Rejection note is required', traceId);
   }
 
   const deposit = await getDepositOrThrow(traceId, depositId);
+  if (deposit.status !== DEPOSIT_STATUS.pending) {
+    throw new ApiError(HttpStatusCode.BadRequest, 'Only pending deposits can be verified', traceId);
+  }
   deposit.status = payload.status;
-  deposit.verifiedBy = requester.userId as any;
-  deposit.rejectionReason =
-    payload.status === DEPOSIT_STATUS.rejected ? payload.reason! : null;
+  deposit.note = payload.note ?? deposit.note ?? null;
   await deposit.save();
-
-  await Job.findByIdAndUpdate(deposit.job, {
-    depositStatus: resolveJobDepositStatus(payload.status),
-  });
 
   return Deposit.findById(deposit._id).populate(depositPopulate);
 };
@@ -105,7 +94,7 @@ const getAll = async (query: Record<string, unknown>) => {
 /** Rider gets own deposits with pagination. */
 const getMy = async (riderId: string, query: Record<string, unknown>) => {
   const depositQuery = new QueryBuilder(
-    Deposit.find({ rider: riderId }).populate(depositPopulate).select('-__v').lean(),
+    Deposit.find({ author: riderId }).populate(depositPopulate).select('-__v').lean(),
     query
   )
     .filter()
@@ -137,8 +126,7 @@ const getById = async (
 
   const canAccess =
     requester.role === USER_ROLE.admin ||
-    deposit.rider?._id?.toString?.() === requester.userId ||
-    deposit.vendor?._id?.toString?.() === requester.userId;
+    deposit.author?._id?.toString?.() === requester.userId;
   if (!canAccess) {
     throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this deposit', traceId);
   }

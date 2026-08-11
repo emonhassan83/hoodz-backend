@@ -5,7 +5,6 @@ import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import {
   JOB_ASSIGNMENT_TYPE,
-  JOB_DEPOSIT_STATUS,
   JOB_PAYMENT_METHOD,
   JOB_STATUS,
 } from '@/app/modules/job/job.constant';
@@ -17,11 +16,14 @@ import {
   buildJobLocations,
   buildJobMoneyFields,
   compareDeliveryOtp,
+  deleteDeliveryOtpFromRedis,
   generateDeliveryOtp,
+  getDeliveryOtpFromRedis,
   getAssignableOrderOrThrow,
   getAssignableRiderOrThrow,
   hashDeliveryOtp,
   isReassignableJob,
+  saveDeliveryOtpToRedis,
 } from '@/app/modules/job/job.helpers';
 import { Job } from '@/app/modules/job/job.model';
 import {
@@ -45,7 +47,6 @@ const jobPopulate = [
       'id user author totalAmount deliveryCharge status paymentStatus billingDetails deliveryType isOtpVerified',
   },
   { path: 'rider', select: 'name email phone profileAvatar avgRating ratingCount' },
-  { path: 'vendor', select: 'name email phone profileAvatar address location' },
   { path: 'assignedBy', select: 'name email role' },
 ];
 
@@ -118,18 +119,13 @@ const assignJob = async (
     {
       order: payload.orderId,
       rider: payload.riderId,
-      vendor: order.author,
       assignedBy: requester.userId,
       assignmentType,
       paymentMethod,
       ...locationFields,
       ...moneyFields,
-      depositStatus:
-        paymentMethod === JOB_PAYMENT_METHOD.cod
-          ? JOB_DEPOSIT_STATUS.pending
-          : JOB_DEPOSIT_STATUS.not_required,
+      hasDeliveryOtpVerified: false,
       status: JOB_STATUS.assigned,
-      assignedAt: new Date(),
       acceptedAt: null,
       pickedUpAt: null,
       onTheWayAt: null,
@@ -239,7 +235,7 @@ const sendDeliveryOtp = async (
 ) => {
   const job = await Job.findById(payload.jobId);
   if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  assertJobAccess(traceId, job, requester);
+  await assertJobAccess(traceId, job, requester);
   assertJobStatusIn(
     traceId,
     job,
@@ -248,8 +244,8 @@ const sendDeliveryOtp = async (
   );
 
   const otp = generateDeliveryOtp();
-  job.deliveryOtp = await hashDeliveryOtp(otp);
-  job.deliveryOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  await saveDeliveryOtpToRedis(job._id.toString(), await hashDeliveryOtp(otp));
+  job.hasDeliveryOtpVerified = false;
   job.status = JOB_STATUS.otp_sent;
   await job.save();
 
@@ -262,18 +258,24 @@ const verifyDeliveryOtp = async (
   riderId: string,
   payload: TVerifyDeliveryOtpPayload
 ) => {
-  const job = await Job.findById(payload.jobId).select('+deliveryOtp');
+  const job = await Job.findById(payload.jobId);
   if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
   assertAssignedRider(traceId, job, riderId);
   assertJobStatusIn(traceId, job, [JOB_STATUS.otp_sent], 'OTP is not ready for verification');
-  if (!job.deliveryOtp || !job.deliveryOtpExpiresAt || job.deliveryOtpExpiresAt < new Date()) {
+  const storedOtp = await getDeliveryOtpFromRedis(job._id.toString());
+  if (!storedOtp) {
     throw new ApiError(HttpStatusCode.BadRequest, 'Delivery OTP has expired', traceId);
   }
-  if (!(await compareDeliveryOtp(payload.otp, job.deliveryOtp))) {
+  if (!(await compareDeliveryOtp(payload.otp, storedOtp))) {
     throw new ApiError(HttpStatusCode.BadRequest, 'Invalid delivery OTP', traceId);
   }
 
-  await Orders.findByIdAndUpdate(job.order, { isOtpVerified: true });
+  job.hasDeliveryOtpVerified = true;
+  await Promise.all([
+    job.save(),
+    Orders.findByIdAndUpdate(job.order, { isOtpVerified: true }),
+    deleteDeliveryOtpFromRedis(job._id.toString()),
+  ]);
   return Job.findById(job._id).populate(jobPopulate);
 };
 
@@ -293,16 +295,12 @@ const deliveredJob = async (
     assertJobStatusIn(traceId, job, [JOB_STATUS.otp_sent], 'OTP verification is required before delivery');
 
     const order = await Orders.findById(job.order).session(session);
-    if (!order?.isOtpVerified) {
+    if (!order?.isOtpVerified || !job.hasDeliveryOtpVerified) {
       throw new ApiError(HttpStatusCode.BadRequest, 'Delivery OTP is not verified', traceId);
     }
 
     job.status = JOB_STATUS.delivered;
     job.completedAt = new Date();
-    job.depositStatus =
-      job.paymentMethod === JOB_PAYMENT_METHOD.cod
-        ? JOB_DEPOSIT_STATUS.pending
-        : JOB_DEPOSIT_STATUS.not_required;
     await job.save({ session });
 
     order.status = ORDER_STATUS.delivered;
@@ -386,7 +384,9 @@ const getAllJobs = async (
   query: Record<string, unknown>
 ) => {
   const filter =
-    requester.role === USER_ROLE.vendor ? { vendor: requester.userId } : {};
+    requester.role === USER_ROLE.vendor
+      ? { order: { $in: await Orders.distinct('_id', { author: requester.userId }) } }
+      : {};
   const jobQuery = new QueryBuilder(
     Job.find(filter).populate(jobPopulate).select('-__v').lean(),
     query
@@ -408,7 +408,7 @@ const getJobById = async (
 ) => {
   const job = await Job.findById(jobId).populate(jobPopulate).select('-__v').lean();
   if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  assertJobAccess(traceId, job as any, requester);
+  await assertJobAccess(traceId, job as any, requester);
   return job;
 };
 
@@ -420,7 +420,7 @@ const getJobByOrderId = async (
 ) => {
   const job = await Job.findOne({ order: orderId }).populate(jobPopulate).select('-__v').lean();
   if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  assertJobAccess(traceId, job as any, requester);
+  await assertJobAccess(traceId, job as any, requester);
   return job;
 };
 

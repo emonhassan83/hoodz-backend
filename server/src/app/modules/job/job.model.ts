@@ -2,7 +2,6 @@ import { Schema, model } from 'mongoose';
 
 import {
   JOB_ASSIGNMENT_TYPE,
-  JOB_DEPOSIT_STATUS,
   JOB_PAYMENT_METHOD,
   JOB_STATUS,
 } from '@/app/modules/job/job.constant';
@@ -37,16 +36,10 @@ const jobSchema = new Schema<IJob, IJobModel>(
       required: true,
       index: true,
     },
-    vendor: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-      index: true,
-    },
     assignedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
     },
     assignmentType: {
       type: String,
@@ -63,23 +56,13 @@ const jobSchema = new Schema<IJob, IJobModel>(
     destination: { type: jobPointSchema, required: true },
     collectedMoney: { type: Number, default: 0, min: 0 },
     earning: { type: Number, default: 0, min: 0 },
-    depositStatus: {
-      type: String,
-      enum: Object.values(JOB_DEPOSIT_STATUS),
-      default: JOB_DEPOSIT_STATUS.not_required,
-      index: true,
-    },
-    deliveryOtp: { type: String, default: null, select: false },
-    deliveryOtpExpiresAt: { type: Date, default: null },
-    depositReference: { type: String, default: null, trim: true },
-    depositedAt: { type: Date, default: null },
+    hasDeliveryOtpVerified: { type: Boolean, default: false },
     status: {
       type: String,
       enum: Object.values(JOB_STATUS),
       default: JOB_STATUS.assigned,
       index: true,
     },
-    assignedAt: { type: Date, default: Date.now },
     acceptedAt: { type: Date, default: null },
     pickedUpAt: { type: Date, default: null },
     onTheWayAt: { type: Date, default: null },
@@ -94,7 +77,6 @@ const jobSchema = new Schema<IJob, IJobModel>(
 
 jobSchema.index({ order: 1, status: 1 });
 jobSchema.index({ rider: 1, status: 1, createdAt: -1 });
-jobSchema.index({ vendor: 1, status: 1, createdAt: -1 });
 
 export const Job = model<IJob, IJobModel>('Job', jobSchema);
 

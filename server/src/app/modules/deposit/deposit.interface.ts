@@ -8,16 +8,13 @@ export type TDepositStatus =
 export interface IDeposit {
   _id: Types.ObjectId;
   id: string;
-  rider: Types.ObjectId;
-  job: Types.ObjectId;
-  order: Types.ObjectId;
-  vendor: Types.ObjectId;
+  author: Types.ObjectId;
+  jobIds: Types.ObjectId[];
   amount: number;
-  reference: string;
-  files: string[];
+  fawryRefNo: string;
+  receiptFiles: string[];
   status: TDepositStatus;
-  verifiedBy?: Types.ObjectId | null;
-  rejectionReason?: string | null;
+  note?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

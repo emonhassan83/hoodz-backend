@@ -30,13 +30,12 @@ export const assertSocketRole = (
 export const getJobAudienceIds = async (jobId: string) => {
   const job = await Job.findById(jobId)
     .populate([{ path: 'order', select: 'user author' }])
-    .select('rider vendor assignedBy order')
+    .select('rider assignedBy order')
     .lean();
   if (!job) return [];
 
   return [
     job.rider,
-    job.vendor,
     job.assignedBy,
     (job.order as any)?.user,
     (job.order as any)?.author,

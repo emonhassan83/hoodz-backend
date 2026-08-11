@@ -15,48 +15,34 @@ const DepositSchema = new Schema<IDeposit, IDepositModel>(
       unique: true,
       index: true,
     },
-    rider: {
+    author: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
       index: true,
     },
-    job: {
+    jobIds: [{
       type: Schema.Types.ObjectId,
       ref: 'Job',
       required: true,
-      unique: true,
       index: true,
-    },
-    order: {
-      type: Schema.Types.ObjectId,
-      ref: 'Order',
-      required: true,
-      index: true,
-    },
-    vendor: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-      index: true,
-    },
+    }],
     amount: { type: Number, required: true, min: 0 },
-    reference: { type: String, required: true, trim: true },
-    files: { type: [String], default: [] },
+    fawryRefNo: { type: String, required: true, trim: true, index: true },
+    receiptFiles: { type: [String], required: true, default: [] },
     status: {
       type: String,
       enum: Object.values(DEPOSIT_STATUS),
-      default: DEPOSIT_STATUS.submitted,
+      default: DEPOSIT_STATUS.pending,
       index: true,
     },
-    verifiedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
-    rejectionReason: { type: String, default: null, trim: true },
+    note: { type: String, default: null, trim: true },
   },
   { timestamps: true }
 );
 
-DepositSchema.index({ rider: 1, status: 1, createdAt: -1 });
-DepositSchema.index({ vendor: 1, status: 1, createdAt: -1 });
+DepositSchema.index({ author: 1, status: 1, createdAt: -1 });
+DepositSchema.index({ jobIds: 1, status: 1 });
 
 export const Deposit = model<IDeposit, IDepositModel>(
   'Deposit',
