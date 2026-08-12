@@ -197,7 +197,13 @@ const getFeaturedVendors = async (userId?: string) => {
 const getShopDetails = async (
   traceId: string,
   vendorId: string,
-  query: { latitude?: number; longitude?: number },
+  query: {
+    latitude?: number;
+    longitude?: number;
+    lat?: number;
+    lng?: number;
+    lang?: number;
+  },
   userId?: string
 ) => {
   const vendor = await User.findOne({
@@ -207,7 +213,7 @@ const getShopDetails = async (
     isDeleted: false,
   })
     .select(
-      '_id id name email phone profileAvatar coverPhoto description address location avgRating ratingCount followers createdAt'
+      '_id id name phone profileAvatar coverPhoto description address location avgRating ratingCount followers createdAt'
     )
     .lean();
 
@@ -216,6 +222,27 @@ const getShopDetails = async (
   }
 
   const [longitude, latitude] = vendor.location?.coordinates ?? [0, 0];
+  const queryLatitude = query.latitude ?? query.lat;
+  const queryLongitude = query.longitude ?? query.lng ?? query.lang;
+  let origin =
+    queryLatitude !== undefined && queryLongitude !== undefined
+      ? { latitude: queryLatitude, longitude: queryLongitude }
+      : null;
+
+  if (!origin && userId) {
+    const user = await User.findById(userId)
+      .select('deliveryLocation location')
+      .lean();
+    const coordinates =
+      user?.deliveryLocation?.coordinates?.some((coordinate) => coordinate !== 0)
+        ? user.deliveryLocation.coordinates
+        : user?.location?.coordinates;
+
+    if (coordinates && coordinates.some((coordinate) => coordinate !== 0)) {
+      origin = { longitude: coordinates[0], latitude: coordinates[1] };
+    }
+  }
+
   let distance = null as null | {
     distanceKm: number;
     distanceText: string | null;
@@ -223,13 +250,7 @@ const getShopDetails = async (
     durationText: string | null;
   };
 
-  if (
-    query.latitude !== undefined &&
-    query.longitude !== undefined &&
-    latitude !== 0 &&
-    longitude !== 0
-  ) {
-    const origin = { latitude: query.latitude, longitude: query.longitude };
+  if (origin && latitude !== 0 && longitude !== 0) {
     try {
       const [element] = await getGoogleDistanceMatrix(origin, [
         { latitude, longitude },
@@ -285,8 +306,6 @@ const getShopDetails = async (
         $project: {
           _id: '$category._id',
           title: '$category.title',
-          icon: '$category.icon',
-          productCount: 1,
         },
       },
       { $sort: { productCount: -1, title: 1 } },

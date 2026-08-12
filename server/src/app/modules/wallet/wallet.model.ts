@@ -15,7 +15,6 @@ const walletAccountSchema = new Schema<IWalletAccount, IWalletAccountModel>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      index: true,
     },
     type: {
       type: String,

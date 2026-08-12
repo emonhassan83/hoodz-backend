@@ -113,10 +113,27 @@ const shopDetailsValidationSchema = z.object({
   params: z.object({
     vendorId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid vendor id'),
   }),
-  query: z.object({
-    latitude: z.coerce.number().min(-90).max(90).optional(),
-    longitude: z.coerce.number().min(-180).max(180).optional(),
-  }),
+  query: z
+    .object({
+      latitude: z.coerce.number().min(-90).max(90).optional(),
+      longitude: z.coerce.number().min(-180).max(180).optional(),
+      lat: z.coerce.number().min(-90).max(90).optional(),
+      lng: z.coerce.number().min(-180).max(180).optional(),
+      lang: z.coerce.number().min(-180).max(180).optional(),
+    })
+    .refine(
+      (data) => {
+        const hasLatitude = data.latitude !== undefined || data.lat !== undefined;
+        const hasLongitude =
+          data.longitude !== undefined ||
+          data.lng !== undefined ||
+          data.lang !== undefined;
+        return hasLatitude === hasLongitude;
+      },
+      {
+        message: 'Latitude and longitude must be provided together',
+      }
+    ),
 });
 
 export const UserValidation = {

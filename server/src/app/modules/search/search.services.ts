@@ -27,12 +27,119 @@ import {
   searchTypesense,
 } from '@/app/modules/search/search.typesense';
 import {
+  calculateDistanceKm,
+  getGoogleDistanceMatrix,
+} from '@/app/modules/user/user.helpers';
+import { User } from '@/app/modules/user/user.model';
+import {
   getCache,
   setCache,
 } from '@/app/redis/helpers';
 import { REDIS_KEYS } from '@/app/redis/keys';
 
 const SEARCH_SUGGESTION_SOURCE_LIMIT = 15;
+
+const toNumber = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const getSearchOrigin = async (
+  actor: TSearchActor,
+  query: Record<string, unknown>
+) => {
+  const latitude = toNumber(query.latitude ?? query.lat);
+  const longitude = toNumber(query.longitude ?? query.lng ?? query.lang);
+  if (latitude !== undefined && longitude !== undefined) {
+    return { latitude, longitude };
+  }
+
+  if (!actor.userId) return null;
+
+  const user = await User.findById(actor.userId)
+    .select('deliveryLocation location')
+    .lean();
+  const coordinates =
+    user?.deliveryLocation?.coordinates?.some((coordinate) => coordinate !== 0)
+      ? user.deliveryLocation.coordinates
+      : user?.location?.coordinates;
+
+  if (!coordinates || coordinates.every((coordinate) => coordinate === 0)) {
+    return null;
+  }
+
+  return { longitude: coordinates[0], latitude: coordinates[1] };
+};
+
+const addDistanceToFeaturedVendors = async (
+  actor: TSearchActor,
+  query: Record<string, unknown>,
+  vendors: Array<{ _id: unknown } & Record<string, any>>
+): Promise<Array<{ _id: unknown } & Record<string, any>>> => {
+  const origin = await getSearchOrigin(actor, query);
+  if (!origin) {
+    return vendors.map((vendor) => ({ ...vendor, distance: null }));
+  }
+
+  const vendorsWithCoordinates = vendors.map((vendor) => {
+    const [longitude, latitude] = vendor.location?.coordinates ?? [0, 0];
+    const hasLocation = longitude !== 0 || latitude !== 0;
+    return {
+      ...vendor,
+      coordinate: hasLocation ? { latitude, longitude } : null,
+    };
+  });
+
+  let googleElements: any[] = [];
+  try {
+    googleElements = await getGoogleDistanceMatrix(
+      origin,
+      vendorsWithCoordinates
+        .map((vendor) => vendor.coordinate)
+        .filter(Boolean) as { latitude: number; longitude: number }[]
+    );
+  } catch (error) {
+    console.warn(
+      '[Search] Google Maps distance lookup failed:',
+      error instanceof Error ? error.message : error
+    );
+  }
+
+  let googleIndex = 0;
+  return vendorsWithCoordinates.map((vendor) => {
+    const { coordinate, ...vendorData } = vendor;
+    if (!coordinate) return { ...vendorData, distance: null };
+
+    const element = googleElements[googleIndex++];
+    const fallbackDistanceKm = Number(
+      calculateDistanceKm(origin, coordinate).toFixed(2)
+    );
+    const distanceKm =
+      element?.status === 'OK' && element.distance?.value !== undefined
+        ? Number((element.distance.value / 1000).toFixed(2))
+        : fallbackDistanceKm;
+    const durationMinutes =
+      element?.status === 'OK' && element.duration?.value !== undefined
+        ? Math.ceil(element.duration.value / 60)
+        : null;
+
+    return {
+      ...vendorData,
+      distance: {
+        distanceKm,
+        distanceText:
+          element?.status === 'OK' && element.distance?.text
+            ? element.distance.text
+            : `${distanceKm} km`,
+        durationMinutes,
+        durationText:
+          element?.status === 'OK' && element.duration?.text
+            ? element.duration.text
+            : null,
+      },
+    };
+  });
+};
 
 /** Searches products and returns product-title suggestions for grouped result clicks. */
 const searchDataIntoDB = async (
@@ -161,12 +268,21 @@ const getAllIntoDB = async (
   const cached = await getCache(cacheKey);
   if (cached) return cached;
 
+  const {
+    latitude: _latitude,
+    longitude: _longitude,
+    lat: _lat,
+    lng: _lng,
+    lang: _lang,
+    ...historyQueryParams
+  } = query;
+
   const historyQuery = actor.userId || actor.guestId
     ? new QueryBuilder(
         Search.find(buildSearchActorFilter(actor))
           .select('query normalizedQuery source resultCount lastSearchedAt createdAt updatedAt')
           .lean(),
-        query
+        historyQueryParams
       )
         .filter()
         .paginate()
@@ -181,23 +297,28 @@ const getAllIntoDB = async (
       historyQuery?.modelQuery ?? Promise.resolve([]),
       historyQuery?.countTotal() ?? Promise.resolve({
         page: 1,
-        limit: Number(query.limit || 10),
+        limit: Number(historyQueryParams.limit || 10),
         total: 0,
         totalPage: 0,
       }),
     ]);
 
   const followedVendorIds = await getFollowedVendorIdSet(actor.userId);
+  const featuredVendorsWithDistance = await addDistanceToFeaturedVendors(
+    actor,
+    query,
+    featuredVendors
+  );
   const result = {
     popularCategories,
-    featuredVendors: featuredVendors.map((vendor) =>
+    featuredVendors: featuredVendorsWithDistance.map((vendor) =>
       withFollowingFlag(vendor, followedVendorIds)
     ),
     searchHistory,
     meta,
   };
 
-  await setCache(cacheKey, result);
+  await setCache(cacheKey, result, 300);
   return result;
 };
 

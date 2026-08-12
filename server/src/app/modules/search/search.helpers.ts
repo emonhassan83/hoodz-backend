@@ -2,7 +2,6 @@ import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
 import { Category } from '@/app/modules/category/category.model';
-import { Product } from '@/app/modules/product/product.model';
 import { TSearchActor } from '@/app/modules/search/search.types';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
@@ -103,53 +102,20 @@ export const buildProductSuggestions = (
   return suggestions;
 };
 
-/** Returns max 10 categories ranked by product count, sold amount, and recency. */
-export const getPopularCategories = async () => {
-  const categories = await Product.aggregate([
-    { $match: { isDeleted: false, category: { $ne: null } } },
-    {
-      $group: {
-        _id: '$category',
-        productCount: { $sum: 1 },
-        totalSold: { $sum: { $ifNull: ['$sold', 0] } },
-        latestProductAt: { $max: '$createdAt' },
-      },
-    },
-    { $sort: { productCount: -1, totalSold: -1, latestProductAt: -1 } },
-    { $limit: 10 },
-    {
-      $lookup: {
-        from: Category.collection.name,
-        localField: '_id',
-        foreignField: '_id',
-        as: 'category',
-      },
-    },
-    { $unwind: '$category' },
-    {
-      $project: {
-        _id: '$category._id',
-        title: '$category.title',
-        icon: '$category.icon',
-        productCount: 1,
-        totalSold: 1,
-      },
-    },
-  ]);
+/** Returns all category chips for search screen discovery. */
+export const getPopularCategories = async () =>
+  Category.find().select('_id title').sort({ title: 1 }).lean();
 
-  return categories;
-};
-
-/** Returns max 5 high-rated vendors for search screen discovery. */
+/** Returns max 10 high-rated vendors for search screen discovery. */
 export const getFeaturedSearchVendors = async () =>
   User.find({
     role: USER_ROLE.vendor,
     status: 'active',
     isDeleted: false,
-    avgRating: { $gt: 4 },
   })
-    .select('_id id name profileAvatar coverPhoto address location avgRating ratingCount followers')
+    .select('_id name profileAvatar location avgRating ratingCount')
     .sort({ avgRating: -1, ratingCount: -1, createdAt: -1 })
-    .limit(5)
+    .limit(10)
     .lean();
+
 

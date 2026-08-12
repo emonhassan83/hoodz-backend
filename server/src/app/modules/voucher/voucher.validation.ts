@@ -14,25 +14,28 @@ const giftDetailsSchema = z.object({
   description: z.string().trim().optional(),
 });
 
-const voucherBodySchema = z
-  .object({
-    code: z.string().trim().min(2),
-    title: z.string().trim().min(1),
-    description: z.string().trim().optional(),
-    voucherType: z.enum(Object.values(VOUCHER_TYPE) as [string, ...string[]]),
-    shop: objectIdSchema.nullable().optional(),
-    user: objectIdSchema.nullable().optional(),
-    discountType: z.enum(
-      Object.values(VOUCHER_DISCOUNT_TYPE) as [string, ...string[]]
-    ),
-    discountValue: z.number().min(0),
-    maxDiscountAmount: z.number().min(0).optional(),
-    giftDetails: giftDetailsSchema.optional(),
-    minSpend: z.number().min(0).optional(),
-    expiryDate: z.string().datetime().or(z.string().min(1)),
-    status: z.enum(Object.values(VOUCHER_STATUS) as [string, ...string[]]).optional(),
-  })
-  .superRefine((data, ctx) => {
+const voucherBodyBaseSchema = z.object({
+  code: z.string().trim().min(2),
+  title: z.string().trim().min(1),
+  description: z.string().trim().optional(),
+  voucherType: z.enum(Object.values(VOUCHER_TYPE) as [string, ...string[]]),
+  shop: objectIdSchema.nullable().optional(),
+  user: objectIdSchema.nullable().optional(),
+  discountType: z.enum(
+    Object.values(VOUCHER_DISCOUNT_TYPE) as [string, ...string[]]
+  ),
+  discountValue: z.number().min(0),
+  maxDiscountAmount: z.number().min(0).optional(),
+  giftDetails: giftDetailsSchema.optional(),
+  minSpend: z.number().min(0).optional(),
+  expiryDate: z.string().datetime().or(z.string().min(1)),
+  status: z.enum(Object.values(VOUCHER_STATUS) as [string, ...string[]]).optional(),
+});
+
+const validateVoucherRules = (
+  data: Partial<z.infer<typeof voucherBodyBaseSchema>>,
+  ctx: z.RefinementCtx
+) => {
     if (data.voucherType === VOUCHER_TYPE.shop && !data.shop) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -59,7 +62,9 @@ const voucherBodySchema = z
         message: 'Gift name and banner image are required',
       });
     }
-  });
+};
+
+const voucherBodySchema = voucherBodyBaseSchema.superRefine(validateVoucherRules);
 
 const addVoucherValidationSchema = z.object({
   body: voucherBodySchema,
@@ -69,7 +74,12 @@ const updateVoucherValidationSchema = z.object({
   params: z.object({
     voucherId: objectIdSchema,
   }),
-  body: voucherBodySchema.partial(),
+  body: voucherBodyBaseSchema
+    .partial()
+    .superRefine(validateVoucherRules)
+    .refine((data) => Object.keys(data).length > 0, {
+      message: 'At least one field is required',
+    }),
 });
 
 const updateVoucherStatusValidationSchema = z.object({
