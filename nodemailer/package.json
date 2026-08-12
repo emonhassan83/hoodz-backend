@@ -1,15 +1,16 @@
 {
   "name": "hoodz-backend-nodemailer",
-  "version": "9.0.1",
-  "description": "",
+  "version": "1.0.0",
+  "description": "Standalone SMTP mail service for Hoodz Backend",
   "license": "ISC",
   "author": "",
   "type": "commonjs",
   "main": "./dist/index.js",
-  "packageManager": "pnpm@9.15.4",
   "scripts": {
     "build": "tsc --project tsconfig.json && tsc-alias --project tsconfig.json",
+    "build:watch": "tsc --project tsconfig.json -w",
     "start": "node ./dist/index.js",
+    "start:dev": "nodemon",
     "dev": "nodemon",
     "format": "prettier --write \"src/**/*.ts\"",
     "lint": "eslint \"src/**/*.{ts,js}\" --quiet"
@@ -18,7 +19,14 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "nodemailer": "9.0.1"
+    "nodemailer": "^9.0.5"
+  },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion@<1.1.18": "1.1.18",
+      "brace-expansion@>=4.0.0 <5.0.9": "5.0.9",
+      "js-yaml@>=4.0.0 <4.3.1": ">=4.3.1"
+    }
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

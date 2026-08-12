@@ -17,7 +17,7 @@ app.use(
 app.use(express.json());
 
 app.get('/', (_req: Request, res: Response) => {
-  res.send('Hoodz Backend nodemailer is running!');
+  res.send('Hoodz Backend Nodemailer Service is running!');
 });
 
 app.get('/health', (_req: Request, res: Response) => {
@@ -35,10 +35,10 @@ app.post(
       return;
     }
 
-    const { to, subject, html } = req.body;
+    const { to, subject, html, text } = req.body;
 
     try {
-      await mailTransporter.sendMail(mailOption(to, subject, html));
+      await mailTransporter.sendMail(mailOption(to, subject, html, text));
 
       res.status(200).json({
         success: true,

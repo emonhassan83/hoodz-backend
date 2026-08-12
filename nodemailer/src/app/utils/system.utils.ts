@@ -3,5 +3,11 @@ import { TSendMailBody } from '@/app/@types/system.types';
 export const isValidEmailPayload = (
   payload: TSendMailBody
 ): payload is Required<TSendMailBody> => {
-  return Boolean(payload.to && payload.subject && payload.html);
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return Boolean(
+    payload.to &&
+      emailRegex.test(payload.to) &&
+      payload.subject &&
+      payload.html
+  );
 };

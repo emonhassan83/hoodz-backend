@@ -49,8 +49,6 @@ Below is a bird's-eye view of the current project directory structure:
 |-- docker-compose.yaml         # Local Docker Compose stack: API server + Redis
 |-- docs/                       # Developer guides, architecture notes, API rules
 |-- nodemailer/                 # Standalone Hoodz Backend SMTP mail service
-|   |-- Dockerfile              # Production mail-service container build
-|   |-- Dockerfile.dev          # Development mail-service container build
 |   |-- README.md               # Mail-service setup and endpoint docs
 |   |-- scripts/                # Build/runtime helper scripts
 |   |-- src/
@@ -106,7 +104,7 @@ Ensure all variables are populated correctly:
 - **`REDIS_PASSWORD`**: Security credential password for the Redis container.
 - **`JWT_ACCESS_TOKEN_SECRET_KEY` / `JWT_REFRESH_TOKEN_SECRET_KEY`**: Cryptographic keys for signing user tokens.
 - **`OTP_HASH_SECRET`**: Key used for validation signatures of OTP codes in Redis.
-- **`SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS`**: NodeMailer mail server credentials.
+- **`MAIL_HOST` / `MAIL_PORT` / `MAIL_FROM` / `NODEMAILLER_HOST_MAIL` / `NODEMAILLER_HOST_PASS`**: Nodemailer SMTP credentials.
 - **`S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_REGION` / `S3_BUCKET_NAME`**: AWS credentials for file uploads.
 - **`EXCHANGE_RATE_API_KEY`**: Key for the external exchange rates service.
 
@@ -169,7 +167,7 @@ The current local Docker stack is defined in `docker-compose.yaml`:
 | API server | `hoodz_backend_server` | `http://localhost:5029` |
 | Redis | `hoodz_backend_redis` | `127.0.0.1:6408` -> `6379` |
 
-The standalone `nodemailer/` service has its own Dockerfiles and README. Add it to Compose only when you want to run it as a separate container.
+The standalone `nodemailer/` service runs locally with npm scripts and is not part of the Docker Compose stack.
 
 ---
 

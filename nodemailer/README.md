@@ -1,79 +1,70 @@
 # Hoodz Backend Nodemailer Service
 
-The Hoodz Backend nodemailer service exposes a small HTTP API for sending emails through SMTP.
+Standalone SMTP mail service for Hoodz Backend.
 
-> [!WARNING]
-> **This project is strictly Docker-centric.**
-> Run the mail service through Docker Compose so it uses the same local workflow as the other backend services.
+## Setup
 
-## Responsibilities
-
-- accept email send requests
-- send HTML emails through the configured SMTP account
-- expose a lightweight health endpoint
-
-## Scripts
-
-From this folder, you can run:
+Install dependencies:
 
 ```bash
-pnpm run build
-pnpm run start
-pnpm run dev
-pnpm run format
-pnpm run lint
+npm install
 ```
 
-### Script details
+Create the environment file:
 
-- `build`: creates a production TypeScript build
-- `start`: runs the compiled mail service
-- `dev`: starts the service in development mode with nodemon
-- `format`: formats the source code
-- `lint`: checks for lint issues
+```bash
+cp .env.example .env
+```
+
+Update `.env` with your SMTP credentials. For Gmail, use an App Password.
 
 ## Environment
 
-Create `nodemailer/.env` with:
-
 ```bash
 PORT=3000
+NODE_ENV=development
 CORS_ORIGIN=*
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=your-mail@example.com
-SMTP_PASS=your-app-password
-SMTP_FROM=your-mail@example.com
+
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_SECURE=false
+MAIL_FROM=your-mail@example.com
+
+NODEMAILLER_HOST_MAIL=your-email@gmail.com
+NODEMAILLER_HOST_PASS=your-app-password
 ```
 
-## Development Notes
-
-- Default port: `3000`
-- For a full environment, start the stack from the repository root:
+## Scripts
 
 ```bash
-docker compose up --build
-```
-
-## Useful Commands
-
-```bash
-docker compose logs -f nodemailer
-docker compose restart nodemailer
-docker compose exec nodemailer sh
+npm run start:dev
+npm run build
+npm start
+npm run lint
 ```
 
 ## Endpoints
 
 ```http
+GET /
+```
+
+Response:
+
+```text
+Hoodz Backend Nodemailer Service is running!
+```
+
+```http
 GET /health
 ```
 
-Expected result:
-
-- HTTP `200`
-- JSON payload with `success: true`
+```json
+{
+  "success": true,
+  "service": "hoodz-backend-nodemailer"
+}
+```
 
 ```http
 POST /
@@ -84,8 +75,37 @@ Body:
 
 ```json
 {
-  "to": "receiver@example.com",
-  "subject": "Hello",
-  "html": "<p>Hello from nodemailer</p>"
+  "to": "recipient@example.com",
+  "subject": "Email Subject",
+  "html": "<h1>Hello!</h1>",
+  "text": "Optional plain text version"
 }
+```
+
+Success:
+
+```json
+{
+  "success": true,
+  "message": "Email sent successfully."
+}
+```
+
+## Project Structure
+
+```text
+nodemailer/
+|-- src/
+|   |-- app.ts
+|   |-- index.ts
+|   `-- app/
+|       |-- @types/
+|       |-- configs/
+|       `-- utils/
+|-- scripts/
+|-- dist/
+|-- .env.example
+|-- package.json
+|-- tsconfig.json
+`-- README.md
 ```
