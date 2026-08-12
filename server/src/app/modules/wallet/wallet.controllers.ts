@@ -30,32 +30,6 @@ const getMyWallet = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-const getCompanyWallet = asyncHandler(async (_req: Request, res: Response) => {
-  const traceId = getTraceId();
-  const data = await WalletService.getCompanyWallet();
-
-  sendResponse(res, {
-    success: true,
-    statusCode: 200,
-    message: 'Company wallet fetched successfully',
-    data,
-    traceId,
-  });
-});
-
-const setCompanyWallet = asyncHandler(async (req: Request, res: Response) => {
-  const traceId = getTraceId();
-  const data = await WalletService.setCompanyWallet(req.body);
-
-  sendResponse(res, {
-    success: true,
-    statusCode: 200,
-    message: 'Company wallet saved successfully',
-    data,
-    traceId,
-  });
-});
-
 const updateWallet = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await WalletService.updateWallet(
@@ -69,24 +43,6 @@ const updateWallet = asyncHandler(async (req: Request, res: Response) => {
     success: true,
     statusCode: 200,
     message: 'Wallet account updated successfully',
-    data,
-    traceId,
-  });
-});
-
-const toggleActivity = asyncHandler(async (req: Request, res: Response) => {
-  const traceId = getTraceId();
-  const data = await WalletService.toggleActivity(
-    traceId,
-    req.user,
-    req.params.walletId as string,
-    req.body
-  );
-
-  sendResponse(res, {
-    success: true,
-    statusCode: 200,
-    message: 'Wallet account activity updated successfully',
     data,
     traceId,
   });
@@ -112,9 +68,6 @@ const removeWallet = asyncHandler(async (req: Request, res: Response) => {
 export const WalletController = {
   addWallet,
   getMyWallet,
-  getCompanyWallet,
-  setCompanyWallet,
   updateWallet,
-  toggleActivity,
   removeWallet,
 };

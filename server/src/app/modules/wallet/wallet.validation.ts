@@ -9,7 +9,6 @@ const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
 const walletAccountTypeSchema = z.enum([
   WALLET_ACCOUNT_TYPE.mobile_wallet,
   WALLET_ACCOUNT_TYPE.instapay,
-  WALLET_ACCOUNT_TYPE.bank_account,
 ]);
 const mobileWalletProviderSchema = z.enum([
   MOBILE_WALLET_PROVIDER.vodafone_cash,
@@ -23,11 +22,6 @@ const walletAccountDetailsSchema = z.object({
   walletHolderName: z.string().trim().min(1).optional(),
   instaPayAddress: z.string().trim().min(1).optional(),
   accountHolderName: z.string().trim().min(1).optional(),
-  registeredPhoneNumber: z.string().trim().min(1).optional(),
-  bankName: z.string().trim().min(1).optional(),
-  accountNumber: z.string().trim().min(1).optional(),
-  iban: z.string().trim().min(1).optional(),
-  bankBranch: z.string().trim().min(1).nullable().optional(),
 });
 
 const validateWalletDetailsByType = (
@@ -44,13 +38,6 @@ const validateWalletDetailsByType = (
     ],
     [WALLET_ACCOUNT_TYPE.instapay]: [
       'instaPayAddress',
-      'accountHolderName',
-      'registeredPhoneNumber',
-    ],
-    [WALLET_ACCOUNT_TYPE.bank_account]: [
-      'bankName',
-      'accountNumber',
-      'iban',
       'accountHolderName',
     ],
   } as const;
@@ -99,19 +86,10 @@ const walletIdParamValidationSchema = z.object({
   }),
 });
 
-const toggleWalletActivityValidationSchema = z.object({
-  params: z.object({
-    walletId: objectIdSchema,
-  }),
-});
-
 export const WalletValidation = {
   walletAccountValidationSchema,
   updateWalletAccountValidationSchema,
   walletIdParamValidationSchema,
-  toggleWalletActivityValidationSchema,
 };
-
-
 
 

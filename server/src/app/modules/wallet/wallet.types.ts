@@ -13,13 +13,7 @@ export type TWalletAccountPayload = {
   details: IWalletAccountDetails;
 };
 
-export type TUpdateWalletAccountPayload = Partial<TWalletAccountPayload> & {
-  isActive?: boolean;
-};
-
-export type TToggleWalletActivityPayload = {
-  isActive?: boolean;
-};
+export type TUpdateWalletAccountPayload = Partial<TWalletAccountPayload>;
 
 
 

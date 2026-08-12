@@ -13,6 +13,13 @@ const addWalletMoneyValidationSchema = z.object({
   }),
 });
 
+const topUpIdParamValidationSchema = z.object({
+  params: z.object({
+    topUpId: objectIdSchema.or(z.string().trim().min(1)),
+  }),
+});
+
 export const TopUpValidation = {
   addWalletMoneyValidationSchema,
+  topUpIdParamValidationSchema,
 };

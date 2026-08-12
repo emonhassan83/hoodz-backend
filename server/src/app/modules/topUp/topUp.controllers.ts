@@ -21,6 +21,35 @@ const addWalletMoney = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const getSummary = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const result = await TopUpService.getSummary(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Top-up summary fetched successfully',
+    meta: result.meta,
+    data: result.data,
+    traceId,
+  });
+});
+
+const getDetails = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await TopUpService.getDetails(traceId, req.params.topUpId as string);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Top-up transaction fetched successfully',
+    data,
+    traceId,
+  });
+});
+
 export const TopUpController = {
   addWalletMoney,
+  getSummary,
+  getDetails,
 };
