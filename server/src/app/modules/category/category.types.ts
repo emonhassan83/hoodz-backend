@@ -3,4 +3,8 @@ export type TCategoryPayload = {
   icon: string;
 };
 
+export type TCategoryShopQuery = {
+  brandType?: string;
+};
+
 

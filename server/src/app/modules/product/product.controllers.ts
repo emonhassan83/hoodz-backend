@@ -110,6 +110,25 @@ const getTrendingProducts = asyncHandler(async (req: Request, res: Response) => 
   });
 });
 
+const getAiRecommendedProducts = asyncHandler(
+  async (req: Request, res: Response) => {
+    const traceId = getTraceId();
+    const result = await ProductService.getAiRecommendedProducts(
+      getProductActor(req),
+      req.query
+    );
+
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: 'AI recommended products fetched successfully',
+      meta: result.meta,
+      data: result.data,
+      traceId,
+    });
+  }
+);
+
 const getShopProducts = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const result = await ProductService.getShopProducts(
@@ -237,6 +256,7 @@ export const ProductController = {
   markProductViewed,
   getRecentlyViewedProducts,
   getTrendingProducts,
+  getAiRecommendedProducts,
   createProduct,
   createProductByAdmin,
   getAllProduct,

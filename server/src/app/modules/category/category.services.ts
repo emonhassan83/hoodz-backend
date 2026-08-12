@@ -1,14 +1,20 @@
 import {
   assertCategoryExists,
   assertCategoryTitleAvailable,
+  assertValidBrandType,
+  assertValidObjectId,
   createCategory,
   deleteCategoryById,
+  findCategoriesByBrandType,
   findCategories,
+  findShopsByCategory,
   updateCategoryById,
 } from '@/app/modules/category/category.helpers';
-import { TCategoryPayload } from '@/app/modules/category/category.types';
 import {
-  deleteCache,
+  TCategoryPayload,
+  TCategoryShopQuery,
+} from '@/app/modules/category/category.types';
+import {
   deleteCachePattern,
   getCache,
   setCache,
@@ -24,7 +30,7 @@ const create = async (
 
   const category = await createCategory(payload);
   await Promise.all([
-    deleteCache(REDIS_KEYS.CATEGORY_LIST),
+    deleteCachePattern(`${REDIS_KEYS.CATEGORY_LIST}*`),
     deleteCachePattern('product:*'),
   ]);
 
@@ -41,6 +47,37 @@ const getAll = async () => {
   return categories;
 };
 
+/** Returns product categories available under a product brand type. */
+const getCategoryByBrandType = async (traceId: string, brandType: string) => {
+  assertValidBrandType(brandType, traceId);
+
+  const cacheKey = `${REDIS_KEYS.CATEGORY_LIST}:brand-type:${brandType}`;
+  const cached = await getCache(cacheKey);
+  if (cached) return cached;
+
+  const categories = await findCategoriesByBrandType(brandType);
+  await setCache(cacheKey, categories, 300);
+  return categories;
+};
+
+/** Returns shops/vendors that have products in a category. */
+const getCategoryByShop = async (
+  traceId: string,
+  categoryId: string,
+  query: TCategoryShopQuery
+) => {
+  assertValidObjectId(categoryId, 'category id', traceId);
+  if (query.brandType) assertValidBrandType(query.brandType, traceId);
+
+  const cacheKey = `${REDIS_KEYS.CATEGORY_LIST}:shops:${categoryId}:${query.brandType ?? 'all'}`;
+  const cached = await getCache(cacheKey);
+  if (cached) return cached;
+
+  const shops = await findShopsByCategory(categoryId, query);
+  await setCache(cacheKey, shops, 300);
+  return shops;
+};
+
 /** Updates a category and invalidates category/product caches. */
 const updateA = async (
   traceId: string,
@@ -54,7 +91,7 @@ const updateA = async (
   const category = await updateCategoryById(categoryId, payload);
   assertCategoryExists(category, traceId);
   await Promise.all([
-    deleteCache(REDIS_KEYS.CATEGORY_LIST),
+    deleteCachePattern(`${REDIS_KEYS.CATEGORY_LIST}*`),
     deleteCachePattern('product:*'),
   ]);
 
@@ -66,7 +103,7 @@ const deleteA = async (traceId: string, categoryId: string) => {
   const category = await deleteCategoryById(categoryId);
   assertCategoryExists(category, traceId);
   await Promise.all([
-    deleteCache(REDIS_KEYS.CATEGORY_LIST),
+    deleteCachePattern(`${REDIS_KEYS.CATEGORY_LIST}*`),
     deleteCachePattern('product:*'),
   ]);
 
@@ -76,6 +113,8 @@ const deleteA = async (traceId: string, categoryId: string) => {
 export const CategoryService = {
   create,
   getAll,
+  getCategoryByBrandType,
+  getCategoryByShop,
   updateA,
   deleteA,
 };

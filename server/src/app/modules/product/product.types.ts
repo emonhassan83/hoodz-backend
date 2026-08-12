@@ -1,5 +1,6 @@
 import {
   COLLECTION_TYPE,
+  PRODUCT_BRAND_TYPE,
   PRODUCT_INVENTORY_TYPE,
 } from '@/app/modules/product/product.constant';
 
@@ -7,6 +8,9 @@ export type ICollectionType = keyof typeof COLLECTION_TYPE;
 
 export type TProductInventoryType =
   (typeof PRODUCT_INVENTORY_TYPE)[keyof typeof PRODUCT_INVENTORY_TYPE];
+
+export type TProductBrandType =
+  (typeof PRODUCT_BRAND_TYPE)[keyof typeof PRODUCT_BRAND_TYPE];
 
 export type TProductColor = {
   code: string;
@@ -33,6 +37,7 @@ export type TProductPayload = {
   inventoryType: TProductInventoryType;
   collectionType: ICollectionType;
   brand: string;
+  brandType?: TProductBrandType;
   title: string;
   description: string;
   images: string[];
@@ -63,6 +68,7 @@ export type TProductListQuery = Record<string, unknown>;
 export type TProductFilterQuery = {
   category?: string;
   brand?: string;
+  brandType?: string;
   color?: string;
   size?: string;
   collectionType?: string;

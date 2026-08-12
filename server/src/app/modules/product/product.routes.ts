@@ -38,6 +38,10 @@ router
   .get(optionalAuth, ProductController.getTrendingProducts);
 
 router
+  .route('/ai-recommended')
+  .get(optionalAuth, ProductController.getAiRecommendedProducts);
+
+router
   .route('/recently-viewed')
   .get(optionalAuth, ProductController.getRecentlyViewedProducts);
 

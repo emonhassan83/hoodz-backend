@@ -18,6 +18,20 @@ router
   .get(CategoryController.getAll);
 
 router
+  .route('/brand-type')
+  .get(
+    validateRequest(CategoryValidation.getCategoryByBrandTypeValidationSchema),
+    CategoryController.getCategoryByBrandType
+  );
+
+router
+  .route('/:categoryId/shops')
+  .get(
+    validateRequest(CategoryValidation.getCategoryByShopValidationSchema),
+    CategoryController.getCategoryByShop
+  );
+
+router
   .route('/:categoryId')
   .patch(
     auth(USER_ROLE.admin),

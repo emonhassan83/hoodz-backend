@@ -2,6 +2,7 @@ import { Model, Types } from 'mongoose';
 
 import {
   ICollectionType,
+  TProductBrandType,
   TProductInventoryType,
   TProductColor,
   TProductSeo,
@@ -16,6 +17,7 @@ export interface IProduct {
   inventoryType: TProductInventoryType;
   collectionType: ICollectionType;
   brand: string;
+  brandType: TProductBrandType;
   title: string;
   description: string;
   images: string[];

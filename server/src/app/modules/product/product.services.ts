@@ -46,6 +46,7 @@ import {
 import { getGoogleDistanceMatrix } from '@/app/modules/user/user.helpers';
 import {
   deleteCache,
+  deleteCachePattern,
   getCache,
   setCache,
 } from '@/app/redis/helpers';
@@ -62,7 +63,7 @@ const productPopulate = [
 ];
 
 const productListSelect =
-  '_id category vendorId title inventoryType collectionType images price discount discountPrice stock avgRating ratingCount createdAt';
+  '_id category vendorId title inventoryType collectionType brand brandType images price discount discountPrice stock avgRating ratingCount sold createdAt';
 
 type TProductPaginationMeta = {
   page: number;
@@ -141,6 +142,7 @@ const markProductViewed = async (
   await Promise.all([
     deleteCache(REDIS_KEYS.PRODUCT_RECENTLY_VIEWED(actorKey)),
     deleteCache(REDIS_KEYS.PRODUCT_LIST(`recently-viewed:${actorKey}:cards:v4`)),
+    deleteCachePattern(`product:list:ai-recommended:${actorKey}:*`),
   ]);
 
   return { viewed: true };
@@ -263,6 +265,186 @@ const getTrendingProducts = async (
   return result;
 };
 
+const getPagination = (query: Record<string, unknown>) => {
+  const page = Math.max(Number(query.page) || 1, 1);
+  const rawLimit = Number(query.limit ?? query.perPage) || 10;
+  const limit = Math.min(Math.max(rawLimit, 1), 50);
+  return {
+    page,
+    limit,
+    skip: (page - 1) * limit,
+  };
+};
+
+const getActorCartProductIds = async (actor: TProductActor) => {
+  const cart = await Cart.findOne(
+    actor.userId ? { userId: actor.userId } : { guestId: actor.guestId }
+  )
+    .select('items.productId')
+    .lean();
+
+  return (cart?.items ?? []).map((item: any) => item.productId.toString());
+};
+
+const getActorOrderedProductCounts = async (userId?: string) => {
+  if (!userId) return new Map<string, number>();
+
+  const orderedSignals = await Items.aggregate([
+    {
+      $lookup: {
+        from: 'orders',
+        localField: 'order',
+        foreignField: '_id',
+        as: 'order',
+      },
+    },
+    { $unwind: '$order' },
+    {
+      $match: {
+        'order.user': new mongoose.Types.ObjectId(userId),
+        'order.isDeleted': false,
+      },
+    },
+    { $group: { _id: '$product', count: { $sum: '$quantity' } } },
+  ]);
+
+  return new Map(
+    orderedSignals.map((item: any) => [item._id.toString(), item.count])
+  );
+};
+
+const getAiRecommendedProducts = async (
+  actor: TProductActor,
+  query: Record<string, unknown>
+) => {
+  const actorKey = getProductActorKey(actor);
+  const cacheKey = REDIS_KEYS.PRODUCT_LIST(
+    `ai-recommended:${actorKey}:cards:v1:${JSON.stringify(query)}`
+  );
+  const cached = await getCache<TProductListResponse>(cacheKey);
+  if (cached) return cached;
+
+  const { page, limit, skip } = getPagination(query);
+  const [
+    recentProductIds,
+    wishlistSignals,
+    cartProductIds,
+    orderedProductCounts,
+    followedVendorIds,
+  ] = await Promise.all([
+    getRecentlyViewedProductIds(actorKey),
+    actor.userId
+      ? Wishlist.find({ user: actor.userId }).select('product -_id').lean()
+      : Promise.resolve([]),
+    actor.userId || actor.guestId
+      ? getActorCartProductIds(actor)
+      : Promise.resolve([]),
+    getActorOrderedProductCounts(actor.userId),
+    getFollowedVendorIdSet(actor.userId),
+  ]);
+
+  const wishlistProductIds = wishlistSignals.map((item: any) =>
+    item.product.toString()
+  );
+  const signalProductIds = [
+    ...new Set([
+      ...recentProductIds,
+      ...wishlistProductIds,
+      ...cartProductIds,
+      ...orderedProductCounts.keys(),
+    ]),
+  ];
+
+  const signalProducts = signalProductIds.length
+    ? await Product.find({ _id: { $in: signalProductIds }, isDeleted: false })
+        .select('_id category vendorId brand brandType')
+        .lean()
+    : [];
+
+  const categoryIds = new Set(signalProducts.map((product: any) =>
+    product.category?.toString()
+  ).filter(Boolean));
+  const brands = new Set(signalProducts.map((product: any) => product.brand).filter(Boolean));
+  const brandTypes = new Set(
+    signalProducts.map((product: any) => product.brandType).filter(Boolean)
+  );
+  const signalVendorIds = new Set(
+    signalProducts.map((product: any) => product.vendorId?.toString()).filter(Boolean)
+  );
+
+  const recommendationFilter: Record<string, unknown> = { isDeleted: false };
+  const orFilters: Record<string, unknown>[] = [];
+  if (categoryIds.size > 0) orFilters.push({ category: { $in: [...categoryIds] } });
+  if (brands.size > 0) orFilters.push({ brand: { $in: [...brands] } });
+  if (brandTypes.size > 0) orFilters.push({ brandType: { $in: [...brandTypes] } });
+  if (signalVendorIds.size > 0) orFilters.push({ vendorId: { $in: [...signalVendorIds] } });
+  if (followedVendorIds.size > 0) {
+    orFilters.push({ vendorId: { $in: [...followedVendorIds] } });
+  }
+  if (orFilters.length > 0) recommendationFilter.$or = orFilters;
+
+  const candidates = await Product.find(recommendationFilter)
+    .populate(productPopulate)
+    .select(productListSelect)
+    .sort({ avgRating: -1, ratingCount: -1, sold: -1, createdAt: -1 })
+    .limit(200)
+    .lean();
+
+  const recentRank = new Map(
+    recentProductIds.map((productId, index) => [productId, index])
+  );
+  const wishlistSet = new Set(wishlistProductIds);
+  const cartSet = new Set(cartProductIds);
+  const scoredProducts = candidates
+    .map((product: any) => {
+      const productId = product._id.toString();
+      const categoryId = product.category?._id?.toString?.() ?? product.category?.toString?.();
+      const vendorId = product.vendorId?._id?.toString?.() ?? product.vendorId?.toString?.();
+      const recentIndex = recentRank.get(productId);
+      const score =
+        (wishlistSet.has(productId) ? 500 : 0) +
+        (cartSet.has(productId) ? 450 : 0) +
+        (recentIndex !== undefined ? 320 - recentIndex * 15 : 0) +
+        ((orderedProductCounts.get(productId) ?? 0) * 300) +
+        (categoryIds.has(categoryId) ? 260 : 0) +
+        (brands.has(product.brand) ? 220 : 0) +
+        (signalVendorIds.has(vendorId) ? 180 : 0) +
+        (followedVendorIds.has(vendorId) ? 240 : 0) +
+        (brandTypes.has(product.brandType) ? 100 : 0) +
+        (product.avgRating ?? 0) * 30 +
+        (product.ratingCount ?? 0) * 2 +
+        (product.sold ?? 0);
+
+      return { product, score };
+    })
+    .filter((item) => item.score > 0 || orFilters.length === 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return (
+        new Date(b.product.createdAt).getTime() -
+        new Date(a.product.createdAt).getTime()
+      );
+    });
+
+  const total = scoredProducts.length;
+  const paginatedProducts = scoredProducts
+    .slice(skip, skip + limit)
+    .map((item) => item.product);
+  const wishlistIds = await getWishlistProductIdSet(actor.userId);
+  const result = {
+    meta: {
+      page,
+      limit,
+      total,
+      totalPage: Math.ceil(total / limit),
+    },
+    data: formatProductListItems(paginatedProducts, wishlistIds),
+  };
+
+  await setCache(cacheKey, result, 180);
+  return result;
+};
+
 const getAllProduct = async (
   traceId: string,
   query: TProductListQuery,
@@ -279,6 +461,7 @@ const getAllProduct = async (
   const minPrice = toNumber(productQuery.minPrice ?? productQuery.minimumPrice);
   const maxPrice = toNumber(productQuery.maxPrice ?? productQuery.maximumPrice);
   const brands = toStringArray(productQuery.brand);
+  const brandTypes = toStringArray(productQuery.brandType);
   const colors = toStringArray(productQuery.color);
   const sizes = toStringArray(productQuery.size);
   const gender = productQuery.gender || productQuery.collectionType;
@@ -286,6 +469,7 @@ const getAllProduct = async (
   if (productQuery.category) filter.category = productQuery.category;
   if (gender && gender !== 'all') filter.collectionType = gender;
   if (brands.length > 0) filter.brand = { $in: brands };
+  if (brandTypes.length > 0) filter.brandType = { $in: brandTypes };
   if (colors.length > 0) filter['colors.name'] = { $in: colors };
   if (sizes.length > 0) filter.sizes = { $in: sizes };
   if (minPrice !== undefined || maxPrice !== undefined) {
@@ -682,6 +866,7 @@ export const ProductService = {
   markProductViewed,
   getRecentlyViewedProducts,
   getTrendingProducts,
+  getAiRecommendedProducts,
   createProduct,
   createProductByAdmin,
   getAllProduct,

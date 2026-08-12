@@ -27,6 +27,7 @@ import {
   getWishlistProductIds,
   syncWishlistProductIds,
 } from '@/app/redis/helpers/wishlist';
+import { REDIS_KEYS } from '@/app/redis/keys';
 import { sendNotificationViaQueue } from '@/app/utils/notification-queue.service';
 
 export const toNumber = (value: unknown) => {
@@ -371,7 +372,10 @@ export const generateUniqueSku = async () => {
 
 /** Clears product list/detail caches after product or wishlist writes. */
 export const invalidateProductCaches = async () => {
-  await deleteCachePattern('product:*');
+  await Promise.all([
+    deleteCachePattern('product:*'),
+    deleteCachePattern(`${REDIS_KEYS.CATEGORY_LIST}*`),
+  ]);
 };
 
 /** Loads a user's wishlist ids from Redis and hydrates from MongoDB on miss. */
@@ -420,6 +424,8 @@ export const formatProductListItem = (
     title: product.title,
     inventoryType: product.inventoryType,
     collectionType: product.collectionType,
+    brand: product.brand,
+    brandType: product.brandType,
     images: product.images ?? [],
     price: product.price ?? 0,
     discount: product.discount ?? 0,

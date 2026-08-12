@@ -30,6 +30,46 @@ const getAll = asyncHandler(async (_req: Request, res: Response) => {
   });
 });
 
+const getCategoryByBrandType = asyncHandler(
+  async (req: Request, res: Response) => {
+    const traceId = getTraceId();
+    const data = await CategoryService.getCategoryByBrandType(
+      traceId,
+      req.query.brandType as string
+    );
+
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: 'Brand type categories fetched successfully',
+      data,
+      traceId,
+    });
+  }
+);
+
+const getCategoryByShop = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await CategoryService.getCategoryByShop(
+    traceId,
+    req.params.categoryId as string,
+    {
+      brandType:
+        typeof req.query.brandType === 'string'
+          ? req.query.brandType
+          : undefined,
+    }
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Category shops fetched successfully',
+    data,
+    traceId,
+  });
+});
+
 const updateA = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await CategoryService.updateA(
@@ -66,6 +106,8 @@ const deleteA = asyncHandler(async (req: Request, res: Response) => {
 export const CategoryController = {
   create,
   getAll,
+  getCategoryByBrandType,
+  getCategoryByShop,
   updateA,
   deleteA,
 };

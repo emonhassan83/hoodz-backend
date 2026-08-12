@@ -2,6 +2,7 @@ import { Schema, model } from 'mongoose';
 
 import {
   COLLECTION_TYPE,
+  PRODUCT_BRAND_TYPE,
   PRODUCT_INVENTORY_TYPE,
 } from '@/app/modules/product/product.constant';
 import {
@@ -85,6 +86,12 @@ const productSchema = new Schema<IProduct, IProductModel>(
       required: true,
     },
     brand: { type: String, required: true, trim: true },
+    brandType: {
+      type: String,
+      enum: Object.values(PRODUCT_BRAND_TYPE),
+      default: PRODUCT_BRAND_TYPE.local,
+      index: true,
+    },
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true, trim: true },
     images: { type: [String], required: true, default: [] },
@@ -111,6 +118,7 @@ const productSchema = new Schema<IProduct, IProductModel>(
 
 productSchema.index({ vendorId: 1, isDeleted: 1, createdAt: -1 });
 productSchema.index({ category: 1, isDeleted: 1 });
+productSchema.index({ brandType: 1, category: 1, vendorId: 1, isDeleted: 1 });
 productSchema.index({
   avgRating: -1,
   ratingCount: -1,
