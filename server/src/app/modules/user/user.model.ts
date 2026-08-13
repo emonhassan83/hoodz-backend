@@ -18,7 +18,7 @@ const userSchema = new Schema<IUser, IUserModal>(
       unique: true,
       default: () => generateCryptoString(4),
     },
-    refferalCode: {
+    referralCode: {
       type: String,
       unique: true,
       index: true,

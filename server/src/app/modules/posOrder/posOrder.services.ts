@@ -18,7 +18,7 @@ import { deleteCachePattern } from '@/app/redis/helpers';
 const posOrderPopulate = [
   { path: 'soldBy', select: 'name email phone profileAvatar role' },
   { path: 'shop', select: 'name email phone profileAvatar coverPhoto' },
-  { path: 'items.product', select: 'title images sku price discountPrice inventoryType stock variants vendorId' },
+  { path: 'items.product', select: 'title images sku price discountPrice inventoryType stock variants vendor' },
 ];
 
 /** Creates a POS order and decrements product inventory in one transaction. */

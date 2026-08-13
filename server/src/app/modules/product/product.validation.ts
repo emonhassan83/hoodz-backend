@@ -90,11 +90,11 @@ const baseProductSchema = {
   sku: z.string().trim().min(1, 'SKU is required'),
   inventoryType: inventoryTypeSchema,
   collectionType: z.enum(Object.values(COLLECTION_TYPE) as [string, ...string[]]),
-  brand: z.string().trim().min(1, 'Brand is required'),
   brandType: brandTypeSchema.default(PRODUCT_BRAND_TYPE.local),
   title: z.string().trim().min(1, 'Title is required'),
   description: z.string().trim().min(1, 'Description is required'),
-  images: z.array(z.string().trim().min(1)).min(1, 'At least one image is required'),
+  banner: z.string().trim().min(1).nullable().optional(),
+  images: z.array(z.string().trim().min(1)).optional(),
   price: z.number().nonnegative(),
   discount: z.number().min(0).max(100).default(0),
   stock: z.number().int().nonnegative().optional(),
@@ -109,7 +109,7 @@ const createProductValidationSchema = z.object({
 const createProductByAdminValidationSchema = z.object({
   body: z
     .object({
-      vendorId: objectIdSchema,
+      vendor: objectIdSchema,
       ...baseProductSchema,
     })
     .strip()
@@ -125,11 +125,11 @@ const updateProductValidationSchema = z.object({
       collectionType: z
         .enum(Object.values(COLLECTION_TYPE) as [string, ...string[]])
         .optional(),
-      brand: z.string().trim().min(1, 'Brand is required').optional(),
       brandType: brandTypeSchema.optional(),
       title: z.string().trim().min(1, 'Title is required').optional(),
       description: z.string().trim().min(1, 'Description is required').optional(),
-      images: z.array(z.string().trim().min(1)).min(1).optional(),
+      banner: z.string().trim().min(1).nullable().optional(),
+      images: z.array(z.string().trim().min(1)).optional(),
       price: z.number().nonnegative().optional(),
       discount: z.number().min(0).max(100).optional(),
       stock: z.number().int().nonnegative().optional(),

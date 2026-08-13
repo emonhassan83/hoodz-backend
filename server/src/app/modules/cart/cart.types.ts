@@ -36,7 +36,7 @@ export type TRemoveCartItemPayload = TCartItemIdentity;
 export type TEnrichedCartItem = TCartItem & {
   product: {
     _id: Types.ObjectId;
-    vendorId: Types.ObjectId;
+    vendor: Types.ObjectId;
     title: string;
     images: string[];
     inventoryType: string;

@@ -206,6 +206,11 @@ const getShopDetails = async (
   },
   userId?: string
 ) => {
+  const toNumber = (value: unknown) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
   const vendor = await User.findOne({
     _id: vendorId,
     role: USER_ROLE.vendor,
@@ -222,8 +227,8 @@ const getShopDetails = async (
   }
 
   const [longitude, latitude] = vendor.location?.coordinates ?? [0, 0];
-  const queryLatitude = query.latitude ?? query.lat;
-  const queryLongitude = query.longitude ?? query.lng ?? query.lang;
+  const queryLatitude = toNumber(query.latitude ?? query.lat);
+  const queryLongitude = toNumber(query.longitude ?? query.lng ?? query.lang);
   let origin =
     queryLatitude !== undefined && queryLongitude !== undefined
       ? { latitude: queryLatitude, longitude: queryLongitude }
@@ -291,7 +296,7 @@ const getShopDetails = async (
 
   const [categories, policies, followedVendorIds] = await Promise.all([
     Product.aggregate([
-      { $match: { vendorId: new mongoose.Types.ObjectId(vendorId), isDeleted: false } },
+      { $match: { vendor: new mongoose.Types.ObjectId(vendorId), isDeleted: false } },
       { $group: { _id: '$category', productCount: { $sum: 1 } } },
       {
         $lookup: {
@@ -314,8 +319,27 @@ const getShopDetails = async (
     getFollowedVendorIdSet(userId),
   ]);
 
+  const shop = withFollowingFlag(
+    {
+      _id: vendor._id,
+      name: vendor.name,
+      profileAvatar: vendor.profileAvatar,
+      coverPhoto: vendor.coverPhoto ?? null,
+      description: vendor.description,
+      phone: vendor.phone,
+      location: vendor.location,
+      id: vendor.id,
+      createdAt: vendor.createdAt,
+      followers: vendor.followers,
+      address: vendor.address,
+      avgRating: vendor.avgRating,
+      ratingCount: vendor.ratingCount,
+    },
+    followedVendorIds
+  );
+
   return {
-    shop: withFollowingFlag(vendor, followedVendorIds),
+    shop,
     distance,
     categories,
     policies,

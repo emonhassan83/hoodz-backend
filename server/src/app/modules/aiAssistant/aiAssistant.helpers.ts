@@ -42,7 +42,6 @@ export const normalizeIntent = (
   intent: intent.intent || AI_INTENT.general,
   searchQuery: intent.searchQuery || fallbackMessage,
   category: intent.category ?? null,
-  brand: intent.brand ?? null,
   colors: Array.isArray(intent.colors) ? intent.colors : [],
   sizes: Array.isArray(intent.sizes) ? intent.sizes : [],
   minPrice: typeof intent.minPrice === 'number' ? intent.minPrice : null,
@@ -173,7 +172,7 @@ export const buildIntentMessages = (message: string): TAiChatMessage[] => [
   {
     role: 'system',
     content:
-      'You are Hoodz Backend ecommerce AI. Extract product search intent only. Return ONLY valid JSON. No markdown. JSON shape: {"intent":"product_search|product_compare|styling_advice|policy_question|general","searchQuery":"","category":null,"brand":null,"colors":[],"sizes":[],"minPrice":null,"maxPrice":null,"collectionType":"men|woman|unisex|null"}. Use null when unknown.',
+      'You are Hoodz Backend ecommerce AI. Extract product search intent only. Return ONLY valid JSON. No markdown. JSON shape: {"intent":"product_search|product_compare|styling_advice|policy_question|general","searchQuery":"","category":null,"colors":[],"sizes":[],"minPrice":null,"maxPrice":null,"collectionType":"men|woman|unisex|null"}. Use null when unknown.',
   },
   { role: 'user', content: message },
 ];

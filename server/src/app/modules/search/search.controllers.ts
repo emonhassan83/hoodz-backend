@@ -49,9 +49,9 @@ const getAllIntoDB = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const actor = getSearchActorFromRequest(req);
   const result = (await SearchService.getAllIntoDB(req.query, actor)) as {
-    popularCategories?: unknown;
+    categories?: unknown;
     featuredVendors?: unknown;
-    searchHistory?: unknown;
+    histories?: unknown;
     meta: unknown;
   };
 
@@ -60,9 +60,9 @@ const getAllIntoDB = asyncHandler(async (req: Request, res: Response) => {
     statusCode: 200,
     message: 'Search history fetched successfully',
     data: {
-      popularCategories: result.popularCategories ?? [],
+      categories: result.categories ?? [],
       featuredVendors: result.featuredVendors ?? [],
-      searchHistory: result.searchHistory ?? [],
+      histories: result.histories ?? [],
     },
     meta: result.meta,
     traceId,

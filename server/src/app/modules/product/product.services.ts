@@ -58,12 +58,12 @@ import {
 import { REDIS_KEYS } from '@/app/redis/keys';
 
 const productPopulate = [
-  { path: 'vendorId', select: 'name email phone profileAvatar address location' },
+  { path: 'vendor', select: 'name email phone profileAvatar address location' },
   { path: 'category', select: 'title icon' },
 ];
 
 const productListSelect =
-  '_id category vendorId title inventoryType collectionType brand brandType images price discount discountPrice stock avgRating ratingCount sold createdAt';
+  '_id category vendor title inventoryType collectionType brandType banner price discount discountPrice stock avgRating ratingCount sold createdAt';
 
 type TProductPaginationMeta = {
   page: number;
@@ -93,7 +93,7 @@ const getProductActorKey = (actor: TProductActor) => {
 
 const createProduct = async (
   traceId: string,
-  vendorId: string,
+  vendor: string,
   payload: TProductPayload
 ) => {
   await Promise.all([
@@ -104,7 +104,7 @@ const createProduct = async (
 
   const product = await Product.create({
     ...buildProductWritePayload(payload),
-    vendorId,
+    vendor,
   });
 
   await invalidateProductCaches();
@@ -121,10 +121,10 @@ const createProductByAdmin = async (
   traceId: string,
   payload: TAdminProductPayload
 ) => {
-  const { vendorId, ...productPayload } = payload;
-  await assertVendorExists(traceId, vendorId);
+  const { vendor, ...productPayload } = payload;
+  await assertVendorExists(traceId, vendor);
 
-  return createProduct(traceId, vendorId, productPayload);
+  return createProduct(traceId, vendor, productPayload);
 };
 
 const generateSku = async () => ({
@@ -357,29 +357,27 @@ const getAiRecommendedProducts = async (
 
   const signalProducts = signalProductIds.length
     ? await Product.find({ _id: { $in: signalProductIds }, isDeleted: false })
-        .select('_id category vendorId brand brandType')
+        .select('_id category vendor brandType')
         .lean()
     : [];
 
   const categoryIds = new Set(signalProducts.map((product: any) =>
     product.category?.toString()
   ).filter(Boolean));
-  const brands = new Set(signalProducts.map((product: any) => product.brand).filter(Boolean));
   const brandTypes = new Set(
     signalProducts.map((product: any) => product.brandType).filter(Boolean)
   );
   const signalVendorIds = new Set(
-    signalProducts.map((product: any) => product.vendorId?.toString()).filter(Boolean)
+    signalProducts.map((product: any) => product.vendor?.toString()).filter(Boolean)
   );
 
   const recommendationFilter: Record<string, unknown> = { isDeleted: false };
   const orFilters: Record<string, unknown>[] = [];
   if (categoryIds.size > 0) orFilters.push({ category: { $in: [...categoryIds] } });
-  if (brands.size > 0) orFilters.push({ brand: { $in: [...brands] } });
   if (brandTypes.size > 0) orFilters.push({ brandType: { $in: [...brandTypes] } });
-  if (signalVendorIds.size > 0) orFilters.push({ vendorId: { $in: [...signalVendorIds] } });
+  if (signalVendorIds.size > 0) orFilters.push({ vendor: { $in: [...signalVendorIds] } });
   if (followedVendorIds.size > 0) {
-    orFilters.push({ vendorId: { $in: [...followedVendorIds] } });
+    orFilters.push({ vendor: { $in: [...followedVendorIds] } });
   }
   if (orFilters.length > 0) recommendationFilter.$or = orFilters;
 
@@ -399,7 +397,7 @@ const getAiRecommendedProducts = async (
     .map((product: any) => {
       const productId = product._id.toString();
       const categoryId = product.category?._id?.toString?.() ?? product.category?.toString?.();
-      const vendorId = product.vendorId?._id?.toString?.() ?? product.vendorId?.toString?.();
+      const vendorId = product.vendor?._id?.toString?.() ?? product.vendor?.toString?.();
       const recentIndex = recentRank.get(productId);
       const score =
         (wishlistSet.has(productId) ? 500 : 0) +
@@ -407,7 +405,6 @@ const getAiRecommendedProducts = async (
         (recentIndex !== undefined ? 320 - recentIndex * 15 : 0) +
         ((orderedProductCounts.get(productId) ?? 0) * 300) +
         (categoryIds.has(categoryId) ? 260 : 0) +
-        (brands.has(product.brand) ? 220 : 0) +
         (signalVendorIds.has(vendorId) ? 180 : 0) +
         (followedVendorIds.has(vendorId) ? 240 : 0) +
         (brandTypes.has(product.brandType) ? 100 : 0) +
@@ -460,7 +457,6 @@ const getAllProduct = async (
   const filter: Record<string, unknown> = { isDeleted: false };
   const minPrice = toNumber(productQuery.minPrice ?? productQuery.minimumPrice);
   const maxPrice = toNumber(productQuery.maxPrice ?? productQuery.maximumPrice);
-  const brands = toStringArray(productQuery.brand);
   const brandTypes = toStringArray(productQuery.brandType);
   const colors = toStringArray(productQuery.color);
   const sizes = toStringArray(productQuery.size);
@@ -468,7 +464,6 @@ const getAllProduct = async (
 
   if (productQuery.category) filter.category = productQuery.category;
   if (gender && gender !== 'all') filter.collectionType = gender;
-  if (brands.length > 0) filter.brand = { $in: brands };
   if (brandTypes.length > 0) filter.brandType = { $in: brandTypes };
   if (colors.length > 0) filter['colors.name'] = { $in: colors };
   if (sizes.length > 0) filter.sizes = { $in: sizes };
@@ -486,7 +481,7 @@ const getAllProduct = async (
       .lean(),
     query
   )
-    .search(['title', 'brand', 'sku'])
+    .search(['title', 'sku'])
     .sort()
     .paginate();
 
@@ -514,7 +509,7 @@ const getAllProduct = async (
 
     const vendorCoordinateById = new Map<string, { latitude: number; longitude: number }>();
     products.forEach((product: any) => {
-      const vendor = product.vendorId;
+      const vendor = product.vendor;
       const coordinates = vendor?.location?.coordinates;
       if (!vendor?._id || !coordinates || coordinates.every((item: number) => item === 0)) {
         return;
@@ -549,7 +544,7 @@ const getAllProduct = async (
     );
 
     products = products.filter((product: any) => {
-      const vendorId = product.vendorId?._id?.toString();
+      const vendorId = product.vendor?._id?.toString();
       const delivery = vendorId ? distanceByVendorId.get(vendorId) : null;
       if (!delivery) return false;
 
@@ -572,10 +567,10 @@ const getAllProduct = async (
   const sortedProducts = followedVendorIds.size
     ? [...products].sort((a: any, b: any) => {
         const aFollowed = followedVendorIds.has(
-          a.vendorId?._id?.toString() ?? a.vendorId?.toString()
+          a.vendor?._id?.toString() ?? a.vendor?.toString()
         );
         const bFollowed = followedVendorIds.has(
-          b.vendorId?._id?.toString() ?? b.vendorId?.toString()
+          b.vendor?._id?.toString() ?? b.vendor?.toString()
         );
 
         return Number(bFollowed) - Number(aFollowed);
@@ -609,7 +604,7 @@ const getShopProducts = async (
   }>(cacheKey);
   if (cached) return cached;
 
-  const baseFilter = { vendorId, isDeleted: false };
+  const baseFilter = { vendor: vendorId, isDeleted: false };
   const allProductsQuery = new QueryBuilder(
     Product.find(baseFilter)
       .populate(productPopulate)
@@ -718,13 +713,13 @@ const getMyProducts = async (
   if (cached) return cached;
 
   const productQuery = new QueryBuilder(
-    Product.find({ vendorId, isDeleted: false })
+    Product.find({ vendor: vendorId, isDeleted: false })
       .populate(productPopulate)
       .select(productListSelect)
       .lean(),
     query
   )
-    .search(['title', 'brand', 'sku'])
+    .search(['title', 'sku'])
     .filter()
     .sort()
     .paginate();
@@ -732,7 +727,7 @@ const getMyProducts = async (
   const [products, meta, statsProducts] = await Promise.all([
     productQuery.modelQuery,
     productQuery.countTotal(),
-    Product.find({ vendorId, isDeleted: false })
+    Product.find({ vendor: vendorId, isDeleted: false })
       .populate([{ path: 'category', select: 'title' }])
       .select('category price discountPrice stock')
       .lean(),

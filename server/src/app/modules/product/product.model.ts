@@ -54,7 +54,7 @@ const seoSchema = new Schema(
 
 const productSchema = new Schema<IProduct, IProductModel>(
   {
-    vendorId: {
+    vendor: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
@@ -85,7 +85,6 @@ const productSchema = new Schema<IProduct, IProductModel>(
       enum: Object.values(COLLECTION_TYPE),
       required: true,
     },
-    brand: { type: String, required: true, trim: true },
     brandType: {
       type: String,
       enum: Object.values(PRODUCT_BRAND_TYPE),
@@ -94,7 +93,8 @@ const productSchema = new Schema<IProduct, IProductModel>(
     },
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true, trim: true },
-    images: { type: [String], required: true, default: [] },
+    banner: { type: String, default: null, trim: true },
+    images: { type: [String], default: [] },
     price: { type: Number, required: true, min: 0 },
     discount: { type: Number, required: true, min: 0, max: 100, default: 0 },
     discountPrice: { type: Number, required: true, min: 0, default: 0 },
@@ -116,9 +116,9 @@ const productSchema = new Schema<IProduct, IProductModel>(
   }
 );
 
-productSchema.index({ vendorId: 1, isDeleted: 1, createdAt: -1 });
+productSchema.index({ vendor: 1, isDeleted: 1, createdAt: -1 });
 productSchema.index({ category: 1, isDeleted: 1 });
-productSchema.index({ brandType: 1, category: 1, vendorId: 1, isDeleted: 1 });
+productSchema.index({ brandType: 1, category: 1, vendor: 1, isDeleted: 1 });
 productSchema.index({
   avgRating: -1,
   ratingCount: -1,

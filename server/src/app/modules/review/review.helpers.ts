@@ -15,12 +15,12 @@ export const resolveReviewAuthorOrThrow = async (
     const product = await Product.findOne({
       _id: payload.reference,
       isDeleted: false,
-    }).select('vendorId');
+    }).select('vendor');
     if (!product) {
       throw new ApiError(HttpStatusCode.NotFound, 'Product not found', traceId);
     }
 
-    return product.vendorId;
+    return product.vendor;
   }
 
   const job = await Job.findById(payload.reference).select('rider');

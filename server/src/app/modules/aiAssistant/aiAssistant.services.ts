@@ -27,7 +27,7 @@ import { Product } from '@/app/modules/product/product.model';
 
 const productPopulate = [{ path: 'category', select: 'title icon' }];
 const productSelect =
-  '_id category title inventoryType collectionType images price discount discountPrice stock avgRating ratingCount brand colors sizes';
+  '_id category title inventoryType collectionType banner price discount discountPrice stock avgRating ratingCount colors sizes';
 
 /** Finds or creates the authenticated user's AI assistant chat. */
 const resolveAiChat = async (
@@ -67,12 +67,10 @@ const buildProductFilterFromIntent = (intent: TAiIntentResult) => {
     const regex = new RegExp(escapeRegex(searchTerm), 'i');
     filter.$or = [
       { title: regex },
-      { brand: regex },
       { description: regex },
       { 'seo.metaKeywords': regex },
     ];
   }
-  if (intent.brand) filter.brand = new RegExp(escapeRegex(intent.brand), 'i');
   if (intent.collectionType) filter.collectionType = intent.collectionType;
   if (intent.colors?.length) {
     filter['colors.name'] = {

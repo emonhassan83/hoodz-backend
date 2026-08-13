@@ -21,7 +21,6 @@ export type TSearchActor = {
 export type TSearchQuery = {
   searchTerm?: string;
   category?: string;
-  brand?: string;
   collectionType?: string;
   size?: string;
   color?: string;
@@ -39,12 +38,11 @@ export type TInsertSearchPayload = {
 export type TTypesenseProductDocument = {
   id: string;
   title: string;
-  brand: string;
   description: string;
   sku: string;
   categoryId: string;
   categoryTitle: string;
-  vendorId: string;
+  vendor: string;
   vendorName: string;
   collectionType: string;
   images: string[];

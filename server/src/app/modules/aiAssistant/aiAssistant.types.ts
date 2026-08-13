@@ -28,7 +28,6 @@ export type TAiIntentResult = {
   intent: TAiIntent;
   searchQuery: string;
   category?: string | null;
-  brand?: string | null;
   colors?: string[];
   sizes?: string[];
   minPrice?: number | null;
@@ -42,7 +41,7 @@ export type TAiProductCard = {
   title: string;
   inventoryType: string;
   collectionType: string;
-  images: string[];
+  banner?: string | null;
   price: number;
   discount: number;
   discountPrice: number;

@@ -13,12 +13,11 @@ const productSchema = {
   name: PRODUCT_COLLECTION,
   fields: [
     { name: 'title', type: 'string' },
-    { name: 'brand', type: 'string', facet: true },
     { name: 'description', type: 'string' },
     { name: 'sku', type: 'string' },
     { name: 'categoryId', type: 'string', facet: true },
     { name: 'categoryTitle', type: 'string', facet: true },
-    { name: 'vendorId', type: 'string', facet: true },
+    { name: 'vendor', type: 'string', facet: true },
     { name: 'vendorName', type: 'string' },
     { name: 'collectionType', type: 'string', facet: true },
     { name: 'images', type: 'string[]' },
@@ -60,13 +59,12 @@ export const ensureTypesenseCollections = async () => {
 export const buildTypesenseProductDocument = (product: any): TTypesenseProductDocument => ({
   id: product._id.toString(),
   title: product.title ?? '',
-  brand: product.brand ?? '',
   description: product.description ?? '',
   sku: product.sku ?? '',
   categoryId: product.category?._id?.toString() ?? product.category?.toString() ?? '',
   categoryTitle: product.category?.title ?? '',
-  vendorId: product.vendorId?._id?.toString() ?? product.vendorId?.toString() ?? '',
-  vendorName: product.vendorId?.name ?? '',
+  vendor: product.vendor?._id?.toString() ?? product.vendor?.toString() ?? '',
+  vendorName: product.vendor?.name ?? '',
   collectionType: product.collectionType ?? '',
   images: product.images ?? [],
   sizes: product.sizes ?? [],
@@ -91,7 +89,7 @@ export const upsertProductToTypesense = async (productId: string) => {
   await ensureTypesenseCollections();
   const product = await Product.findOne({ _id: productId, isDeleted: false })
     .populate([
-      { path: 'vendorId', select: 'name' },
+      { path: 'vendor', select: 'name' },
       { path: 'category', select: 'title' },
     ])
     .lean();
@@ -133,7 +131,7 @@ export const reindexTypesense = async () => {
 
   const products = await Product.find({ isDeleted: false })
     .populate([
-      { path: 'vendorId', select: 'name' },
+      { path: 'vendor', select: 'name' },
       { path: 'category', select: 'title' },
     ])
     .lean();
@@ -157,7 +155,6 @@ const buildProductFilter = (query: TSearchQuery) => {
   const filters: string[] = ['inStock:=true'];
 
   if (query.category) filters.push(`categoryId:=${query.category}`);
-  if (query.brand) filters.push(`brand:=${JSON.stringify(query.brand)}`);
   if (query.collectionType) filters.push(`collectionType:=${query.collectionType}`);
   if (query.size) filters.push(`sizes:=${JSON.stringify(query.size)}`);
   if (query.color) filters.push(`colors:=${JSON.stringify(query.color)}`);
@@ -190,14 +187,14 @@ export const searchTypesense = async (
     path: `/collections/${PRODUCT_COLLECTION}/documents/search`,
     params: {
       q: searchTerm,
-      query_by: 'title,brand,categoryTitle,vendorName,seoKeywords,description,sku',
-      query_by_weights: '8,5,4,3,3,1,1',
+      query_by: 'title,categoryTitle,vendorName,seoKeywords,description,sku',
+      query_by_weights: '8,4,3,3,1,1',
       filter_by: buildProductFilter(query),
-      facet_by: 'brand,categoryTitle,sizes,colors,collectionType,inStock',
+      facet_by: 'categoryTitle,sizes,colors,collectionType,inStock',
       sort_by: resolveSortBy(query.sortBy),
       page: 1,
       per_page: SEARCH_SUGGESTION_SOURCE_LIMIT,
-      num_typos: '2,1,1,1,1,1,0',
+      num_typos: '2,1,1,1,1,0',
       prefix: true,
     },
   });

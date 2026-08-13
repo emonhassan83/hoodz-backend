@@ -331,10 +331,10 @@ export const assertProductExists = (product: unknown, traceId: string) => {
 /** Allows only admins or owning vendors to mutate a product. */
 export const assertProductAccess = (
   traceId: string,
-  product: { vendorId: Types.ObjectId },
+  product: { vendor: Types.ObjectId },
   requester: { userId: string; role: string }
 ) => {
-  const isOwner = product.vendorId.toString() === requester.userId;
+  const isOwner = product.vendor.toString() === requester.userId;
   const isAdmin = requester.role === USER_ROLE.admin;
 
   if (!isOwner && !isAdmin) {
@@ -413,20 +413,22 @@ export const formatProductListItem = (
   product: Record<string, any>,
   wishlistIds: Set<string>
 ) => {
-  const categoryTitle =
+  const category =
     product.category && typeof product.category === 'object'
-      ? product.category.title
-      : undefined;
+      ? {
+          _id: product.category._id,
+          title: product.category.title,
+        }
+      : product.category;
 
   return {
     _id: product._id,
-    categoryTitle,
+    category,
     title: product.title,
     inventoryType: product.inventoryType,
     collectionType: product.collectionType,
-    brand: product.brand,
     brandType: product.brandType,
-    images: product.images ?? [],
+    banner: product.banner ?? null,
     price: product.price ?? 0,
     discount: product.discount ?? 0,
     discountPrice: product.discountPrice ?? product.price ?? 0,

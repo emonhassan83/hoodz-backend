@@ -21,7 +21,7 @@ type TDeliveryChargeSetting = {
 /** Groups cart items by product vendor/author for multi-vendor checkout. */
 export const groupCartItemsByAuthor = (items: TEnrichedCartItem[]) =>
   items.reduce<Map<string, TEnrichedCartItem[]>>((groupedItems, item) => {
-    const authorId = item.product.vendorId.toString();
+    const authorId = item.product.vendor.toString();
     const existingItems = groupedItems.get(authorId) ?? [];
     groupedItems.set(authorId, [...existingItems, item]);
     return groupedItems;
@@ -86,7 +86,7 @@ export const resolveCheckoutItemsOrThrow = async (
   const products = await Product.find({
     _id: { $in: items.map((item) => item.product) },
     isDeleted: false,
-  }).select('vendorId title images price discount discountPrice stock inventoryType variants');
+  }).select('vendor title images price discount discountPrice stock inventoryType variants');
 
   const productById = new Map(
     products.map((product) => [product._id.toString(), product])
@@ -149,7 +149,7 @@ export const resolveCheckoutItemsOrThrow = async (
       quantity: item.quantity,
       product: {
         _id: product._id,
-        vendorId: product.vendorId,
+        vendor: product.vendor,
         title: product.title,
         images: product.images,
         inventoryType: product.inventoryType,

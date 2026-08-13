@@ -36,11 +36,11 @@ export type TProductPayload = {
   sku: string;
   inventoryType: TProductInventoryType;
   collectionType: ICollectionType;
-  brand: string;
   brandType?: TProductBrandType;
   title: string;
   description: string;
-  images: string[];
+  banner?: string | null;
+  images?: string[];
   price: number;
   discount?: number;
   stock?: number;
@@ -49,7 +49,7 @@ export type TProductPayload = {
 };
 
 export type TAdminProductPayload = TProductPayload & {
-  vendorId: string;
+  vendor: string;
 };
 
 export type TProductVariantSummary = {
@@ -67,7 +67,6 @@ export type TProductListQuery = Record<string, unknown>;
 
 export type TProductFilterQuery = {
   category?: string;
-  brand?: string;
   brandType?: string;
   color?: string;
   size?: string;

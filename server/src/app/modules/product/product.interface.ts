@@ -11,15 +11,15 @@ import {
 
 export interface IProduct {
   _id: Types.ObjectId;
-  vendorId: Types.ObjectId;
+  vendor: Types.ObjectId;
   category: Types.ObjectId;
   sku: string;
   inventoryType: TProductInventoryType;
   collectionType: ICollectionType;
-  brand: string;
   brandType: TProductBrandType;
   title: string;
   description: string;
+  banner?: string | null;
   images: string[];
   price: number;
   discount: number;

@@ -116,9 +116,8 @@ export const findShopsByCategory = (
     { $match: match },
     {
       $group: {
-        _id: '$vendorId',
+        _id: '$vendor',
         productCount: { $sum: 1 },
-        brands: { $addToSet: '$brand' },
         brandTypes: { $addToSet: '$brandType' },
       },
     },
@@ -152,7 +151,6 @@ export const findShopsByCategory = (
         ratingCount: '$shop.ratingCount',
         followers: '$shop.followers',
         productCount: 1,
-        brands: 1,
         brandTypes: 1,
       },
     },

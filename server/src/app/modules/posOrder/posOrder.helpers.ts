@@ -48,7 +48,7 @@ export const decrementPosItemStockOrThrow = async (
 ) => {
   const product = await Product.findOne({
     _id: item.product,
-    vendorId: shopId,
+    vendor: shopId,
     isDeleted: false,
   }).session(session);
   if (!product) {

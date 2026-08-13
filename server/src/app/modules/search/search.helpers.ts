@@ -80,14 +80,14 @@ export const invalidateSearchActorCache = async (actor: TSearchActor) => {
 
 /** Builds title phrase suggestions from matched product-like documents. */
 export const buildProductSuggestions = (
-  products: Array<{ title?: string; brand?: string }>,
+  products: Array<{ title?: string }>,
   limit = 8
 ) => {
   const seen = new Set<string>();
   const suggestions: Array<{ query: string; resultCount: number }> = [];
 
   for (const product of products) {
-    const phrases = [product.title, [product.brand, product.title].filter(Boolean).join(' ')];
+    const phrases = [product.title];
     for (const phrase of phrases) {
       if (!phrase) continue;
       const query = phrase.trim().replace(/\s+/g, ' ');

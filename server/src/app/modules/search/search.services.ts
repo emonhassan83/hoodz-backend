@@ -2,7 +2,6 @@ import { HttpStatusCode } from 'axios';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
-import { getFollowedVendorIdSet, withFollowingFlag } from '@/app/modules/follow/follow.helpers';
 import { Product } from '@/app/modules/product/product.model';
 import {
   assertSearchActorExists,
@@ -76,9 +75,21 @@ const addDistanceToFeaturedVendors = async (
   query: Record<string, unknown>,
   vendors: Array<{ _id: unknown } & Record<string, any>>
 ): Promise<Array<{ _id: unknown } & Record<string, any>>> => {
+  const toVendorCard = (
+    vendor: Record<string, any>,
+    distance: null | { distanceKm: number; durationMinutes: number | null }
+  ) => ({
+    _id: vendor._id,
+    name: vendor.name,
+    profileAvatar: vendor.profileAvatar,
+    avgRating: vendor.avgRating ?? 0,
+    ratingCount: vendor.ratingCount ?? 0,
+    distance,
+  });
+
   const origin = await getSearchOrigin(actor, query);
   if (!origin) {
-    return vendors.map((vendor) => ({ ...vendor, distance: null }));
+    return vendors.map((vendor) => toVendorCard(vendor, null));
   }
 
   const vendorsWithCoordinates = vendors.map((vendor) => {
@@ -108,7 +119,7 @@ const addDistanceToFeaturedVendors = async (
   let googleIndex = 0;
   return vendorsWithCoordinates.map((vendor) => {
     const { coordinate, ...vendorData } = vendor;
-    if (!coordinate) return { ...vendorData, distance: null };
+    if (!coordinate) return toVendorCard(vendorData, null);
 
     const element = googleElements[googleIndex++];
     const fallbackDistanceKm = Number(
@@ -123,21 +134,7 @@ const addDistanceToFeaturedVendors = async (
         ? Math.ceil(element.duration.value / 60)
         : null;
 
-    return {
-      ...vendorData,
-      distance: {
-        distanceKm,
-        distanceText:
-          element?.status === 'OK' && element.distance?.text
-            ? element.distance.text
-            : `${distanceKm} km`,
-        durationMinutes,
-        durationText:
-          element?.status === 'OK' && element.duration?.text
-            ? element.duration.text
-            : null,
-      },
-    };
+    return toVendorCard(vendorData, { distanceKm, durationMinutes });
   });
 };
 
@@ -173,7 +170,6 @@ const searchDataIntoDB = async (
     ...(query.inStock === false || query.inStock === 'false'
       ? {}
       : { stock: { $gt: 0 } }),
-    ...(query.brand ? { brand: query.brand } : {}),
     ...(query.collectionType ? { collectionType: query.collectionType } : {}),
     ...(query.category ? { category: query.category } : {}),
     ...(query.size ? { sizes: query.size } : {}),
@@ -188,7 +184,6 @@ const searchDataIntoDB = async (
       : {}),
     $or: [
       { title: searchRegex },
-      { brand: searchRegex },
       { description: searchRegex },
       { sku: searchRegex },
       { 'seo.metaKeywords': searchRegex },
@@ -196,7 +191,7 @@ const searchDataIntoDB = async (
   };
 
   const products = await Product.find(productFilter)
-    .select('title brand')
+    .select('title')
     .sort({ stock: -1, createdAt: -1 })
     .limit(SEARCH_SUGGESTION_SOURCE_LIMIT)
     .lean();
@@ -224,7 +219,6 @@ const insertIntoDB = async (
     isDeleted: false,
     $or: [
       { title: new RegExp(escapeRegex(query), 'i') },
-      { brand: new RegExp(escapeRegex(query), 'i') },
       { description: new RegExp(escapeRegex(query), 'i') },
       { sku: new RegExp(escapeRegex(query), 'i') },
       { 'seo.metaKeywords': new RegExp(escapeRegex(query), 'i') },
@@ -263,7 +257,7 @@ const getAllIntoDB = async (
 ) => {
   const cacheKey = REDIS_KEYS.SEARCH_HISTORY(
     getSearchActorCacheKey(actor),
-    JSON.stringify(query)
+    `v2:${JSON.stringify(query)}`
   );
   const cached = await getCache(cacheKey);
   if (cached) return cached;
@@ -290,7 +284,7 @@ const getAllIntoDB = async (
         .fields()
     : null;
 
-  const [popularCategories, featuredVendors, searchHistory, meta] =
+  const [categories, featuredVendors, histories, meta] =
     await Promise.all([
       getPopularCategories(),
       getFeaturedSearchVendors(),
@@ -303,18 +297,15 @@ const getAllIntoDB = async (
       }),
     ]);
 
-  const followedVendorIds = await getFollowedVendorIdSet(actor.userId);
   const featuredVendorsWithDistance = await addDistanceToFeaturedVendors(
     actor,
     query,
     featuredVendors
   );
   const result = {
-    popularCategories,
-    featuredVendors: featuredVendorsWithDistance.map((vendor) =>
-      withFollowingFlag(vendor, followedVendorIds)
-    ),
-    searchHistory,
+    categories,
+    featuredVendors: featuredVendorsWithDistance,
+    histories,
     meta,
   };
 

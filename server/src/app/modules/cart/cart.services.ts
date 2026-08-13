@@ -155,7 +155,7 @@ const getCart = async (actor: TCartActor) => {
     _id: { $in: items.map((item) => item.productId) },
     isDeleted: false,
   })
-    .select('vendorId title images inventoryType price discountPrice variants')
+    .select('vendor title images inventoryType price discountPrice variants')
     .lean();
 
   const productById = new Map(
@@ -175,7 +175,7 @@ const getCart = async (actor: TCartActor) => {
         quantity: item.quantity,
         product: {
           _id: product._id,
-          vendorId: product.vendorId,
+          vendor: product.vendor,
           title: product.title,
           images: product.images,
           inventoryType: product.inventoryType,
