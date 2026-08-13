@@ -8,6 +8,7 @@ import {
   TCartItemIdentity,
   TCartColor,
   TCartActor,
+  TCartRecommendedProduct,
 } from '@/app/modules/cart/cart.types';
 import { PRODUCT_INVENTORY_TYPE } from '@/app/modules/product/product.constant';
 import { Product } from '@/app/modules/product/product.model';
@@ -175,6 +176,133 @@ export const clearCart = async (actor: TCartActor) => {
     { upsert: true }
   );
   await clearCartCache(getCartActorCacheKey(actor));
+};
+
+/** Safely reads ObjectId from populated or raw relation values. */
+const getRelationId = (relation: any) =>
+  relation?._id?.toString?.() ?? relation?.toString?.() ?? null;
+
+/** Formats recommendation cards for the cart screen. */
+const formatCartRecommendedProduct = (product: any): TCartRecommendedProduct => ({
+  _id: product._id,
+  category:
+    product.category && typeof product.category === 'object'
+      ? {
+          _id: product.category._id,
+          title: product.category.title,
+        }
+      : null,
+  title: product.title,
+  collectionType: product.collectionType,
+  banner: product.banner ?? null,
+  price: product.price,
+  discount: product.discount,
+  discountPrice: product.discountPrice,
+  avgRating: product.avgRating ?? 0,
+  ratingCount: product.ratingCount ?? 0,
+  inStock: (product.stock ?? 0) > 0,
+});
+
+/** Ranks products by relation to the cart and product performance signals. */
+const getCartRecommendationScore = (
+  product: any,
+  signals: {
+    vendorIds: Set<string>;
+    categoryIds: Set<string>;
+    collectionTypes: Set<string>;
+    brandTypes: Set<string>;
+  }
+) => {
+  const vendorScore = signals.vendorIds.has(getRelationId(product.vendor))
+    ? 400
+    : 0;
+  const categoryScore = signals.categoryIds.has(getRelationId(product.category))
+    ? 300
+    : 0;
+  const collectionScore = signals.collectionTypes.has(product.collectionType)
+    ? 150
+    : 0;
+  const brandTypeScore = signals.brandTypes.has(product.brandType) ? 100 : 0;
+  const qualityScore =
+    Number(product.avgRating ?? 0) * 30 +
+    Number(product.ratingCount ?? 0) * 2 +
+    Number(product.sold ?? 0);
+
+  return (
+    vendorScore +
+    categoryScore +
+    collectionScore +
+    brandTypeScore +
+    qualityScore
+  );
+};
+
+/** Finds max ten products related to the current cart contents. */
+export const getCartRecommendedProducts = async (
+  cartProducts: any[],
+  excludedProductIds: Set<string>
+) => {
+  if (!cartProducts.length) return [];
+
+  const signals = {
+    vendorIds: new Set<string>(),
+    categoryIds: new Set<string>(),
+    collectionTypes: new Set<string>(),
+    brandTypes: new Set<string>(),
+  };
+
+  cartProducts.forEach((product) => {
+    const vendorId = getRelationId(product.vendor);
+    const categoryId = getRelationId(product.category);
+    if (vendorId) signals.vendorIds.add(vendorId);
+    if (categoryId) signals.categoryIds.add(categoryId);
+    if (product.collectionType) signals.collectionTypes.add(product.collectionType);
+    if (product.brandType) signals.brandTypes.add(product.brandType);
+  });
+
+  const matchSignals: Record<string, unknown>[] = [];
+  if (signals.vendorIds.size) {
+    matchSignals.push({ vendor: { $in: [...signals.vendorIds] } });
+  }
+  if (signals.categoryIds.size) {
+    matchSignals.push({ category: { $in: [...signals.categoryIds] } });
+  }
+  if (signals.collectionTypes.size) {
+    matchSignals.push({ collectionType: { $in: [...signals.collectionTypes] } });
+  }
+  if (signals.brandTypes.size) {
+    matchSignals.push({ brandType: { $in: [...signals.brandTypes] } });
+  }
+
+  if (!matchSignals.length) return [];
+
+  const products = await Product.find({
+    _id: { $nin: [...excludedProductIds] },
+    isDeleted: false,
+    $or: matchSignals,
+  })
+    .populate([{ path: 'category', select: 'title' }])
+    .select(
+      '_id category vendor title collectionType brandType banner price discount discountPrice avgRating ratingCount stock sold createdAt'
+    )
+    .sort({ avgRating: -1, ratingCount: -1, sold: -1, createdAt: -1 })
+    .limit(40)
+    .lean();
+
+  return products
+    .sort((left, right) => {
+      const scoreDiff =
+        getCartRecommendationScore(right, signals) -
+        getCartRecommendationScore(left, signals);
+      if (scoreDiff !== 0) return scoreDiff;
+
+      return (
+        new Date(right.createdAt).getTime() -
+        new Date(left.createdAt).getTime()
+      );
+    })
+    .slice(0, 10)
+    .map(formatCartRecommendedProduct);
 };
 
 

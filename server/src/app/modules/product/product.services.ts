@@ -6,6 +6,8 @@ import ApiError from '@/app/errors/ApiError';
 import { Cart } from '@/app/modules/cart/cart.model';
 import { getFollowedVendorIdSet } from '@/app/modules/follow/follow.helpers';
 import { Items } from '@/app/modules/items/items.model';
+import { ORDER_STATUS } from '@/app/modules/orders/orders.constant';
+import { Orders } from '@/app/modules/orders/orders.model';
 import {
   assertCategoryExists,
   assertProductAccess,
@@ -22,7 +24,6 @@ import {
   getProductByIdOrThrow,
   invalidateProductCaches,
   notifyProductRestockedSubscribers,
-  withWishlistFlag,
   toNumber,
   toStringArray,
   getUserOrigin,
@@ -39,11 +40,19 @@ import {
   TProductPayload,
   TProductRequester,
 } from '@/app/modules/product/product.types';
+import { REVIEW_MODEL_TYPE } from '@/app/modules/review/review.constant';
+import { Review } from '@/app/modules/review/review.model';
 import {
   deleteProductFromTypesense,
   upsertProductToTypesense,
 } from '@/app/modules/search/search.typesense';
+import { SettingService } from '@/app/modules/settings/settings.services';
 import { getGoogleDistanceMatrix } from '@/app/modules/user/user.helpers';
+import {
+  VOUCHER_STATUS,
+  VOUCHER_TYPE,
+} from '@/app/modules/voucher/voucher.constant';
+import { Voucher } from '@/app/modules/voucher/voucher.model';
 import {
   deleteCache,
   deleteCachePattern,
@@ -746,12 +755,213 @@ const getMyProducts = async (
   return result;
 };
 
+// Safely reads ObjectId from populated or raw relation values.
+const getRelationId = (relation: any) =>
+  relation?._id?.toString?.() ?? relation?.toString?.() ?? null;
+
+// Keeps vendor summary compact for product details header.
+const formatProductVendor = (vendor: any) => {
+  if (!vendor || typeof vendor !== 'object') return null;
+
+  return {
+    _id: vendor._id,
+    name: vendor.name ?? null,
+    profileAvatar: vendor.profileAvatar ?? null,
+  };
+};
+
+// Keeps category summary compact for product details header.
+const formatProductCategory = (category: any) => {
+  if (!category || typeof category !== 'object') return null;
+
+  return {
+    _id: category._id,
+    title: category.title ?? null,
+  };
+};
+
+// Removes populated relation payloads from the product body.
+const formatProductDetails = (product: any) => {
+  const { vendor: _vendor, category: _category, __v: _version, ...details } =
+    product;
+
+  return details;
+};
+
+// Scores products for complete-look/similar recommendations.
+const getSimilarProductScore = (
+  product: any,
+  currentProduct: any,
+  currentVendorId: string | null,
+  currentCategoryId: string | null
+) => {
+  const vendorScore =
+    getRelationId(product.vendor) === currentVendorId ? 400 : 0;
+  const categoryScore =
+    getRelationId(product.category) === currentCategoryId ? 300 : 0;
+  const collectionScore =
+    product.collectionType === currentProduct.collectionType ? 150 : 0;
+  const brandTypeScore =
+    product.brandType === currentProduct.brandType ? 100 : 0;
+  const qualityScore =
+    Number(product.avgRating ?? 0) * 30 +
+    Number(product.ratingCount ?? 0) * 2 +
+    Number(product.sold ?? 0);
+
+  return (
+    vendorScore +
+    categoryScore +
+    collectionScore +
+    brandTypeScore +
+    qualityScore
+  );
+};
+
+// Loads four strongest products related to the current product.
+const getSimilarProducts = async (
+  currentProduct: any,
+  wishlistIds: Set<string>
+) => {
+  const currentVendorId = getRelationId(currentProduct.vendor);
+  const currentCategoryId = getRelationId(currentProduct.category);
+  const matchSignals: Record<string, unknown>[] = [];
+  if (currentVendorId) matchSignals.push({ vendor: currentVendorId });
+  if (currentCategoryId) matchSignals.push({ category: currentCategoryId });
+  if (currentProduct.collectionType) {
+    matchSignals.push({ collectionType: currentProduct.collectionType });
+  }
+  if (currentProduct.brandType) {
+    matchSignals.push({ brandType: currentProduct.brandType });
+  }
+
+  if (matchSignals.length === 0) return [];
+
+  const products = await Product.find({
+    _id: { $ne: currentProduct._id },
+    isDeleted: false,
+    $or: matchSignals,
+  })
+    .populate([{ path: 'category', select: 'title' }])
+    .select(productListSelect)
+    .sort({ avgRating: -1, ratingCount: -1, sold: -1, createdAt: -1 })
+    .limit(30)
+    .lean();
+
+  const sortedProducts = products.sort(
+    (left, right) =>
+      getSimilarProductScore(
+        right,
+        currentProduct,
+        currentVendorId,
+        currentCategoryId
+      ) -
+      getSimilarProductScore(
+        left,
+        currentProduct,
+        currentVendorId,
+        currentCategoryId
+      )
+  );
+
+  return formatProductListItems(sortedProducts.slice(0, 4), wishlistIds);
+};
+
+// Loads active shop/global vouchers that are still valid.
+const getProductVouchers = async (vendorId: string | null) => {
+  const voucherScopes: Record<string, unknown>[] = [
+    { voucherType: VOUCHER_TYPE.global },
+  ];
+  if (vendorId) {
+    voucherScopes.push({ voucherType: VOUCHER_TYPE.shop, shop: vendorId });
+  }
+
+  return Voucher.find({
+    isDeleted: false,
+    status: VOUCHER_STATUS.active,
+    expiryDate: { $gte: new Date() },
+    $or: voucherScopes,
+  })
+    .select(
+      '_id title code voucherType discountType discountValue maxDiscountAmount minSpend expiryDate'
+    )
+    .sort({ expiryDate: 1, createdAt: -1 })
+    .limit(4)
+    .lean();
+};
+
+// Loads newest product reviews for the detail page preview.
+const getLatestProductReviews = async (productId: string) =>
+  Review.find({
+    modelType: REVIEW_MODEL_TYPE.Product,
+    reference: productId,
+  })
+    .populate([{ path: 'user', select: 'name profileAvatar' }])
+    .select('_id user review files rating createdAt')
+    .sort({ createdAt: -1 })
+    .limit(3)
+    .lean();
+
+// Checks if the requester has a delivered order containing this product.
+const hasPurchasedProduct = async (
+  userId: string | undefined,
+  productId: string
+) => {
+  if (!userId) return false;
+
+  const [purchase] = await Items.aggregate([
+    {
+      $match: {
+        product: new mongoose.Types.ObjectId(productId),
+      },
+    },
+    {
+      $lookup: {
+        from: Orders.collection.name,
+        localField: 'order',
+        foreignField: '_id',
+        as: 'order',
+      },
+    },
+    { $unwind: '$order' },
+    {
+      $match: {
+        'order.user': new mongoose.Types.ObjectId(userId),
+        'order.status': ORDER_STATUS.delivered,
+        'order.isDeleted': false,
+      },
+    },
+    { $limit: 1 },
+    { $project: { _id: 1 } },
+  ]);
+
+  return Boolean(purchase);
+};
+
+// Checks if the requester already reviewed this product.
+const hasSubmittedProductReview = async (
+  userId: string | undefined,
+  productId: string
+) => {
+  if (!userId) return false;
+
+  const review = await Review.exists({
+    user: userId,
+    modelType: REVIEW_MODEL_TYPE.Product,
+    reference: productId,
+  });
+
+  return Boolean(review);
+};
+
 const getProductById = async (
   traceId: string,
   productId: string,
   userId?: string
 ) => {
-  const cacheKey = REDIS_KEYS.PRODUCT_SINGLE(productId, userId ?? 'anonymous');
+  const cacheKey = `${REDIS_KEYS.PRODUCT_SINGLE(
+    productId,
+    userId ?? 'anonymous'
+  )}:v2`;
   const cached = await getCache(cacheKey);
   if (cached) return cached;
 
@@ -762,7 +972,39 @@ const getProductById = async (
 
   assertProductExists(product, traceId);
   const wishlistIds = await getWishlistProductIdSet(userId);
-  const result = withWishlistFlag(product!, wishlistIds);
+  const vendorId = getRelationId(product!.vendor);
+  const isWishlisted = wishlistIds.has(product!._id.toString());
+
+  const [
+    shopRules,
+    similarProducts,
+    vouchers,
+    reviews,
+    hasPurchase,
+    hasReviewSubmit,
+  ] = await Promise.all([
+    vendorId
+      ? SettingService.getSettingGenerals(traceId, vendorId).catch(() => null)
+      : Promise.resolve(null),
+    getSimilarProducts(product, wishlistIds),
+    getProductVouchers(vendorId),
+    getLatestProductReviews(productId),
+    hasPurchasedProduct(userId, productId),
+    hasSubmittedProductReview(userId, productId),
+  ]);
+
+  const result = {
+    product: formatProductDetails(product),
+    vendor: formatProductVendor(product!.vendor),
+    category: formatProductCategory(product!.category),
+    shopRules,
+    similarProducts,
+    vouchers,
+    reviews,
+    hasPurchase,
+    hasReviewSubmit,
+    isWishlisted,
+  };
 
   await setCache(cacheKey, result, 300);
   return result;

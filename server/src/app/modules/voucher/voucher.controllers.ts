@@ -48,6 +48,23 @@ const getShopwiseVoutures = asyncHandler(async (req: Request, res: Response) => 
   });
 });
 
+const getActiveShopAndGlobalVoutures = asyncHandler(
+  async (req: Request, res: Response) => {
+    const traceId = getTraceId();
+    const data = await VoucherService.getActiveShopAndGlobalVoutures(
+      req.params.vendorId as string
+    );
+
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: 'Shop and global vouchers fetched successfully',
+      data,
+      traceId,
+    });
+  }
+);
+
 const getCompensionVoutures = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const result = await VoucherService.getCompensionVoutures(req.user, req.query);
@@ -136,6 +153,7 @@ export const VoucherController = {
   addVouture,
   getGlobalVoutures,
   getShopwiseVoutures,
+  getActiveShopAndGlobalVoutures,
   getCompensionVoutures,
   getAVouture,
   updateAVouture,

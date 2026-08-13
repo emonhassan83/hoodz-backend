@@ -101,6 +101,21 @@ const getShopwiseVoutures = async (
   return { meta, data };
 };
 
+/** Returns compact active shop and global vouchers for product details. */
+const getActiveShopAndGlobalVoutures = async (vendorId: string) =>
+  Voucher.find({
+    ...activeVoucherFilter(),
+    $or: [
+      { voucherType: VOUCHER_TYPE.global },
+      { voucherType: VOUCHER_TYPE.shop, shop: vendorId },
+    ],
+  })
+    .select(
+      '_id title code voucherType discountType discountValue maxDiscountAmount minSpend expiryDate'
+    )
+    .sort({ expiryDate: 1, createdAt: -1 })
+    .lean();
+
 /** Returns compensation vouchers for the user, or all for admin/agent. */
 const getCompensionVoutures = async (
   requester: TVoucherRequester,
@@ -235,6 +250,7 @@ export const VoucherService = {
   addVouture,
   getGlobalVoutures,
   getShopwiseVoutures,
+  getActiveShopAndGlobalVoutures,
   getCompensionVoutures,
   getAVouture,
   updateAVouture,

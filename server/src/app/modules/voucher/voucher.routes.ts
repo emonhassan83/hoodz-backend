@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import auth from '@/app/middlewares/auth';
+import auth, { optionalAuth } from '@/app/middlewares/auth';
 import { AUTHENTICATED_ROLES, USER_ROLE } from '@/app/modules/user/user.constant';
 import { VoucherController } from '@/app/modules/voucher/voucher.controllers';
 import { VoucherValidation } from '@/app/modules/voucher/voucher.validation';
@@ -26,6 +26,14 @@ router
     auth(...AUTHENTICATED_ROLES),
     validateRequest(VoucherValidation.vendorIdParamValidationSchema),
     VoucherController.getShopwiseVoutures
+  );
+
+router
+  .route('/shop/:vendorId/active')
+  .get(
+    optionalAuth,
+    validateRequest(VoucherValidation.vendorIdParamValidationSchema),
+    VoucherController.getActiveShopAndGlobalVoutures
   );
 
 router

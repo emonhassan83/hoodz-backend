@@ -134,7 +134,10 @@ const addDistanceToFeaturedVendors = async (
         ? Math.ceil(element.duration.value / 60)
         : null;
 
-    return toVendorCard(vendorData, { distanceKm, durationMinutes });
+    return toVendorCard(vendorData, {
+      distanceKm: Number(Math.max(distanceKm, 0.01).toFixed(2)),
+      durationMinutes,
+    });
   });
 };
 

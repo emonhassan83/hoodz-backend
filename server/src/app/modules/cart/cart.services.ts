@@ -11,6 +11,7 @@ import {
   findProductVariantOrThrow,
   getCartActorCacheKey,
   getCartItemsOrEmpty,
+  getCartRecommendedProducts,
   isSameCartItem,
   syncCartCacheFromMongo,
 } from '@/app/modules/cart/cart.helpers';
@@ -148,6 +149,7 @@ const getCart = async (actor: TCartActor) => {
       items: [],
       totalItems: 0,
       subTotal: 0,
+      recommendedProducts: [],
     };
   }
 
@@ -155,7 +157,10 @@ const getCart = async (actor: TCartActor) => {
     _id: { $in: items.map((item) => item.productId) },
     isDeleted: false,
   })
-    .select('vendor title images inventoryType price discountPrice variants')
+    .populate([{ path: 'category', select: 'title' }])
+    .select(
+      'vendor category title images inventoryType collectionType brandType banner price discount discountPrice avgRating ratingCount stock sold variants createdAt'
+    )
     .lean();
 
   const productById = new Map(
@@ -192,11 +197,16 @@ const getCart = async (actor: TCartActor) => {
     (total, item) => total + item.totalPrice,
     0
   );
+  const recommendedProducts = await getCartRecommendedProducts(
+    products,
+    new Set(items.map((item) => item.productId.toString()))
+  );
 
   return {
     items: enrichedItems,
     totalItems: enrichedItems.reduce((total, item) => total + item.quantity, 0),
     subTotal: Number(subTotal.toFixed(2)),
+    recommendedProducts,
   };
 };
 
@@ -208,6 +218,7 @@ const clear = async (traceId: string, actor: TCartActor) => {
     items: [],
     totalItems: 0,
     subTotal: 0,
+    recommendedProducts: [],
   };
 };
 

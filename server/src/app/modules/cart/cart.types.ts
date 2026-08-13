@@ -47,4 +47,20 @@ export type TEnrichedCartItem = TCartItem & {
   totalPrice: number;
 };
 
+export type TCartRecommendedProduct = {
+  _id: Types.ObjectId;
+  category: {
+    _id: Types.ObjectId;
+    title: string;
+  } | null;
+  title: string;
+  collectionType: string;
+  banner: string | null;
+  price: number;
+  discount: number;
+  discountPrice: number;
+  avgRating: number;
+  ratingCount: number;
+  inStock: boolean;
+};
 

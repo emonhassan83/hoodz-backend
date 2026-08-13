@@ -250,9 +250,7 @@ const getShopDetails = async (
 
   let distance = null as null | {
     distanceKm: number;
-    distanceText: string | null;
     durationMinutes: number | null;
-    durationText: string | null;
   };
 
   if (origin && latitude !== 0 && longitude !== 0) {
@@ -263,22 +261,15 @@ const getShopDetails = async (
       const fallbackDistanceKm = Number(
         calculateDistanceKm(origin, { latitude, longitude }).toFixed(2)
       );
+      const googleDistanceKm =
+        element?.status === 'OK' && element.distance?.value !== undefined
+          ? element.distance.value / 1000
+          : fallbackDistanceKm;
       distance = {
-        distanceKm:
-          element?.status === 'OK' && element.distance?.value !== undefined
-            ? Number((element.distance.value / 1000).toFixed(2))
-            : fallbackDistanceKm,
-        distanceText:
-          element?.status === 'OK' && element.distance?.text
-            ? element.distance.text
-            : `${fallbackDistanceKm} km`,
+        distanceKm: Number(Math.max(googleDistanceKm, 0.01).toFixed(2)),
         durationMinutes:
           element?.status === 'OK' && element.duration?.value !== undefined
             ? Math.ceil(element.duration.value / 60)
-            : null,
-        durationText:
-          element?.status === 'OK' && element.duration?.text
-            ? element.duration.text
             : null,
       };
     } catch (error) {
@@ -286,10 +277,8 @@ const getShopDetails = async (
         calculateDistanceKm(origin, { latitude, longitude }).toFixed(2)
       );
       distance = {
-        distanceKm: fallbackDistanceKm,
-        distanceText: `${fallbackDistanceKm} km`,
+        distanceKm: Number(Math.max(fallbackDistanceKm, 0.01).toFixed(2)),
         durationMinutes: null,
-        durationText: null,
       };
     }
   }
