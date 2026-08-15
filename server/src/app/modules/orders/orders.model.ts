@@ -29,6 +29,7 @@ const ordersSchema = new Schema<IOrders, IOrdersModel>(
       index: true,
     },
     amount: { type: Number, required: true, min: 0 },
+    coinDiscount: { type: Number, default: 0, min: 0 },
     deliveryCharge: { type: Number, default: 0, min: 0 },
     totalAmount: { type: Number, default: 0, min: 0 },
     status: {
@@ -85,7 +86,11 @@ const ordersSchema = new Schema<IOrders, IOrdersModel>(
 
 ordersSchema.pre('save', function calculateTotal() {
   this.totalAmount = Number(
-    ((this.amount ?? 0) + (this.deliveryCharge ?? 0)).toFixed(2)
+    (
+      (this.amount ?? 0) -
+      (this.coinDiscount ?? 0) +
+      (this.deliveryCharge ?? 0)
+    ).toFixed(2)
   );
 });
 

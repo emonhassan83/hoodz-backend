@@ -36,6 +36,7 @@ export type TCreateOrderPayload = {
     deliveryType: TDeliveryType;
     deliveryCharge?: number;
     transactionId?: string | null;
+    redeemCoins?: number;
   };
 };
 

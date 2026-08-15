@@ -15,6 +15,21 @@ export const startCronJobs = async () => {
     });
     jobs.push(healthHeartbeat);
 
+    const coinLifecycle = cron.schedule('0 9 * * *', async () => {
+      try {
+        const { CoinService } = await import('@/app/modules/coin/coin.services');
+        const reminders = await CoinService.sendInactiveCoinReminders();
+        const warnings = await CoinService.sendExpiryWarnings();
+        const expired = await CoinService.expireDueCoins();
+        console.log(
+          `⏰ [Cron] Coin lifecycle: reminders=${reminders.notifiedUsers}, warnings=${warnings.notifiedUsers}, expiredUsers=${expired.expiredUsers}`
+        );
+      } catch (error) {
+        console.error('⏰ [Cron] Coin lifecycle job failed:', error);
+      }
+    });
+    jobs.push(coinLifecycle);
+
     console.log(`⏰ [Cron] ✓ ${jobs.length} cron schedules active`);
   } catch (error) {
     console.error('⏰ [Cron] Failed to load node-cron or start jobs:', error);

@@ -46,6 +46,7 @@ export type TGoogleLoginPayload = {
   deliveryLatitude?: number;
   deliveryLongitude?: number;
   timeZone?: string;
+  referralCode?: string;
   isLegalTermsAccepted: boolean;
 };
 

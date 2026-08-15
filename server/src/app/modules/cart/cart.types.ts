@@ -41,7 +41,9 @@ export type TEnrichedCartItem = TCartItem & {
     images: string[];
     inventoryType: string;
     price: number;
+    discount: number;
     discountPrice: number;
+    isDiscounted: boolean;
   };
   unitPrice: number;
   totalPrice: number;

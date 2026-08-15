@@ -20,6 +20,9 @@ export interface IPayment {
   paymentIntentId?: string | null;
   savedCard?: Types.ObjectId | null;
   saveCardRequested?: boolean;
+  subtotalAmount: number;
+  coinDiscount: number;
+  deliveryCharge: number;
   amount: number;
   status: IPaymentStatus;
   paymentMethod: IPaymentMethod;

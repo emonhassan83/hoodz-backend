@@ -43,6 +43,7 @@ const createOrderValidationSchema = z.object({
       deliveryType: z.enum(Object.values(DELIVERY_TYPE) as [string, ...string[]]),
       deliveryCharge: z.number().nonnegative().default(0),
       transactionId: z.string().trim().nullable().optional(),
+      redeemCoins: z.number().int().nonnegative().optional(),
     }),
   }),
 });

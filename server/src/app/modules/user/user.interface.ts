@@ -11,6 +11,8 @@ export interface IUser extends Document {
   _id: Types.ObjectId
   id: string
   referralCode: string
+  referredBy?: Types.ObjectId | null
+  referralCodeUsed?: string | null
   name: string;
   email: string;
   password: string;
@@ -33,7 +35,6 @@ export interface IUser extends Document {
   registerWith: string
   avgRating: number
   ratingCount: number
-  points: number
   balance: number
   walletBalance: number
   followers: number
@@ -83,6 +84,7 @@ export interface ISignUpWithEmail {
   password: string
   role?: IUserRole
   fcmToken?: string
+  referralCode?: string
   isLegalTermsAccepted: boolean
 }
 
@@ -92,6 +94,7 @@ export interface ISignUpWithPhone {
   phone: string
   role?: IUserRole
   fcmToken?: string
+  referralCode?: string
   isLegalTermsAccepted: boolean
 }
 

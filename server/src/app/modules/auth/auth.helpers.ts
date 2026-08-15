@@ -14,6 +14,7 @@ import {
   validateUserCreation,
 } from '@/app/modules/user/user.helpers';
 import { ISignUpWithEmail, IUser } from '@/app/modules/user/user.interface';
+import { User } from '@/app/modules/user/user.model';
 
 // ─── JWT ───────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,7 @@ export const buildSignupAddressPayload = <T extends Partial<ISignUpWithEmail>>(
     longitude,
     deliveryLatitude,
     deliveryLongitude,
+    referralCode: _referralCode,
     ...rest
   } = payload;
 
@@ -83,6 +85,35 @@ export const buildSignupAddressPayload = <T extends Partial<ISignUpWithEmail>>(
           ),
         }
       : {}),
+  };
+};
+
+export const resolveReferralData = async (
+  referralCode: string | undefined,
+  traceId: string,
+  currentUserId?: string
+) => {
+  if (!referralCode) return {};
+
+  const normalizedReferralCode = referralCode.trim().toUpperCase();
+  const referrer = await User.findOne({
+    referralCode: normalizedReferralCode,
+    isDeleted: false,
+  })
+    .select('_id referralCode')
+    .lean();
+
+  if (!referrer) {
+    throw new ApiError(HttpStatusCode.BadRequest, 'Invalid referral code', traceId);
+  }
+
+  if (currentUserId && referrer._id.toString() === currentUserId) {
+    throw new ApiError(HttpStatusCode.BadRequest, 'You cannot use your own referral code', traceId);
+  }
+
+  return {
+    referredBy: referrer._id,
+    referralCodeUsed: referrer.referralCode,
   };
 };
 
@@ -105,18 +136,24 @@ export const handleDuplicateUser = async (
     );
   }
 
-  const nextPayload = {
-    ...buildSignupAddressPayload(payload),
-    role,
-    status: role === USER_ROLE.rider ? USER_STATUS.pending : USER_STATUS.active,
-  };
-
   const identityPayload = {
     ...(email ? { email } : {}),
     ...(phone ? { phone } : {}),
   };
 
   const existingUser = await checkUserExists(email, phone);
+  const referralData = await resolveReferralData(
+    payload.referralCode,
+    traceId,
+    existingUser?._id.toString()
+  );
+
+  const nextPayload = {
+    ...buildSignupAddressPayload(payload),
+    ...referralData,
+    role,
+    status: role === USER_ROLE.rider ? USER_STATUS.pending : USER_STATUS.active,
+  };
 
   if (!existingUser) {
     return { shouldProceed: true };
@@ -162,13 +199,19 @@ export const processSignup = async (
     );
   }
 
+  const existingUser = await checkUserExists(email);
+  const referralData = await resolveReferralData(
+    payload.referralCode,
+    traceId,
+    existingUser?._id.toString()
+  );
+
   const signupPayload = {
     ...buildSignupAddressPayload(payload),
+    ...referralData,
     role,
     status: role === USER_ROLE.rider ? USER_STATUS.pending : USER_STATUS.active,
   };
-
-  const existingUser = await checkUserExists(email);
 
   if (existingUser) {
     if (!existingUser.isDeleted && existingUser.isSignUpOtpVerified) {

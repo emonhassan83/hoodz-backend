@@ -13,6 +13,7 @@ export interface IOrders {
   user?: Types.ObjectId | null;
   author: Types.ObjectId;
   amount: number;
+  coinDiscount: number;
   deliveryCharge: number;
   totalAmount: number;
   status: TOrderStatus;

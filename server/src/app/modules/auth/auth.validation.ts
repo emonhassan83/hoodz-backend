@@ -4,6 +4,7 @@ import { USER_ROLE } from '@/app/modules/user/user.constant';
 
 const registerRoleSchema = z.enum([USER_ROLE.user, USER_ROLE.rider]).optional();
 const coordinateSchema = z.number();
+const referralCodeSchema = z.string().trim().toUpperCase().optional();
 const optionalAddressSchema = z
   .string()
   .trim()
@@ -43,6 +44,7 @@ const signupWithEmailSchema = z.object({
 
     role: registerRoleSchema,
     fcmToken: z.string().optional(),
+    referralCode: referralCodeSchema,
 
     isLegalTermsAccepted: z
       .boolean({
@@ -75,6 +77,7 @@ const signupWithPhoneSchema = z.object({
 
     role: registerRoleSchema,
     fcmToken: z.string().optional(),
+    referralCode: referralCodeSchema,
 
     isLegalTermsAccepted: z
       .boolean({
@@ -195,6 +198,7 @@ const googleZodValidationSchema = z.object({
     }),
     fcmToken: z.string().optional(),
     role: registerRoleSchema,
+    referralCode: referralCodeSchema,
     ...optionalLocationFields,
     profileImage: z.string().optional(),
     isLegalTermsAccepted: z.boolean({
@@ -222,6 +226,7 @@ const appleZodValidationSchema = z.object({
     }),
     fcmToken: z.string().optional(),
     role: registerRoleSchema,
+    referralCode: referralCodeSchema,
     ...optionalLocationFields,
     profileImage: z.string().optional(),
     isLegalTermsAccepted: z.boolean({

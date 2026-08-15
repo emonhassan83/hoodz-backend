@@ -6,7 +6,11 @@ import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
 const getOrderSummary = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await OrdersService.getOrderSummary(traceId, req.body);
+  const data = await OrdersService.getOrderSummary(
+    traceId,
+    req.user.userId,
+    req.body
+  );
 
   sendResponse(res, {
     success: true,

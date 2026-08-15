@@ -7,6 +7,7 @@ import {
   ORDER_STATUS,
   PAYMENT_STATUS as ORDER_PAYMENT_STATUS,
 } from '@/app/modules/orders/orders.constant';
+import { CoinService } from '@/app/modules/coin/coin.services';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { PAYMENT_METHOD, PAYMENT_STATUS } from '@/app/modules/payment/payment.constant';
 import {
@@ -47,7 +48,11 @@ import { WalletTransactionService } from '@/app/modules/walletTransaction/wallet
 
 const paymentPopulate = [
   { path: 'account', select: 'name email phone profileAvatar' },
-  { path: 'order', select: 'id totalAmount paymentStatus status billingDetails' },
+  {
+    path: 'order',
+    select:
+      'id amount coinDiscount deliveryCharge totalAmount paymentStatus status billingDetails',
+  },
   { path: 'savedCard', select: 'maskedPan last4 cardBrand cardSubType isDefault' },
 ];
 
@@ -111,6 +116,9 @@ const createPaymentRows = async (
     orders.map((order) => ({
       account: userId,
       order: order._id,
+      subtotalAmount: order.amount,
+      coinDiscount: order.coinDiscount ?? 0,
+      deliveryCharge: order.deliveryCharge ?? 0,
       amount: order.totalAmount,
       paymentMethod: payload.paymentMethod,
       savedCard: payload.savedCardId ?? null,
@@ -270,6 +278,7 @@ const initiateWalletPayment = async (
     await session.endSession();
   }
 
+  await CoinService.processPaidOrderRewards(orders.map((order) => order._id));
   await Promise.all(
     orders.map((order) =>
       WalletTransactionService.createWalletTransaction({
@@ -394,6 +403,10 @@ const confirmPayment = async (
     ...orderUpdate,
   });
 
+  if (status === PAYMENT_STATUS.paid) {
+    await CoinService.processPaidOrderRewards([payment.order]);
+  }
+
   return payment.populate(paymentPopulate);
 };
 
@@ -478,6 +491,12 @@ const confirmPaymentByWebhook = async (
     { _id: { $in: payments.map((payment) => payment.order) } },
     orderUpdate
   );
+
+  if (status === PAYMENT_STATUS.paid) {
+    await CoinService.processPaidOrderRewards(
+      payments.map((payment) => payment.order)
+    );
+  }
 
   return {
     received: true,

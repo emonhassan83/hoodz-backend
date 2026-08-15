@@ -7,6 +7,7 @@ import ApiError from '@/app/errors/ApiError';
 import {
   buildSignupAddressPayload,
   processSignup,
+  resolveReferralData,
   generateTokens,
   createToken,
   verifyToken,
@@ -22,6 +23,7 @@ import {
   TChangePasswordPayload,
 } from '@/app/modules/auth/auth.types';
 import { CartService } from '@/app/modules/cart/cart.services';
+import { CoinService } from '@/app/modules/coin/coin.services';
 import { OtpServices } from '@/app/modules/otp/otp.services';
 import { ProductService } from '@/app/modules/product/product.services';
 import { SearchService } from '@/app/modules/search/search.services';
@@ -32,12 +34,18 @@ import { User } from '@/app/modules/user/user.model';
 // ─── Signup ────────────────────────────────────────────────────────────────
 
 /** Registers a user with email credentials. */
-export const signupWithEmail = (traceId: string, payload: ISignUpWithEmail) =>
-  processSignup(payload, traceId);
+export const signupWithEmail = async (traceId: string, payload: ISignUpWithEmail) => {
+  const user = await processSignup(payload, traceId);
+  await CoinService.addWelcomeBonus(user._id.toString());
+  return user;
+};
 
 /** Registers a user with phone credentials. */
-export const signupWithPhone = (traceId: string, payload: ISignUpWithPhone) =>
-  processSignup(payload as unknown as ISignUpWithEmail, traceId);
+export const signupWithPhone = async (traceId: string, payload: ISignUpWithPhone) => {
+  const user = await processSignup(payload as unknown as ISignUpWithEmail, traceId);
+  await CoinService.addWelcomeBonus(user._id.toString());
+  return user;
+};
 
 // ─── Social Auth ───────────────────────────────────────────────────────────
 
@@ -73,6 +81,7 @@ const registerWithSocialAuth = async (
     deliveryLatitude: payload.deliveryLatitude,
     deliveryLongitude: payload.deliveryLongitude,
     timeZone: payload.timeZone,
+    referralCode: payload.referralCode,
     isLegalTermsAccepted: payload.isLegalTermsAccepted,
   });
 
@@ -87,9 +96,13 @@ const registerWithSocialAuth = async (
       );
     }
 
+    const referralData = user.isDeleted && !user.referredBy
+      ? await resolveReferralData(payload.referralCode, traceId, user._id.toString())
+      : {};
     const updatePayload = user.isDeleted
       ? {
           ...profileData,
+          ...referralData,
           role,
           status: registrationStatus,
           isDeleted: false,
@@ -116,8 +129,10 @@ const registerWithSocialAuth = async (
     return generateTokens(authUser);
   }
 
+  const referralData = await resolveReferralData(payload.referralCode, traceId);
   const newUser = await User.create({
     ...profileData,
+    ...referralData,
     role,
     status: registrationStatus,
     registerWith: provider,
@@ -131,6 +146,7 @@ const registerWithSocialAuth = async (
   await SearchService.mergeGuestSearchHistory(guestId, newUser._id.toString());
   await CartService.mergeGuestCart(guestId, newUser._id.toString());
   await ProductService.mergeGuestRecentlyViewed(guestId, newUser._id.toString());
+  await CoinService.addWelcomeBonus(newUser._id.toString());
   return generateTokens(newUser);
 };
 

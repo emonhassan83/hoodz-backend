@@ -6,6 +6,7 @@ import QueryBuilder from '@/app/builder/QueryBuilder';
 import { SALT_ROUNDS } from '@/app/constant';
 import ApiError from '@/app/errors/ApiError';
 import { generateTokens } from '@/app/modules/auth/auth.helpers';
+import { CoinService } from '@/app/modules/coin/coin.services';
 import {
   getFollowedVendorIdSet,
   withFollowingFlag,
@@ -368,7 +369,7 @@ const updateUserProfile = async (
   userId: string,
   payload: Partial<IUser> & { latitude?: number; longitude?: number }
 ): Promise<Partial<IUser>> => {
-  await findActiveUserOrThrow(userId, traceId);
+  const existingUser = await findActiveUserOrThrow(userId, traceId);
 
   const updateData: Record<string, any> = { ...payload };
 
@@ -403,6 +404,11 @@ const updateUserProfile = async (
 
   if (!result)
     throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
+
+  if (!existingUser.isProfileSetUp) {
+    await CoinService.addProfileCompletionBonus(userId);
+  }
+
   if (result.role === USER_ROLE.vendor) {
     await upsertShopToTypesense(userId).catch((error) => {
       console.warn(

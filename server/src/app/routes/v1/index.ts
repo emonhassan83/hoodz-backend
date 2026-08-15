@@ -6,6 +6,7 @@ import { BannerRoutes } from '@/app/modules/banner/banner.routes';
 import { CartRoutes } from '@/app/modules/cart/cart.routes';
 import { CategoryRoutes } from '@/app/modules/category/category.routes';
 import { ChatRoutes } from '@/app/modules/chat/chat.routes';
+import { CoinRoutes } from '@/app/modules/coin/coin.routes';
 import { DepositRoutes } from '@/app/modules/deposit/deposit.routes';
 import { FollowRoutes } from '@/app/modules/follow/follow.routes';
 import { GrievanceRoutes } from '@/app/modules/grievance/grievance.routes';
@@ -112,6 +113,10 @@ const apiRoutes = [
   {
     path: '/voucher',
     route: VoucherRoutes,
+  },
+  {
+    path: '/coin',
+    route: CoinRoutes,
   },
 
   // ===============================

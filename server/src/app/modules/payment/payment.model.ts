@@ -46,6 +46,21 @@ const paymentSchema = new Schema<IPayment, IPaymentModel>(
       type: Boolean,
       default: false,
     },
+    subtotalAmount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    coinDiscount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    deliveryCharge: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     amount: {
       type: Number,
       required: true,

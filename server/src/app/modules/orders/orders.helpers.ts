@@ -136,6 +136,9 @@ export const resolveCheckoutItemsOrThrow = async (
     }
 
     const unitPrice = product.discountPrice || product.price;
+    const isDiscounted =
+      product.discount > 0 ||
+      (product.discountPrice > 0 && product.discountPrice < product.price);
     return {
       productId: product._id,
       size:
@@ -154,7 +157,9 @@ export const resolveCheckoutItemsOrThrow = async (
         images: product.images,
         inventoryType: product.inventoryType,
         price: product.price,
+        discount: product.discount,
         discountPrice: product.discountPrice,
+        isDiscounted,
       },
       unitPrice,
       totalPrice: Number((unitPrice * item.quantity).toFixed(2)),

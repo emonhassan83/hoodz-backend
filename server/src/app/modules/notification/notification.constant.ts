@@ -3,6 +3,7 @@ export const NOTIFICATION_MODEL_TYPE = {
   User : 'User',
   Kyc: 'Kyc',
   Product: 'Product',
+  Coin: 'Coin',
 } as const
 
 

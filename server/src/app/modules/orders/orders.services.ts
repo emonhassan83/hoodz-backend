@@ -4,7 +4,10 @@ import mongoose from 'mongoose';
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import { buildCartItemMatch } from '@/app/modules/cart/cart.helpers';
+import { TEnrichedCartItem } from '@/app/modules/cart/cart.types';
 import { Cart } from '@/app/modules/cart/cart.model';
+import { COIN_REFERENCE_TYPE } from '@/app/modules/coin/coin.constant';
+import { CoinService } from '@/app/modules/coin/coin.services';
 import { Items } from '@/app/modules/items/items.model';
 import {
   assertOrderAccess,
@@ -20,7 +23,7 @@ import {
   TCreateOrderPayload,
   TOrderRequester,
 } from '@/app/modules/orders/orders.types';
-import { USER_ROLE } from '@/app/modules/user/user.constant';
+import { PAYMENT_STATUS } from '@/app/modules/orders/orders.constant';
 import { deleteCachePattern } from '@/app/redis/helpers';
 import { clearCartCache } from '@/app/redis/helpers/cart';
 
@@ -37,13 +40,65 @@ const invalidateOrderCaches = async () => {
   ]);
 };
 
+const getBasketSubtotal = (items: TEnrichedCartItem[]) =>
+  Number(items.reduce((total, item) => total + item.totalPrice, 0).toFixed(2));
+
+const getCoinEligibleSubtotal = (items: TEnrichedCartItem[]) =>
+  Number(
+    items
+      .filter((item) => !item.product.isDiscounted)
+      .reduce((total, item) => total + item.totalPrice, 0)
+      .toFixed(2)
+  );
+
+const distributeCoinDiscount = (
+  totalCoins: number,
+  groupedItems: [string, TEnrichedCartItem[]][]
+) => {
+  if (totalCoins <= 0) return groupedItems.map(() => 0);
+
+  const eligibleSubtotals = groupedItems.map(([, items]) =>
+    getCoinEligibleSubtotal(items)
+  );
+  const totalEligibleSubtotal = eligibleSubtotals.reduce(
+    (total, subtotal) => total + subtotal,
+    0
+  );
+
+  if (totalEligibleSubtotal <= 0) return groupedItems.map(() => 0);
+
+  const allocations = eligibleSubtotals.map((subtotal, index) => {
+    const rawCoins = (subtotal / totalEligibleSubtotal) * totalCoins;
+    return {
+      index,
+      coins: Math.floor(rawCoins),
+      fraction: rawCoins - Math.floor(rawCoins),
+    };
+  });
+  let remainingCoins =
+    totalCoins - allocations.reduce((total, item) => total + item.coins, 0);
+
+  allocations
+    .sort((a, b) => b.fraction - a.fraction)
+    .forEach((allocation) => {
+      if (remainingCoins <= 0) return;
+      allocation.coins += 1;
+      remainingCoins -= 1;
+    });
+
+  return allocations
+    .sort((a, b) => a.index - b.index)
+    .map((allocation) => allocation.coins);
+};
+
 /** Returns checkout preview without creating orders or items. */
 const getOrderSummary = async (
   traceId: string,
+  userId: string,
   payload: TCreateOrderPayload
 ) => {
   const checkoutItems = await resolveCheckoutItemsOrThrow(traceId, payload.items);
-  const groupedItems = groupCartItemsByAuthor(checkoutItems);
+  const groupedItems = [...groupCartItemsByAuthor(checkoutItems).entries()];
   const deliveryCharge = await getDeliveryChargeFromSettingsOrThrow(
     traceId,
     payload.orderData.billingDetails.city,
@@ -51,32 +106,41 @@ const getOrderSummary = async (
   );
   const deliveryCharges = distributeDeliveryCharge(
     deliveryCharge,
-    groupedItems.size
+    groupedItems.length
   );
+  const amount = getBasketSubtotal(checkoutItems);
+  const redemption = await CoinService.getRedemptionPreview(
+    traceId,
+    userId,
+    payload.orderData.redeemCoins ?? 0,
+    amount,
+    getCoinEligibleSubtotal(checkoutItems)
+  );
+  const coinDiscounts = distributeCoinDiscount(redemption.redeemCoins, groupedItems);
 
-  const orders = [...groupedItems.entries()].map(([authorId, items], index) => {
+  const orders = groupedItems.map(([authorId, items], index) => {
     const amount = Number(
       items.reduce((total, item) => total + item.totalPrice, 0).toFixed(2)
     );
     const orderDeliveryCharge = deliveryCharges[index] ?? 0;
+    const coinDiscount = coinDiscounts[index] ?? 0;
 
     return {
       author: authorId,
       amount,
+      coinDiscount,
       deliveryCharge: orderDeliveryCharge,
-      totalAmount: Number((amount + orderDeliveryCharge).toFixed(2)),
+      totalAmount: Number((amount - coinDiscount + orderDeliveryCharge).toFixed(2)),
       items,
     };
   });
 
-  const amount = Number(
-    orders.reduce((total, order) => total + order.amount, 0).toFixed(2)
-  );
-
   return {
     amount,
+    redeemCoins: redemption.redeemCoins,
+    coinDiscount: redemption.coinDiscount,
     deliveryCharge,
-    totalAmount: Number((amount + deliveryCharge).toFixed(2)),
+    totalAmount: Number((amount - redemption.coinDiscount + deliveryCharge).toFixed(2)),
     deliveryType: payload.orderData.deliveryType,
     city: payload.orderData.billingDetails.city,
     billingDetails: payload.orderData.billingDetails,
@@ -116,7 +180,7 @@ const createOrders = async (
   payload: TCreateOrderPayload
 ) => {
   const checkoutItems = await resolveCheckoutItemsOrThrow(traceId, payload.items);
-  const groupedItems = groupCartItemsByAuthor(checkoutItems);
+  const groupedItems = [...groupCartItemsByAuthor(checkoutItems).entries()];
   const deliveryCharge = await getDeliveryChargeFromSettingsOrThrow(
     traceId,
     payload.orderData.billingDetails.city,
@@ -124,19 +188,29 @@ const createOrders = async (
   );
   const deliveryCharges = distributeDeliveryCharge(
     deliveryCharge,
-    groupedItems.size
+    groupedItems.length
   );
+  const amount = getBasketSubtotal(checkoutItems);
+  const redemption = await CoinService.getRedemptionPreview(
+    traceId,
+    userId,
+    payload.orderData.redeemCoins ?? 0,
+    amount,
+    getCoinEligibleSubtotal(checkoutItems)
+  );
+  const coinDiscounts = distributeCoinDiscount(redemption.redeemCoins, groupedItems);
   const session = await mongoose.startSession();
 
   try {
     session.startTransaction();
     const orders = [];
 
-    for (const [index, [authorId, items]] of [...groupedItems.entries()].entries()) {
+    for (const [index, [authorId, items]] of groupedItems.entries()) {
       const amount = Number(
         items.reduce((total, item) => total + item.totalPrice, 0).toFixed(2)
       );
       const deliveryCharge = deliveryCharges[index] ?? 0;
+      const coinDiscount = coinDiscounts[index] ?? 0;
 
       const [order] = await Orders.create(
         [
@@ -144,8 +218,9 @@ const createOrders = async (
             user: userId,
             author: authorId,
             amount,
+            coinDiscount,
             deliveryCharge,
-            totalAmount: Number((amount + deliveryCharge).toFixed(2)),
+            totalAmount: Number((amount - coinDiscount + deliveryCharge).toFixed(2)),
             transactionId: payload.orderData.transactionId ?? null,
             billingDetails: payload.orderData.billingDetails,
             deliveryType: payload.orderData.deliveryType,
@@ -155,10 +230,25 @@ const createOrders = async (
       );
 
       await createOrderItems(order._id, authorId, items, session);
+      await CoinService.redeemCoins(
+        traceId,
+        userId,
+        coinDiscount,
+        COIN_REFERENCE_TYPE.order,
+        order._id,
+        session
+      );
       orders.push(order);
     }
 
     await session.commitTransaction();
+    if (redemption.redeemCoins > 0) {
+      await CoinService.sendRedemptionNotification(
+        userId,
+        redemption.redeemCoins,
+        orders[0]?._id
+      );
+    }
     await removeCheckedOutItemsFromCart(userId, payload.items);
     await invalidateOrderCaches();
 
@@ -277,11 +367,19 @@ const changeOrderStatus = async (
 
   assertOrderAccess(traceId, order, requester);
 
+  const shouldAwardPurchaseCoins =
+    payload.paymentStatus === PAYMENT_STATUS.paid &&
+    order.paymentStatus !== PAYMENT_STATUS.paid;
+
   const updatedOrder = await Orders.findByIdAndUpdate(orderId, payload, {
     returnDocument: 'after',
   })
     .populate(orderPopulate)
     .select('-__v');
+
+  if (shouldAwardPurchaseCoins) {
+    await CoinService.processPaidOrderRewards([order._id]);
+  }
 
   await invalidateOrderCaches();
   return updatedOrder;
