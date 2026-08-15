@@ -26,11 +26,16 @@ export const sendDeliveryOtpHandler = eventHandler<TJobIdSocketPayload>(
     const jobId = resolveJobId(data.job);
 
     await emitJobToAudience(jobId, SOCKET_EMIT.jobOtpSent, data.job);
+    await emitJobToAudience(jobId, SOCKET_EMIT.jobUpdated, data.job);
     sendJobAck(callback, {
       success: true,
       status: 200,
       message: 'Delivery OTP sent or resent',
-      data,
+      data: {
+        jobId: data.jobId,
+        otp: data.otp,
+        mock: data.mock,
+      },
     });
   }
 );

@@ -24,6 +24,7 @@ import {
   hashDeliveryOtp,
   isReassignableJob,
   saveDeliveryOtpToRedis,
+  sendDeliveryOtpSms,
 } from '@/app/modules/job/job.helpers';
 import { Job } from '@/app/modules/job/job.model';
 import {
@@ -250,8 +251,19 @@ const sendDeliveryOtp = async (
   job.hasDeliveryOtpVerified = false;
   job.status = JOB_STATUS.otp_sent;
   await job.save();
+  const populatedJob = await Job.findById(job._id).populate(jobPopulate);
+  const sms = await sendDeliveryOtpSms(
+    traceId,
+    (populatedJob?.order as any)?.billingDetails?.phoneNumber,
+    otp
+  );
 
-  return { job: await Job.findById(job._id).populate(jobPopulate), otp };
+  return {
+    job: populatedJob,
+    jobId: job._id,
+    otp,
+    mock: sms.mock,
+  };
 };
 
 /** Verifies customer delivery OTP and marks order OTP verified. */

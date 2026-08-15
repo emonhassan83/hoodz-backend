@@ -1,6 +1,8 @@
 import { compare, hash } from 'bcrypt';
 import { HttpStatusCode } from 'axios';
+import twilio from 'twilio';
 
+import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
 import { getRedisClient } from '@/app/configs/redis.config';
 import { JOB_PAYMENT_METHOD, JOB_STATUS } from '@/app/modules/job/job.constant';
@@ -25,7 +27,7 @@ export const compareDeliveryOtp = async (otp: string, hashedOtp: string) =>
 export const saveDeliveryOtpToRedis = async (
   jobId: string,
   hashedOtp: string,
-  ttlSeconds = 300
+  ttlSeconds = env.DELIVERY_OTP_TTL_SECONDS ?? 300
 ) => {
   await getRedisClient().set(REDIS_KEYS.DELIVERY_OTP(jobId), hashedOtp, 'EX', ttlSeconds);
 };
@@ -37,6 +39,41 @@ export const getDeliveryOtpFromRedis = async (jobId: string) =>
 /** Deletes delivery OTP hash after successful verification. */
 export const deleteDeliveryOtpFromRedis = async (jobId: string) => {
   await getRedisClient().del(REDIS_KEYS.DELIVERY_OTP(jobId));
+};
+
+/** Sends delivery OTP to customer phone in production and mocks locally. */
+export const sendDeliveryOtpSms = async (
+  traceId: string,
+  phoneNumber: string | null | undefined,
+  otp: string
+) => {
+  const mock = env.NODE_ENV !== 'production';
+  if (mock) return { sent: false, mock };
+
+  if (!phoneNumber) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Customer phone number is required to send delivery OTP',
+      traceId
+    );
+  }
+
+  const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
+  try {
+    await client.messages.create({
+      body: `Your Hoodz delivery OTP is ${otp}. It expires in 5 minutes. Please do not share it.`,
+      from: env.TWILIO_PHONE_NUMBER,
+      to: phoneNumber,
+    });
+    return { sent: true, mock };
+  } catch (error) {
+    console.error(`[${traceId}] Delivery OTP SMS error:`, error);
+    throw new ApiError(
+      HttpStatusCode.InternalServerError,
+      'Failed to send delivery OTP',
+      traceId
+    );
+  }
 };
 
 /** Throws unless requester can manage an order assignment. */

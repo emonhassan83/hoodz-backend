@@ -47,6 +47,14 @@ export type TEnv = {
   GROQ_MODEL?: string;
   GEMINI_API_KEY?: string;
   GEMINI_MODEL?: string;
+  DELIVERY_OTP_TTL_SECONDS?: number;
+  SMS_PROVIDER?: string;
+  VODAFONE_SMS_TOKEN_URL?: string;
+  VODAFONE_SMS_SEND_URL?: string;
+  VODAFONE_SMS_CLIENT_ID?: string;
+  VODAFONE_SMS_CLIENT_SECRET?: string;
+  VODAFONE_SMS_SENDER_ID?: string;
+  VODAFONE_SMS_TIMEOUT_MS?: number;
 
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
