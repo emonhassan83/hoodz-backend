@@ -16,5 +16,12 @@ export type TConfirmPaymentPayload = {
   success?: boolean;
 };
 
+export type TInitiatePaymentPayload = {
+  orderIds: string[];
+  paymentMethod: TPaymentMethod;
+  savedCardId?: string;
+  saveCard?: boolean;
+};
+
 export type TPaymobWebhookPayload = Record<string, any>;
 

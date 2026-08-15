@@ -9,6 +9,14 @@ import validateRequest from '@/app/utils/validateRequest';
 const router = Router();
 
 router
+  .route('/initiate')
+  .post(
+    auth(...AUTHENTICATED_ROLES),
+    validateRequest(PaymentValidation.initiatePaymentValidationSchema),
+    PaymentController.initiatePayment
+  );
+
+router
   .route('/confirm')
   .post(
     auth(...AUTHENTICATED_ROLES),

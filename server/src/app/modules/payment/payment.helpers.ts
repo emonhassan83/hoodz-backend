@@ -1,6 +1,6 @@
-import axios from 'axios';
-import { HttpStatusCode } from 'axios';
 import crypto from 'node:crypto';
+
+import axios, { HttpStatusCode } from 'axios';
 
 import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';

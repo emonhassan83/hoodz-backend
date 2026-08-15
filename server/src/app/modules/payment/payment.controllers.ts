@@ -5,6 +5,23 @@ import { buildPaymobReturnHtml } from '@/app/modules/payment/payment.helpers';
 import { PaymentService } from '@/app/modules/payment/payment.services';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
+const initiatePayment = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await PaymentService.initiatePayment(
+    traceId,
+    req.user.userId,
+    req.body
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 201,
+    message: 'Payment initiated successfully',
+    data,
+    traceId,
+  });
+});
+
 const confirmPayment = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await PaymentService.confirmPayment(
@@ -59,6 +76,7 @@ const paymobReturnPage = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const PaymentController = {
+  initiatePayment,
   confirmPayment,
   paymobWebhook,
   paymobReturnPage,
