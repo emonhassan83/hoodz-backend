@@ -1,1 +1,26 @@
-// Routes for meta module
+import { Router } from 'express';
+
+import auth from '@/app/middlewares/auth';
+import { MetaController } from '@/app/modules/meta/meta.controllers';
+import { MetaValidation } from '@/app/modules/meta/meta.validation';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
+import validateRequest from '@/app/utils/validateRequest';
+
+const router = Router();
+
+router
+  .route('/user/guest')
+  .get(
+    validateRequest(MetaValidation.getGuestMetaValidationSchema),
+    MetaController.getGuestMeta
+  );
+
+router
+  .route('/user')
+  .get(
+    auth(USER_ROLE.user),
+    validateRequest(MetaValidation.getUserMetaValidationSchema),
+    MetaController.getUserMeta
+  );
+
+export const MetaRoutes = router;

@@ -387,13 +387,6 @@ const updateUserProfile = async (
   if (payload.phone) {
     const user = await User.findById(userId);
     if (payload.phone !== user?.phone) {
-      if (!user?.isChangePhoneOtpVerified) {
-        throw new ApiError(
-          HttpStatusCode.BadRequest,
-          'Please verify your new phone with OTP first',
-          traceId
-        );
-      }
       await assertPhoneNotTaken(payload.phone, userId, traceId);
       updateData.isChangePhoneOtpVerified = false;
     }
@@ -799,5 +792,4 @@ export const UserService = {
   applyReferralCodeToUser,
   deleteUserProfile,
 };
-
 

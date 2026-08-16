@@ -14,6 +14,7 @@ import { GrievanceRoutes } from '@/app/modules/grievance/grievance.routes';
 import { JobRoutes } from '@/app/modules/job/job.routes';
 import { KycRoutes } from '@/app/modules/kyc/kyc.routes';
 import { MessagesRoutes } from '@/app/modules/messages/messages.routes';
+import { MetaRoutes } from '@/app/modules/meta/meta.routes';
 import { NotificationRoutes } from '@/app/modules/notification/notification.routes';
 import { OrdersRoutes } from '@/app/modules/orders/orders.routes';
 import { OtpRoutes } from '@/app/modules/otp/otp.routes';
@@ -78,6 +79,10 @@ const apiRoutes = [
   {
     path: '/banner',
     route: BannerRoutes,
+  },
+  {
+    path: '/meta',
+    route: MetaRoutes,
   },
   {
     path: '/category',
