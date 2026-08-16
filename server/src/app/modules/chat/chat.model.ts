@@ -32,7 +32,7 @@ chatSchema.index(
   { order: 1, type: 1 },
   {
     unique: true,
-    partialFilterExpression: { type: CHAT_TYPES.order_support },
+    partialFilterExpression: { order: { $type: 'objectId' } },
   }
 );
 

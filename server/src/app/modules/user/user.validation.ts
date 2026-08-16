@@ -92,6 +92,16 @@ const invitePlatformUserValidationSchema = z.object({
 });
 
 
+const applyReferralCodeValidationSchema = z.object({
+  body: z.object({
+    referralCode: z
+      .string({ message: 'Referral code is required.' })
+      .trim()
+      .min(1, { message: 'Referral code cannot be empty.' })
+      .toUpperCase(),
+  }),
+});
+
 const changeEmailZodSchema = z.object({
   body: z.object({
     email: z
@@ -145,6 +155,7 @@ export const UserValidation = {
   verifySecurityCodeValidationSchema,
   inviteVendorValidationSchema: invitePlatformUserValidationSchema,
   inviteAgentValidationSchema: invitePlatformUserValidationSchema,
+  applyReferralCodeValidationSchema,
   changeEmailZodSchema,
   nearbyShopsValidationSchema,
   shopDetailsValidationSchema,

@@ -4,7 +4,7 @@ import { disconnectDatabase } from '@/app/configs/db.configs';
 import { logger } from '@/app/configs/logger.configs';
 import { disconnectRedis } from '@/app/configs/redis.config';
 import { stopWorkers } from '@/app/worker';
-import { stopCronJobs } from '@/app/jobs';
+import { stopCronJobs } from '@/app/jobs/jobScheduler';
 
 type TShutdown = {
   reason: string;

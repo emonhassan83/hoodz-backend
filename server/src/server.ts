@@ -6,7 +6,7 @@ import { config } from 'dotenv';
 import app from '@/app';
 import { connectDatabase } from '@/app/configs/db.configs';
 import { connectRedis } from '@/app/configs/redis.config';
-import { startCronJobs } from '@/app/jobs';
+import { startCronJobs } from '@/app/jobs/jobScheduler';
 import initializeSocketIO from '@/app/socket/socket.init';
 import { shutdown } from '@/app/utils/shutdown.utils';
 import { startWorkers } from '@/app/worker';

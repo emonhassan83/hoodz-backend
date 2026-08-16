@@ -36,6 +36,14 @@ router
 // ─── Profile ───────────────────────────────────────────────────────────────
 
 router
+  .route('/referral-code')
+  .post(
+    auth(...AUTHENTICATED_ROLES),
+    validateRequest(UserValidation.applyReferralCodeValidationSchema),
+    UserControllers.applyReferralCodeToUser
+  );
+
+router
   .route('/change-email')
   .put(
     auth(...AUTHENTICATED_ROLES),

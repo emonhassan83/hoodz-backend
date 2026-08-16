@@ -712,6 +712,70 @@ const deleteUserProfile = async (
   }
 };
 
+/** Binds a referral code to a user who has not used one yet. */
+const applyReferralCodeToUser = async (
+  traceId: string,
+  userId: string,
+  referralCode: string
+) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const user = await User.findById(userId).session(session);
+    if (!user || user.isDeleted) {
+      throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
+    }
+
+    if (user.referredBy) {
+      throw new ApiError(
+        HttpStatusCode.BadRequest,
+        'Referral code already used',
+        traceId
+      );
+    }
+
+    const normalizedReferralCode = referralCode.trim().toUpperCase();
+    const referrer = await User.findOne({
+      referralCode: normalizedReferralCode,
+      isDeleted: false,
+    }).session(session);
+
+    if (!referrer) {
+      throw new ApiError(HttpStatusCode.BadRequest, 'Invalid referral code', traceId);
+    }
+
+    if (referrer._id.toString() === user._id.toString()) {
+      throw new ApiError(
+        HttpStatusCode.BadRequest,
+        'You cannot use your own referral code',
+        traceId
+      );
+    }
+
+    user.referredBy = referrer._id;
+    user.referralCodeUsed = referrer.referralCode;
+    await user.save({ session });
+    await session.commitTransaction();
+
+    return {
+      _id: user._id,
+      referredBy: user.referredBy,
+      referralCodeUsed: user.referralCodeUsed,
+      referrer: {
+        _id: referrer._id,
+        name: referrer.name,
+        profileAvatar: referrer.profileAvatar,
+      },
+    };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+};
+
 export const UserService = {
   getAllUsersFromDB,
   getSingleUser,
@@ -727,6 +791,7 @@ export const UserService = {
   verifySecurityCode,
   inviteVendor,
   inviteAgent,
+  applyReferralCodeToUser,
   deleteUserProfile,
 };
 

@@ -109,6 +109,23 @@ const inviteAgent = asyncHandler(async (req: Request, res: Response) => {
 
 // ─── Update ────────────────────────────────────────────────────────────────
 
+const applyReferralCodeToUser = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await UserService.applyReferralCodeToUser(
+    traceId,
+    req.user.userId,
+    req.body.referralCode
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Referral code applied successfully',
+    data,
+    traceId,
+  });
+});
+
 const changedEmail = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await UserService.changeEmail(traceId, req.user.userId, req.body);
@@ -239,6 +256,7 @@ export const UserControllers = {
   getShopDetails,
   inviteVendor,
   inviteAgent,
+  applyReferralCodeToUser,
   changedEmail,
   updateUserProfile,
   updateUserStatus,

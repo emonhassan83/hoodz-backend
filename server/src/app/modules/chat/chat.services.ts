@@ -9,6 +9,8 @@ import {
 import {
   assertChatAccess,
   assertChatUserExists,
+  assertOrderSupportAccess,
+  assertStaffSupportCreateAccess,
   getActiveAgentIds,
   getChatOrderOrThrow,
 } from '@/app/modules/chat/chat.helpers';
@@ -40,12 +42,78 @@ const getExistingUserChatByType = async (
   const chatIds = await getMyParticipantChatIds(userId);
   if (chatIds.length === 0) return null;
 
-  return Chat.findOne({ _id: { $in: chatIds }, type });
+  return Chat.findOne({ _id: { $in: chatIds }, type, order: null });
 };
 
 /** Loads a chat with order details for API response. */
 const getPopulatedChatById = async (chatId: unknown) => {
   return Chat.findById(chatId).populate(chatPopulate).select('-__v');
+};
+
+const upsertOrderChat = async (orderId: string, type: IChatType) =>
+  Chat.findOneAndUpdate(
+    { order: orderId, type },
+    {
+      type,
+      order: orderId,
+      status: CHAT_STATUS.active,
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  ).populate(chatPopulate);
+
+/** Creates or returns a user-only AI assistant chat. */
+const createAiAssistantChat = async (userId: string) => {
+  const existingChat = await getExistingUserChatByType(
+    userId,
+    CHAT_TYPES.ai_assistant
+  );
+  const chat =
+    existingChat ||
+    (await Chat.create({
+      type: CHAT_TYPES.ai_assistant,
+      order: null,
+      status: CHAT_STATUS.active,
+    }));
+
+  await syncChatParticipants(chat._id, [userId]);
+  const populatedChat = await getPopulatedChatById(chat._id);
+  return attachParticipantsToChat(populatedChat);
+};
+
+/** Creates or returns a singleton requester <-> agent support chat. */
+const createAgentSupportChat = async (userId: string, type: IChatType) => {
+  const existingChat = await getExistingUserChatByType(userId, type);
+  const chat =
+    existingChat ||
+    (await Chat.create({
+      type,
+      order: null,
+      status: CHAT_STATUS.active,
+    }));
+  const agentIds = await getActiveAgentIds();
+
+  await syncChatParticipants(chat._id, [userId, ...agentIds]);
+  const populatedChat = await getPopulatedChatById(chat._id);
+  return attachParticipantsToChat(populatedChat);
+};
+
+/** Creates or returns buyer <-> agent chat for one order. */
+const createOrderSupportChat = async (
+  traceId: string,
+  requester: TChatRequester,
+  orderId: string
+) => {
+  const order = await getChatOrderOrThrow(traceId, orderId);
+  assertOrderSupportAccess(traceId, order, requester);
+
+  const buyerId = order.user?.toString();
+  if (!buyerId) {
+    throw new ApiError(HttpStatusCode.BadRequest, 'Order has no customer', traceId);
+  }
+
+  const chat = await upsertOrderChat(orderId, CHAT_TYPES.order_support);
+  await syncChatParticipants(chat._id, [buyerId, ...(await getActiveAgentIds())]);
+  return attachParticipantsToChat(chat);
 };
 
 /** Creates or returns a singleton/order-scoped chat. */
@@ -56,66 +124,24 @@ const createChat = async (
 ) => {
   await assertChatUserExists(traceId, requester.userId);
 
-  if (payload.type === CHAT_TYPES.customer_support) {
-    const existingChat = await getExistingUserChatByType(
-      requester.userId,
-      CHAT_TYPES.customer_support
-    );
-    const chat =
-      existingChat ||
-      (await Chat.create({
-        type: CHAT_TYPES.customer_support,
-        order: null,
-        status: CHAT_STATUS.active,
-      }));
-    const agentIds = await getActiveAgentIds();
-
-    await syncChatParticipants(chat!._id, [requester.userId, ...agentIds]);
-    const populatedChat = await getPopulatedChatById(chat!._id);
-    return attachParticipantsToChat(populatedChat);
+  if (payload.type === CHAT_TYPES.ai_assistant) {
+    return createAiAssistantChat(requester.userId);
   }
 
-  if (payload.type === CHAT_TYPES.ai_assistant) {
-    const existingChat = await getExistingUserChatByType(
-      requester.userId,
-      CHAT_TYPES.ai_assistant
-    );
-    const chat =
-      existingChat ||
-      (await Chat.create({
-        type: CHAT_TYPES.ai_assistant,
-        order: null,
-        status: CHAT_STATUS.active,
-      }));
+  if (payload.type === CHAT_TYPES.customer_support) {
+    return createAgentSupportChat(requester.userId, CHAT_TYPES.customer_support);
+  }
 
-    await syncChatParticipants(chat!._id, [requester.userId]);
-    const populatedChat = await getPopulatedChatById(chat!._id);
-    return attachParticipantsToChat(populatedChat);
+  if (payload.type === CHAT_TYPES.staff_support) {
+    assertStaffSupportCreateAccess(traceId, requester);
+    return createAgentSupportChat(requester.userId, CHAT_TYPES.staff_support);
   }
 
   if (!payload.order) {
     throw new ApiError(HttpStatusCode.BadRequest, 'Order is required', traceId);
   }
 
-  const order = await getChatOrderOrThrow(traceId, payload.order, requester);
-  const participants = [
-    order.user?.toString(),
-    order.author.toString(),
-    ...(await getActiveAgentIds()),
-  ].filter(Boolean) as string[];
-
-  const chat = await Chat.findOneAndUpdate(
-    { order: payload.order, type: CHAT_TYPES.order_support },
-    {
-      type: CHAT_TYPES.order_support,
-      order: payload.order,
-      status: CHAT_STATUS.active,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  ).populate(chatPopulate);
-
-  await syncChatParticipants(chat!._id, participants);
-  return attachParticipantsToChat(chat);
+  return createOrderSupportChat(traceId, requester, payload.order);
 };
 
 /** Returns chats where requester participates. */
@@ -147,13 +173,14 @@ const getChatId = async (
   return attachParticipantsToChat(chat);
 };
 
-/** Returns one order-support chat by order id after access check. */
+/** Returns one order-scoped support chat after access check. */
 const getChatOrderById = async (
   traceId: string,
   requester: TChatRequester,
   orderId: string
 ) => {
-  await getChatOrderOrThrow(traceId, orderId, requester);
+  const order = await getChatOrderOrThrow(traceId, orderId);
+  assertOrderSupportAccess(traceId, order, requester);
 
   const chat = await Chat.findOne({
     order: orderId,
@@ -176,5 +203,3 @@ export const ChatService = {
   getChatId,
   getChatOrderById,
 };
-
-

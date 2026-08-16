@@ -2,7 +2,10 @@ export const CHAT_TYPES = {
   ai_assistant: 'ai_assistant',
   customer_support: 'customer_support',
   order_support: 'order_support',
+  staff_support: 'staff_support',
 } as const;
+
+export const ORDER_CHAT_TYPES = [CHAT_TYPES.order_support] as const;
 
 export const CHAT_STATUS = {
   active: 'active',

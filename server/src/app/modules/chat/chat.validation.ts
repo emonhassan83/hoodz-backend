@@ -15,7 +15,7 @@ const createChatValidationSchema = z.object({
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['order'],
-          message: 'Order is required for order support chat',
+          message: 'Order is required for this chat type',
         });
       }
     }),
