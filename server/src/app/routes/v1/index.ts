@@ -1,5 +1,6 @@
 import { Router } from 'express';
 
+import { AnalysisRoutes } from '@/app/modules/analysis/analysis.routes';
 import { AiAssistantRoutes } from '@/app/modules/aiAssistant/aiAssistant.routes';
 import { AuthRoutes } from '@/app/modules/auth/auth.routes';
 import { BannerRoutes } from '@/app/modules/banner/banner.routes';
@@ -189,6 +190,10 @@ const apiRoutes = [
   {
     path: '/grievance',
     route: GrievanceRoutes,
+  },
+  {
+    path: '/analysis',
+    route: AnalysisRoutes,
   },
 ];
 

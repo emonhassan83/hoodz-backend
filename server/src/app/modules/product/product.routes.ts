@@ -62,6 +62,14 @@ router
   );
 
 router
+  .route('/shop/:vendorId/search')
+  .get(
+    optionalAuth,
+    validateRequest(ProductValidation.searchShopProductsValidationSchema),
+    ProductController.searchShopProducts
+  );
+
+router
   .route('/shop/:vendorId')
   .get(
     optionalAuth,

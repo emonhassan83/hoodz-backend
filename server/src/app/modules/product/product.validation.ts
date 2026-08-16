@@ -161,12 +161,22 @@ const shopProductsValidationSchema = z.object({
   }),
 });
 
+const searchShopProductsValidationSchema = z.object({
+  params: z.object({
+    vendorId: objectIdSchema,
+  }),
+  query: z.object({
+    searchTerm: z.string().trim().min(1, 'Search term is required'),
+  }).passthrough(),
+});
+
 export const ProductValidation = {
   createProductValidationSchema,
   createProductByAdminValidationSchema,
   updateProductValidationSchema,
   markProductViewedValidationSchema,
   shopProductsValidationSchema,
+  searchShopProductsValidationSchema,
   notifyMeValidationSchema,
 };
 

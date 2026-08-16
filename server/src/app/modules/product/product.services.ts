@@ -32,6 +32,10 @@ import {
   Product,
   ProductStockNotify,
 } from '@/app/modules/product/product.model';
+import {
+  getWishlistItemReferenceId,
+  productWishlistMatch,
+} from '@/app/modules/wishlist/wishlist.helpers';
 import { Wishlist } from '@/app/modules/wishlist/wishlist.model';
 import {
   TAdminProductPayload,
@@ -343,7 +347,9 @@ const getAiRecommendedProducts = async (
   ] = await Promise.all([
     getRecentlyViewedProductIds(actorKey),
     actor.userId
-      ? Wishlist.find({ user: actor.userId }).select('product -_id').lean()
+      ? Wishlist.find(productWishlistMatch(actor.userId))
+          .select('reference -_id')
+          .lean()
       : Promise.resolve([]),
     actor.userId || actor.guestId
       ? getActorCartProductIds(actor)
@@ -352,9 +358,9 @@ const getAiRecommendedProducts = async (
     getFollowedVendorIdSet(actor.userId),
   ]);
 
-  const wishlistProductIds = wishlistSignals.map((item: any) =>
-    item.product.toString()
-  );
+  const wishlistProductIds = wishlistSignals
+    .map((item: any) => getWishlistItemReferenceId(item))
+    .filter(Boolean);
   const signalProductIds = [
     ...new Set([
       ...recentProductIds,
@@ -621,6 +627,7 @@ const getShopProducts = async (
       .lean(),
     query
   )
+    .search(['title', 'sku', 'description'])
     .sort()
     .paginate();
 
@@ -632,7 +639,9 @@ const getShopProducts = async (
       .select(productListSelect)
       .lean(),
     userId
-      ? Wishlist.find({ user: userId }).select('product -_id').lean()
+      ? Wishlist.find(productWishlistMatch(userId))
+          .select('reference -_id')
+          .lean()
       : Promise.resolve([]),
     userId
       ? Cart.findOne({ userId }).select('items.productId').lean()
@@ -666,7 +675,9 @@ const getShopProducts = async (
 
   const wishlistIds = await getWishlistProductIdSet(userId);
   const wishlistSignalIds = new Set(
-    wishlistSignals.map((item: any) => item.product.toString())
+    wishlistSignals
+      .map((item: any) => getWishlistItemReferenceId(item))
+      .filter(Boolean)
   );
   const cartSignalIds = new Set(
     (cart?.items ?? []).map((item: any) => item.productId.toString())
@@ -708,6 +719,55 @@ const getShopProducts = async (
   };
 
   await setCache(cacheKey, result, 300);
+  return result;
+};
+
+/** Searches products inside one shop for the in-store search icon. */
+const searchShopProducts = async (
+  traceId: string,
+  vendorId: string,
+  query: Record<string, unknown>,
+  userId?: string
+) => {
+  await assertVendorExists(traceId, vendorId);
+
+  const searchTerm = String(query.searchTerm ?? '').trim();
+  if (!searchTerm) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Search term is required',
+      traceId
+    );
+  }
+
+  const cacheKey = REDIS_KEYS.PRODUCT_LIST(
+    `shop-search:${vendorId}:${userId ?? 'anonymous'}:v1:${JSON.stringify(query)}`
+  );
+  const cached = await getCache<TProductListResponse>(cacheKey);
+  if (cached) return cached;
+
+  const productsQuery = new QueryBuilder(
+    Product.find({ vendor: vendorId, isDeleted: false })
+      .populate(productPopulate)
+      .select(productListSelect)
+      .lean(),
+    query
+  )
+    .search(['title', 'sku', 'description'])
+    .sort()
+    .paginate();
+
+  const [products, meta] = await Promise.all([
+    productsQuery.modelQuery,
+    productsQuery.countTotal(),
+  ]);
+  const wishlistIds = await getWishlistProductIdSet(userId);
+  const result = {
+    meta,
+    data: formatProductListItems(products, wishlistIds),
+  };
+
+  await setCache(cacheKey, result, 180);
   return result;
 };
 
@@ -1108,6 +1168,7 @@ export const ProductService = {
   createProductByAdmin,
   getAllProduct,
   getShopProducts,
+  searchShopProducts,
   getMyProducts,
   getProductById,
   updateProduct,

@@ -1,5 +1,6 @@
 import { Schema, model } from 'mongoose';
 
+import { WISHLIST_MODEL_TYPE } from '@/app/modules/wishlist/wishlist.constant';
 import {
   IWishlist,
   IWishlistModel,
@@ -13,9 +14,14 @@ const wishlistSchema = new Schema<IWishlist, IWishlistModel>(
       required: true,
       index: true,
     },
-    product: {
+    modelType: {
+      type: String,
+      enum: Object.values(WISHLIST_MODEL_TYPE),
+      default: WISHLIST_MODEL_TYPE.product,
+      index: true,
+    },
+    reference: {
       type: Schema.Types.ObjectId,
-      ref: 'Product',
       required: true,
       index: true,
     },
@@ -23,11 +29,9 @@ const wishlistSchema = new Schema<IWishlist, IWishlistModel>(
   { timestamps: true }
 );
 
-wishlistSchema.index({ user: 1, product: 1 }, { unique: true });
+wishlistSchema.index({ user: 1, modelType: 1, reference: 1 }, { unique: true });
 
 export const Wishlist = model<IWishlist, IWishlistModel>(
   'Wishlist',
   wishlistSchema
 );
-
-

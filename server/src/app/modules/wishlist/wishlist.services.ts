@@ -1,5 +1,11 @@
 import { Product } from '@/app/modules/product/product.model';
-import { assertWishlistProductExists } from '@/app/modules/wishlist/wishlist.helpers';
+import { WISHLIST_MODEL_TYPE } from '@/app/modules/wishlist/wishlist.constant';
+import {
+  assertWishlistReferenceExists,
+  findWishlistItem,
+  getWishlistProductReferenceIds,
+  wishlistItemMatch,
+} from '@/app/modules/wishlist/wishlist.helpers';
 import { Wishlist } from '@/app/modules/wishlist/wishlist.model';
 import { TWishlistTogglePayload } from '@/app/modules/wishlist/wishlist.types';
 import {
@@ -11,62 +17,74 @@ import {
 import {
   addWishlistProduct,
   getWishlistProductIds,
-  isWishlistProduct,
   removeWishlistProduct,
   syncWishlistProductIds,
 } from '@/app/redis/helpers/wishlist';
 import { REDIS_KEYS } from '@/app/redis/keys';
 
 /** Invalidates wishlist and user-personalized product caches. */
-const invalidateWishlistCaches = async (userId: string, productId: string) => {
+const invalidateWishlistCaches = async (userId: string, productId?: string) => {
   await Promise.all([
     deleteCache(REDIS_KEYS.WISHLIST_PRODUCTS(userId)),
-    deleteCache(REDIS_KEYS.PRODUCT_SINGLE(productId, userId)),
+    productId ? deleteCache(REDIS_KEYS.PRODUCT_SINGLE(productId, userId)) : Promise.resolve(),
     deleteCachePattern('product:*'),
   ]);
 };
 
-/** Loads wishlist ids from Redis and hydrates Redis from MongoDB on cache miss. */
+/** Loads product wishlist ids from Redis and hydrates Redis from MongoDB on cache miss. */
 const getWishlistIds = async (userId: string) => {
   const redisProductIds = await getWishlistProductIds(userId);
   if (redisProductIds.length > 0) return redisProductIds;
 
-  const dbProductIds = (
-    await Wishlist.find({ user: userId }).select('product -_id').lean()
-  ).map((item) => item.product.toString());
-
+  const dbProductIds = await getWishlistProductReferenceIds(userId);
   await syncWishlistProductIds(userId, dbProductIds);
   return dbProductIds;
 };
 
-/** Toggles a product id inside the user's Redis wishlist set. */
+/** Toggles a shop or product inside the user's wishlist. */
 const toggle = async (
   traceId: string,
   userId: string,
   payload: TWishlistTogglePayload
 ) => {
-  await assertWishlistProductExists(traceId, payload.productId);
+  const modelType = payload.modelType ?? WISHLIST_MODEL_TYPE.product;
+  const referenceId = payload.referenceId;
+  await assertWishlistReferenceExists(traceId, modelType, referenceId);
 
-  const alreadyAdded = await isWishlistProduct(userId, payload.productId);
-  if (alreadyAdded) {
+  const existing = await findWishlistItem(userId, modelType, referenceId);
+  if (existing) {
     await Promise.all([
-      Wishlist.deleteOne({ user: userId, product: payload.productId }),
-      removeWishlistProduct(userId, payload.productId),
-      invalidateWishlistCaches(userId, payload.productId),
+      Wishlist.deleteMany(wishlistItemMatch(userId, modelType, referenceId)),
+      modelType === WISHLIST_MODEL_TYPE.product
+        ? removeWishlistProduct(userId, referenceId)
+        : Promise.resolve(),
+      invalidateWishlistCaches(
+        userId,
+        modelType === WISHLIST_MODEL_TYPE.product ? referenceId : undefined
+      ),
     ]);
-    return { productId: payload.productId, added: false };
+    return { modelType, referenceId, added: false };
   }
 
   await Promise.all([
     Wishlist.updateOne(
-      { user: userId, product: payload.productId },
-      { user: userId, product: payload.productId },
+      { user: userId, modelType, reference: referenceId },
+      {
+        user: userId,
+        modelType,
+        reference: referenceId,
+      },
       { upsert: true }
     ),
-    addWishlistProduct(userId, payload.productId),
-    invalidateWishlistCaches(userId, payload.productId),
+    modelType === WISHLIST_MODEL_TYPE.product
+      ? addWishlistProduct(userId, referenceId)
+      : Promise.resolve(),
+    invalidateWishlistCaches(
+      userId,
+      modelType === WISHLIST_MODEL_TYPE.product ? referenceId : undefined
+    ),
   ]);
-  return { productId: payload.productId, added: true };
+  return { modelType, referenceId, added: true };
 };
 
 /** Returns wishlist products with frontend-ready basic product details. */
@@ -97,5 +115,3 @@ export const WishlistService = {
   toggle,
   getAll,
 };
-
-

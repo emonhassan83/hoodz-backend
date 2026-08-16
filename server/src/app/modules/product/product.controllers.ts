@@ -148,6 +148,25 @@ const getShopProducts = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const searchShopProducts = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const result = await ProductService.searchShopProducts(
+    traceId,
+    req.params.vendorId as string,
+    req.query,
+    req.user?.userId
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Shop products search fetched successfully',
+    meta: result.meta,
+    data: result.data,
+    traceId,
+  });
+});
+
 const getAllProduct = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const result = await ProductService.getAllProduct(
@@ -261,6 +280,7 @@ export const ProductController = {
   createProductByAdmin,
   getAllProduct,
   getShopProducts,
+  searchShopProducts,
   getMyProducts,
   getProductById,
   updateProduct,

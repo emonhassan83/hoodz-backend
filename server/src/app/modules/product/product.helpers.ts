@@ -21,7 +21,7 @@ import {
 } from '@/app/modules/product/product.types';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
-import { Wishlist } from '@/app/modules/wishlist/wishlist.model';
+import { getWishlistProductReferenceIds } from '@/app/modules/wishlist/wishlist.helpers';
 import { deleteCachePattern } from '@/app/redis/helpers';
 import {
   getWishlistProductIds,
@@ -385,9 +385,7 @@ export const getWishlistProductIdSet = async (userId?: string) => {
   const redisProductIds = await getWishlistProductIds(userId);
   if (redisProductIds.length > 0) return new Set(redisProductIds);
 
-  const dbProductIds = (
-    await Wishlist.find({ user: userId }).select('product -_id').lean()
-  ).map((item) => item.product.toString());
+  const dbProductIds = await getWishlistProductReferenceIds(userId);
 
   await syncWishlistProductIds(userId, dbProductIds);
   return new Set(dbProductIds);

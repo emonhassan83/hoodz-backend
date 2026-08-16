@@ -1,5 +1,6 @@
+import { TWishlistModelType } from '@/app/modules/wishlist/wishlist.interface';
+
 export type TWishlistTogglePayload = {
-  productId: string;
+  referenceId: string;
+  modelType?: TWishlistModelType;
 };
-
-

@@ -19,6 +19,7 @@ import {
   upsertShopToTypesense,
 } from '@/app/modules/search/search.typesense';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
+import { isShopWishlisted } from '@/app/modules/wishlist/wishlist.helpers';
 import {
   assertEmailNotTaken,
   assertPhoneNotTaken,
@@ -284,7 +285,7 @@ const getShopDetails = async (
     }
   }
 
-  const [categories, policies, followedVendorIds] = await Promise.all([
+  const [categories, policies, followedVendorIds, wishlisted] = await Promise.all([
     Product.aggregate([
       { $match: { vendor: new mongoose.Types.ObjectId(vendorId), isDeleted: false } },
       { $group: { _id: '$category', productCount: { $sum: 1 } } },
@@ -307,26 +308,30 @@ const getShopDetails = async (
     ]),
     SettingService.getSettingGenerals(traceId, vendorId).catch(() => null),
     getFollowedVendorIdSet(userId),
+    isShopWishlisted(userId, vendorId),
   ]);
 
-  const shop = withFollowingFlag(
-    {
-      _id: vendor._id,
-      name: vendor.name,
-      profileAvatar: vendor.profileAvatar,
-      coverPhoto: vendor.coverPhoto ?? null,
-      description: vendor.description,
-      phone: vendor.phone,
-      location: vendor.location,
-      id: vendor.id,
-      createdAt: vendor.createdAt,
-      followers: vendor.followers,
-      address: vendor.address,
-      avgRating: vendor.avgRating,
-      ratingCount: vendor.ratingCount,
-    },
-    followedVendorIds
-  );
+  const shop = {
+    ...withFollowingFlag(
+      {
+        _id: vendor._id,
+        name: vendor.name,
+        profileAvatar: vendor.profileAvatar,
+        coverPhoto: vendor.coverPhoto ?? null,
+        description: vendor.description,
+        phone: vendor.phone,
+        location: vendor.location,
+        id: vendor.id,
+        createdAt: vendor.createdAt,
+        followers: vendor.followers,
+        address: vendor.address,
+        avgRating: vendor.avgRating,
+        ratingCount: vendor.ratingCount,
+      },
+      followedVendorIds
+    ),
+    isWishlisted: wishlisted,
+  };
 
   return {
     shop,
