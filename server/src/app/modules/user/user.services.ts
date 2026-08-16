@@ -11,6 +11,8 @@ import {
   getFollowedVendorIdSet,
   withFollowingFlag,
 } from '@/app/modules/follow/follow.helpers';
+import { JOB_STATUS } from '@/app/modules/job/job.constant';
+import { Job } from '@/app/modules/job/job.model';
 import { Kyc } from '@/app/modules/kyc/kyc.model';
 import { Product } from '@/app/modules/product/product.model';
 import { SettingService } from '@/app/modules/settings/settings.services';
@@ -86,8 +88,16 @@ const getSingleUser = async (traceId: string, userId: string) => {
 
   if (user.role !== USER_ROLE.rider) return user;
 
-  const kyc = await Kyc.findOne({ user: user._id }).select('-user -rejectedReason -updatedAt -__v').lean();
-  return { ...user, kyc };
+  const [kyc, completedDeliveries] = await Promise.all([
+    Kyc.findOne({ user: user._id })
+      .select('-user -rejectedReason -updatedAt -__v')
+      .lean(),
+    Job.countDocuments({
+      rider: user._id,
+      status: JOB_STATUS.delivered,
+    }),
+  ]);
+  return { ...user, kyc, completedDeliveries };
 };
 
 /** Lists nearby vendor shops with distance and optional Google duration data. */

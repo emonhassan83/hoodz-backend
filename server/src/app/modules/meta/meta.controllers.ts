@@ -35,7 +35,49 @@ const getGuestMeta = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const getRiderMeta = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await MetaService.getRiderMeta(traceId, req.user.userId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Rider meta fetched successfully',
+    data,
+    traceId,
+  });
+});
+
+const getAdminMeta = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await MetaService.getAdminMeta(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Admin meta fetched successfully',
+    data,
+    traceId,
+  });
+});
+
+const getVendorMeta = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await MetaService.getVendorMeta(req.user.userId, req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Vendor meta fetched successfully',
+    data,
+    traceId,
+  });
+});
+
 export const MetaController = {
   getUserMeta,
   getGuestMeta,
+  getRiderMeta,
+  getAdminMeta,
+  getVendorMeta,
 };

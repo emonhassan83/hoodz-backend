@@ -24,7 +24,8 @@ export interface IJob {
   _id: Types.ObjectId;
   id: string;
   order: Types.ObjectId;
-  rider: Types.ObjectId;
+  rider?: Types.ObjectId | null;
+  requestedRider: Types.ObjectId[];
   assignedBy?: Types.ObjectId | null;
   assignmentType: TJobAssignmentType;
   paymentMethod: TJobPaymentMethod;

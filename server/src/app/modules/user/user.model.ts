@@ -132,6 +132,7 @@ const userSchema = new Schema<IUser, IUserModal>(
         return expireAt.setMinutes(expireAt.getMinutes() + 30);
       },
     },
+    isOnline: { type: Boolean, default: false, index: true },
     isDeleted: { type: Boolean, default: false },
   },
   {

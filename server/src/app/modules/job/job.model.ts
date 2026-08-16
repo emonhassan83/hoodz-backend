@@ -34,7 +34,17 @@ const jobSchema = new Schema<IJob, IJobModel>(
     rider: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
+      index: true,
+    },
+    requestedRider: {
+      type: [
+        {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+        },
+      ],
+      default: [],
       index: true,
     },
     assignedBy: {
@@ -84,6 +94,7 @@ const jobSchema = new Schema<IJob, IJobModel>(
 
 jobSchema.index({ order: 1, status: 1 });
 jobSchema.index({ rider: 1, status: 1, createdAt: -1 });
+jobSchema.index({ requestedRider: 1, status: 1 });
 
 export const Job = model<IJob, IJobModel>('Job', jobSchema);
 

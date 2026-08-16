@@ -13,6 +13,7 @@ import {
   assertCanAssignOrder,
   assertJobAccess,
   assertJobStatusIn,
+  assertRequestedOrAssignedRider,
   buildJobLocations,
   buildJobMoneyFields,
   compareDeliveryOtp,
@@ -38,8 +39,11 @@ import {
 } from '@/app/modules/job/job.types';
 import { ORDER_STATUS } from '@/app/modules/orders/orders.constant';
 import { Orders } from '@/app/modules/orders/orders.model';
+import { Payment } from '@/app/modules/payment/payment.model';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
+import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import { RiderAvailabilitySocketHelper } from '@/app/socket/utils/riderAvailability.helpers';
+import { emitJobToAudience } from '@/app/socket/utils/jobSocket.helpers';
 
 const jobPopulate = [
   {
@@ -48,6 +52,7 @@ const jobPopulate = [
       'id user author totalAmount deliveryCharge status paymentStatus billingDetails deliveryType isOtpVerified',
   },
   { path: 'rider', select: 'name email phone profileAvatar avgRating ratingCount' },
+  { path: 'requestedRider', select: 'name email phone profileAvatar' },
   { path: 'assignedBy', select: 'name email role' },
 ];
 
@@ -120,6 +125,7 @@ const assignJob = async (
     {
       order: payload.orderId,
       rider: payload.riderId,
+      requestedRider: [payload.riderId],
       assignedBy:
         assignmentType === JOB_ASSIGNMENT_TYPE.auto ? null : requester.userId,
       assignmentType,
@@ -155,13 +161,17 @@ const acceptJob = async (
 ) => {
   const job = await Job.findById(payload.jobId);
   if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  assertAssignedRider(traceId, job, riderId);
+  assertRequestedOrAssignedRider(traceId, job, riderId);
   assertJobStatusIn(traceId, job, [JOB_STATUS.assigned], 'Only assigned jobs can be accepted');
 
+  job.rider = new mongoose.Types.ObjectId(riderId);
   job.status = JOB_STATUS.accepted;
   job.acceptedAt = new Date();
   await job.save();
-  await RiderAvailabilitySocketHelper.setActiveJob(riderId, job._id.toString());
+  await Promise.all([
+    RiderAvailabilitySocketHelper.setActiveJob(riderId, job._id.toString()),
+    Orders.findByIdAndUpdate(job.order, { status: ORDER_STATUS.rider_assigned }),
+  ]);
 
   return Job.findById(job._id).populate(jobPopulate);
 };
@@ -174,8 +184,16 @@ const rejectJob = async (
 ) => {
   const job = await Job.findById(payload.jobId);
   if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  assertAssignedRider(traceId, job, riderId);
+  assertRequestedOrAssignedRider(traceId, job, riderId);
   assertJobStatusIn(traceId, job, [JOB_STATUS.assigned], 'Only assigned jobs can be rejected');
+
+  if (!job.rider) {
+    job.requestedRider = (job.requestedRider ?? []).filter(
+      (rider) => rider.toString() !== riderId
+    );
+    await job.save();
+    return Job.findById(job._id).populate(jobPopulate);
+  }
 
   job.status = JOB_STATUS.rejected;
   job.rejectionReason = payload.reason ?? null;
@@ -356,8 +374,8 @@ const riderLocationUpdate = async (
 const getCurrentRiderJobs = async (riderId: string, query: Record<string, unknown>) => {
   const jobQuery = new QueryBuilder(
     Job.find({
-      rider: riderId,
       status: { $nin: [JOB_STATUS.delivered, JOB_STATUS.rejected, JOB_STATUS.cancelled] },
+      $or: [{ rider: riderId }, { rider: null, requestedRider: riderId }],
     })
       .populate(jobPopulate)
       .select('-__v')
@@ -438,6 +456,79 @@ const getJobByOrderId = async (
   return job;
 };
 
+/** Creates an unmatched job and offers it to nearby online riders. */
+const startJobMatching = async (traceId: string, orderId: string) => {
+  const order = await getAssignableOrderOrThrow(traceId, orderId);
+  const existingJob = await Job.findOne({
+    order: orderId,
+    status: { $nin: [JOB_STATUS.delivered, JOB_STATUS.cancelled] },
+  });
+  if (existingJob && existingJob.rider) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'This order already has an assigned rider',
+      traceId
+    );
+  }
+
+  const pickup = order.author as { location?: { coordinates?: number[] } };
+  const [longitude, latitude] = pickup?.location?.coordinates ?? [0, 0];
+  const nearbyRiders =
+    latitude && longitude
+      ? await RiderAvailabilitySocketHelper.findOnlineRiders(latitude, longitude)
+      : [];
+  const requestedRider = nearbyRiders
+    .map((item) => item.rider?._id)
+    .filter(Boolean);
+
+  const payment = await Payment.findOne({ order: orderId, isDeleted: false })
+    .select('paymentMethod')
+    .sort({ createdAt: -1 })
+    .lean();
+  const paymentMethod =
+    payment?.paymentMethod &&
+    Object.values(JOB_PAYMENT_METHOD).includes(payment.paymentMethod as any)
+      ? (payment.paymentMethod as (typeof JOB_PAYMENT_METHOD)[keyof typeof JOB_PAYMENT_METHOD])
+      : JOB_PAYMENT_METHOD.card;
+
+  const moneyFields = buildJobMoneyFields(
+    paymentMethod,
+    order.totalAmount,
+    order.deliveryCharge
+  );
+  const locationFields = buildJobLocations(order);
+
+  const job = await Job.findOneAndUpdate(
+    { order: orderId },
+    {
+      order: orderId,
+      rider: null,
+      requestedRider,
+      assignedBy: null,
+      assignmentType: JOB_ASSIGNMENT_TYPE.auto,
+      paymentMethod,
+      deliveryType: order.deliveryType,
+      ...locationFields,
+      ...moneyFields,
+      hasDeliveryOtpVerified: false,
+      status: JOB_STATUS.assigned,
+      acceptedAt: null,
+      pickedUpAt: null,
+      onTheWayAt: null,
+      completedAt: null,
+      cancelledAt: null,
+      rejectionReason: null,
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  ).populate(jobPopulate);
+
+  if (job) {
+    await emitJobToAudience(job._id.toString(), SOCKET_EMIT.jobAssigned, job);
+  }
+
+  return job;
+};
+
 export const JobService = {
   riderGoOnline,
   riderGoOffline,
@@ -457,6 +548,7 @@ export const JobService = {
   getAllJobs,
   getJobById,
   getJobByOrderId,
+  startJobMatching,
 };
 
 

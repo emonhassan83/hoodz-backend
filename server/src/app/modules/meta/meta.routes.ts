@@ -23,4 +23,24 @@ router
     MetaController.getUserMeta
   );
 
+router
+  .route('/rider')
+  .get(auth(USER_ROLE.rider), MetaController.getRiderMeta);
+
+router
+  .route('/admin')
+  .get(
+    auth(USER_ROLE.admin),
+    validateRequest(MetaValidation.getAdminMetaValidationSchema),
+    MetaController.getAdminMeta
+  );
+
+router
+  .route('/vendor')
+  .get(
+    auth(USER_ROLE.vendor),
+    validateRequest(MetaValidation.getVendorMetaValidationSchema),
+    MetaController.getVendorMeta
+  );
+
 export const MetaRoutes = router;

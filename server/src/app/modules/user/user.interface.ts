@@ -29,6 +29,7 @@ export interface IUser extends Document {
   location: IGeoLocation | null;
   deliveryAddress?: string | null;
   deliveryLocation?: IGeoLocation | null;
+  isOnline: boolean;
   timeZone: string;
   role: IUserRole;
 

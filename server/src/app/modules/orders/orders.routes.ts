@@ -34,6 +34,14 @@ router
   .get(auth(USER_ROLE.vendor, USER_ROLE.admin), OrdersController.getAuthorOrders);
 
 router
+  .route('/:orderId/confirm')
+  .patch(
+    auth(USER_ROLE.admin, USER_ROLE.vendor),
+    validateRequest(OrdersValidation.orderIdParamValidationSchema),
+    OrdersController.confirmOrder
+  );
+
+router
   .route('/:orderId/status')
   .patch(
     auth(USER_ROLE.admin, USER_ROLE.vendor),

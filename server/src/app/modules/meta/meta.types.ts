@@ -43,7 +43,15 @@ export type TMetaLastOrder = {
   createdAt: Date;
 };
 
+export type TUserMetaProfile = {
+  name: string;
+  deliveryAddress: string | null;
+  deliveryLocation: unknown;
+};
+
 export type TUserMetaPayload = {
+  profile: TUserMetaProfile;
+  unreadNotification: number;
   firstSectionBanner: TMetaBannerItem[];
   lastOrder: TMetaLastOrder | null;
   nearbyBrands: TMetaBrandItem[];
@@ -53,4 +61,85 @@ export type TUserMetaPayload = {
   aiRecommandedProducts: TMetaProductCard[];
 };
 
-export type TGuestMetaPayload = Omit<TUserMetaPayload, 'lastOrder'>;
+export type TGuestMetaPayload = Omit<
+  TUserMetaPayload,
+  'lastOrder' | 'profile' | 'unreadNotification'
+>;
+
+export type TRiderAssignJob = {
+  _id: unknown;
+  id: string;
+  earning: number;
+  distanceKm: number;
+  pickup: { address: string };
+  destination: { address: string };
+  amount: number;
+  status: string;
+};
+
+export type TRiderMetaPayload = {
+  profile: { name: string };
+  unreadNotification: number;
+  todayEarning: number;
+  weeklyEarning: number;
+  deliveries: number;
+  assignJobs: TRiderAssignJob[];
+};
+
+export type TAdminMetaQuery = {
+  year?: unknown;
+  role?: unknown;
+};
+
+export type TAdminMetaStats = {
+  orders: number;
+  ordersAveragePrice: number;
+  addToCartCount: number;
+  initiateCheckoutCount: number;
+  unreadOrders: number;
+  missedOrder: number;
+  totalSales: number;
+  netRevenue: number;
+};
+
+export type TAdminUserGrowthItem = {
+  month: string;
+  user: number;
+  rider: number;
+  vendor: number;
+  agent: number;
+};
+
+export type TAdminJoinedUser = {
+  _id: unknown;
+  name: string;
+  email: string;
+  profileAvatar: string | null;
+};
+
+export type TAdminRecentOrder = {
+  _id: unknown;
+  id: string;
+  items: { product: { title: string; banner: string | null } };
+  amount: number;
+  paymentMethod: string | null;
+  status: string;
+};
+
+export type TAdminMetaPayload = {
+  stats: TAdminMetaStats;
+  userGrowth: TAdminUserGrowthItem[];
+  joinedUsers: TAdminJoinedUser[];
+  recentOrders: TAdminRecentOrder[];
+};
+
+export type TVendorOrderAnalysisItem = {
+  month: string;
+  count: number;
+  amount: number;
+};
+
+export type TVendorMetaPayload = {
+  stats: TAdminMetaStats;
+  orderAnalysis: TVendorOrderAnalysisItem[];
+};

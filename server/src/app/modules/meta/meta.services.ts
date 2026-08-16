@@ -1,16 +1,33 @@
+import { HttpStatusCode } from 'axios';
+
+import ApiError from '@/app/errors/ApiError';
 import {
+  getAdminDashboardStats,
+  getAdminJoinedUsers,
+  getAdminRecentOrders,
+  getAdminUserGrowth,
   getHomeBanners,
   getLastPaidActiveOrder,
   getNearbyBrands,
+  getRiderAssignJobs,
+  getRiderJobStats,
+  getRiderUnreadNotificationCount,
+  getVendorDashboardStats,
+  getVendorOrderAnalysis,
   parseOriginFromQuery,
   resolveUserOrigin,
   toHomeProductCards,
 } from '@/app/modules/meta/meta.helpers';
 import {
+  TAdminMetaPayload,
+  TAdminMetaQuery,
   TGuestMetaPayload,
   TMetaLocationQuery,
+  TRiderMetaPayload,
   TUserMetaPayload,
+  TVendorMetaPayload,
 } from '@/app/modules/meta/meta.types';
+import { User } from '@/app/modules/user/user.model';
 import { ProductService } from '@/app/modules/product/product.services';
 
 const getUserMeta = async (
@@ -21,22 +38,38 @@ const getUserMeta = async (
   const origin = await resolveUserOrigin(userId, query);
 
   const [
+    user,
     banners,
     lastOrder,
     nearbyBrands,
     recentlyViewed,
     trending,
     aiRecommended,
+    unreadNotification,
   ] = await Promise.all([
+    User.findById(userId)
+      .select('name deliveryAddress deliveryLocation')
+      .lean(),
     getHomeBanners(),
     getLastPaidActiveOrder(userId),
     getNearbyBrands(origin),
     ProductService.getRecentlyViewedProducts(actor, { page: 1, limit: 10 }),
     ProductService.getTrendingProducts({ page: 1, limit: 2 }, userId),
     ProductService.getAiRecommendedProducts(actor, { page: 1, limit: 2 }),
+    getRiderUnreadNotificationCount(userId),
   ]);
 
+  if (!user) {
+    throw new ApiError(HttpStatusCode.NotFound, 'User not found');
+  }
+
   return {
+    profile: {
+      name: user.name,
+      deliveryAddress: user.deliveryAddress ?? null,
+      deliveryLocation: user.deliveryLocation ?? null,
+    },
+    unreadNotification,
     firstSectionBanner: banners.firstSectionBanner,
     lastOrder,
     nearbyBrands,
@@ -78,7 +111,60 @@ const getGuestMeta = async (
   };
 };
 
+const getRiderMeta = async (
+  traceId: string,
+  riderId: string
+): Promise<TRiderMetaPayload> => {
+  const rider = await User.findById(riderId).select('name').lean();
+  if (!rider) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Rider not found', traceId);
+  }
+
+  const [unreadNotification, jobStats, assignJobs] = await Promise.all([
+    getRiderUnreadNotificationCount(riderId),
+    getRiderJobStats(riderId),
+    getRiderAssignJobs(riderId),
+  ]);
+
+  return {
+    profile: { name: rider.name },
+    unreadNotification,
+    todayEarning: jobStats.todayEarning,
+    weeklyEarning: jobStats.weeklyEarning,
+    deliveries: jobStats.deliveries,
+    assignJobs,
+  };
+};
+
+const getAdminMeta = async (
+  query: TAdminMetaQuery
+): Promise<TAdminMetaPayload> => {
+  const [stats, userGrowth, joinedUsers, recentOrders] = await Promise.all([
+    getAdminDashboardStats(),
+    getAdminUserGrowth(query.year),
+    getAdminJoinedUsers(query.role),
+    getAdminRecentOrders(),
+  ]);
+
+  return { stats, userGrowth, joinedUsers, recentOrders };
+};
+
+const getVendorMeta = async (
+  vendorId: string,
+  query: { year?: unknown }
+): Promise<TVendorMetaPayload> => {
+  const [stats, orderAnalysis] = await Promise.all([
+    getVendorDashboardStats(vendorId),
+    getVendorOrderAnalysis(vendorId, query.year),
+  ]);
+
+  return { stats, orderAnalysis };
+};
+
 export const MetaService = {
   getUserMeta,
   getGuestMeta,
+  getRiderMeta,
+  getAdminMeta,
+  getVendorMeta,
 };

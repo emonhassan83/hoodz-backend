@@ -9,6 +9,11 @@ import { Cart } from '@/app/modules/cart/cart.model';
 import { COIN_REFERENCE_TYPE } from '@/app/modules/coin/coin.constant';
 import { CoinService } from '@/app/modules/coin/coin.services';
 import { Items } from '@/app/modules/items/items.model';
+import { JobService } from '@/app/modules/job/job.services';
+import {
+  ORDER_STATUS,
+  PAYMENT_STATUS,
+} from '@/app/modules/orders/orders.constant';
 import {
   assertOrderAccess,
   createOrderItems,
@@ -23,7 +28,6 @@ import {
   TCreateOrderPayload,
   TOrderRequester,
 } from '@/app/modules/orders/orders.types';
-import { PAYMENT_STATUS } from '@/app/modules/orders/orders.constant';
 import { deleteCachePattern } from '@/app/redis/helpers';
 import { clearCartCache } from '@/app/redis/helpers/cart';
 
@@ -385,6 +389,51 @@ const changeOrderStatus = async (
   return updatedOrder;
 };
 
+/** Confirms an order and starts nearby rider job matching. */
+const confirmOrder = async (
+  traceId: string,
+  orderId: string,
+  requester: TOrderRequester
+) => {
+  const order = await Orders.findOne({ _id: orderId, isDeleted: false });
+  if (!order) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Order not found', traceId);
+  }
+
+  assertOrderAccess(traceId, order, requester);
+
+  if (order.status === ORDER_STATUS.cancelled) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Cancelled orders cannot be confirmed',
+      traceId
+    );
+  }
+
+  if (
+    ![ORDER_STATUS.pending, ORDER_STATUS.confirmed].includes(order.status as any)
+  ) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Only pending orders can be confirmed for job matching',
+      traceId
+    );
+  }
+
+  order.status = ORDER_STATUS.confirmed;
+  await order.save();
+
+  const job = await JobService.startJobMatching(traceId, orderId);
+  await invalidateOrderCaches();
+
+  const confirmedOrder = await Orders.findById(orderId)
+    .populate(orderPopulate)
+    .select('-__v')
+    .lean();
+
+  return { order: confirmedOrder, job };
+};
+
 /** Soft deletes an order. */
 const deleteOrder = async (
   traceId: string,
@@ -415,6 +464,7 @@ export const OrdersService = {
   getAuthorOrders,
   getOrdersById,
   changeOrderStatus,
+  confirmOrder,
   deleteOrder,
 };
 

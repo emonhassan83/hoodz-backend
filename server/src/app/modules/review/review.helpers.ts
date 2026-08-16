@@ -28,5 +28,9 @@ export const resolveReviewAuthorOrThrow = async (
     throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
   }
 
+  if (!job.rider) {
+    throw new ApiError(HttpStatusCode.BadRequest, 'Job has no assigned rider', traceId);
+  }
+
   return job.rider;
 };

@@ -94,7 +94,7 @@ export const assertCanAssignOrder = (
 /** Throws unless requester can access a job. */
 export const assertJobAccess = async (
   traceId: string,
-  job: Pick<IJob, 'rider' | 'assignedBy' | 'order'>,
+  job: Pick<IJob, 'rider' | 'assignedBy' | 'order' | 'requestedRider'>,
   requester: { userId: string; role: string }
 ) => {
   const userId = requester.userId;
@@ -102,8 +102,12 @@ export const assertJobAccess = async (
   const isVendorOrder =
     requester.role === USER_ROLE.vendor &&
     Boolean(await Orders.exists({ _id: orderId, author: userId }));
+  const isRequestedRider = (job.requestedRider ?? []).some(
+    (rider) => String((rider as any)?._id ?? rider) === userId
+  );
   const canAccess =
     requester.role === USER_ROLE.admin ||
+    isRequestedRider ||
     String((job.rider as any)?._id ?? job.rider) === userId ||
     String((job.assignedBy as any)?._id ?? job.assignedBy) === userId ||
     isVendorOrder;
@@ -113,14 +117,33 @@ export const assertJobAccess = async (
   }
 };
 
-/** Throws unless requester is the rider assigned to this job. */
+/** Throws unless requester is the assigned rider. */
 export const assertAssignedRider = (
   traceId: string,
   job: Pick<IJob, 'rider'>,
   riderId: string
 ) => {
-  if (job.rider.toString() !== riderId) {
+  if (!job.rider || job.rider.toString() !== riderId) {
     throw new ApiError(HttpStatusCode.Forbidden, 'This job is not assigned to you', traceId);
+  }
+};
+
+/** Allows assigned rider, or a requested rider while the job is still unmatched. */
+export const assertRequestedOrAssignedRider = (
+  traceId: string,
+  job: Pick<IJob, 'rider' | 'requestedRider'>,
+  riderId: string
+) => {
+  if (job.rider) {
+    assertAssignedRider(traceId, job, riderId);
+    return;
+  }
+
+  const isRequested = (job.requestedRider ?? []).some(
+    (rider) => rider.toString() === riderId
+  );
+  if (!isRequested) {
+    throw new ApiError(HttpStatusCode.Forbidden, 'This job is not offered to you', traceId);
   }
 };
 

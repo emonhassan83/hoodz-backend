@@ -107,8 +107,12 @@ const goOnline = async (
     ...payload,
     isOnline: true,
   });
-  const rider = await User.findById(riderId)
-    .select('name email phone profileAvatar avgRating ratingCount')
+  const rider = await User.findByIdAndUpdate(
+    riderId,
+    { isOnline: true },
+    { returnDocument: 'after' }
+  )
+    .select('name email phone profileAvatar avgRating ratingCount isOnline')
     .lean();
 
   return { ...availability, rider };
@@ -129,8 +133,12 @@ const goOffline = async (riderId: string) => {
     isOnline: false,
     activeJob: null,
   });
-  const rider = await User.findById(riderId)
-    .select('name email phone profileAvatar avgRating ratingCount')
+  const rider = await User.findByIdAndUpdate(
+    riderId,
+    { isOnline: false },
+    { returnDocument: 'after' }
+  )
+    .select('name email phone profileAvatar avgRating ratingCount isOnline')
     .lean();
 
   return { ...availability, rider };
@@ -173,7 +181,11 @@ const findOnlineRiders = async (
   const availableRiderIds = availabilityList
     .filter((item) => item?.isOnline && !item.activeJob)
     .map((item) => item!.rider);
-  const users = await User.find({ _id: { $in: availableRiderIds } })
+  const users = await User.find({
+    _id: { $in: availableRiderIds },
+    isOnline: true,
+    isDeleted: false,
+  })
     .select('name email phone profileAvatar avgRating ratingCount')
     .lean();
   const userById = new Map(users.map((user) => [user._id.toString(), user]));

@@ -22,7 +22,7 @@ export const getDepositableJobsOrThrow = async (
   }
 
   jobs.forEach((job) => {
-    if (job.rider.toString() !== riderId) {
+    if (!job.rider || job.rider.toString() !== riderId) {
       throw new ApiError(HttpStatusCode.Forbidden, 'You can only deposit your own COD jobs', traceId);
     }
     if (job.status !== JOB_STATUS.delivered || job.paymentMethod !== JOB_PAYMENT_METHOD.cod) {
