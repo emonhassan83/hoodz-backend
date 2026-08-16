@@ -190,6 +190,7 @@ export const processSignup = async (
   traceId: string
 ) => {
   const { email } = payload;
+  const fallbackName = email.split('@')[0] || 'Hoodz User';
   const role = payload.role ?? USER_ROLE.user;
   if (![USER_ROLE.user, USER_ROLE.rider].includes(role as any)) {
     throw new ApiError(
@@ -209,6 +210,7 @@ export const processSignup = async (
   const signupPayload = {
     ...buildSignupAddressPayload(payload),
     ...referralData,
+    name: payload.name?.trim() || fallbackName,
     role,
     status: role === USER_ROLE.rider ? USER_STATUS.pending : USER_STATUS.active,
   };
@@ -234,5 +236,4 @@ export const processSignup = async (
   validateUserCreation(user, traceId);
   return user;
 };
-
 

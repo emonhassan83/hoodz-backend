@@ -72,7 +72,7 @@ export interface IUserModal extends Model<IUser> {
 
 
 export interface ISignUpWithEmail {
-  name: string,
+  name?: string,
   email: string
   address?: string
   latitude?: number

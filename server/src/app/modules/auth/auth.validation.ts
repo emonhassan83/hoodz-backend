@@ -25,10 +25,11 @@ const optionalLocationFields = {
 const signupWithEmailSchema = z.object({
   body: z.object({
     name: z
-      .string({ error: 'name is required and must be text' })
+      .string({ error: 'name must be text' })
       .trim()
       .min(1, { message: 'name cannot be empty' })
-      .max(100, { message: 'name cannot exceed 100 characters' }),
+      .max(100, { message: 'name cannot exceed 100 characters' })
+      .optional(),
 
     email: z
       .email({ error: 'Invalid email format' })
