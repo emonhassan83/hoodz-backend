@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-import { REVIEW_MODEL_TYPE } from '@/app/modules/review/review.constant';
+import {
+  REVIEW_MODEL_TYPE,
+  REVIEW_PRODUCT_FILTER,
+} from '@/app/modules/review/review.constant';
 
 const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
 
@@ -23,6 +26,13 @@ const authorIdParamValidationSchema = z.object({
 const productIdParamValidationSchema = z.object({
   params: z.object({
     productId: objectIdSchema,
+  }),
+  query: z.object({
+    filter: z
+      .enum(Object.values(REVIEW_PRODUCT_FILTER) as [string, ...string[]])
+      .optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).optional(),
   }),
 });
 

@@ -27,7 +27,6 @@ router
 router
   .route('/product/:productId')
   .get(
-    auth(...AUTHENTICATED_ROLES),
     validateRequest(ReviewValidation.productIdParamValidationSchema),
     ReviewController.getReviewByProduct
   );
