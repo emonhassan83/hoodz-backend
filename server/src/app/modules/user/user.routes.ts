@@ -38,7 +38,7 @@ router
 router
   .route('/referral-code')
   .post(
-    auth(...AUTHENTICATED_ROLES),
+    auth(USER_ROLE.user),
     validateRequest(UserValidation.applyReferralCodeValidationSchema),
     UserControllers.applyReferralCodeToUser
   );
@@ -62,7 +62,7 @@ router
 router
   .route('/delivery-location')
   .put(
-    auth(...AUTHENTICATED_ROLES),
+    auth(USER_ROLE.user),
     validateRequest(UserValidation.updateDeliveryLocationValidationSchema),
     UserControllers.updateMyDeliveryLocation
   );
@@ -86,7 +86,7 @@ router
 router
   .route('/nearby-shops')
   .get(
-    auth(...AUTHENTICATED_ROLES),
+    optionalAuth,
     validateRequest(UserValidation.nearbyShopsValidationSchema),
     UserControllers.getNearbyShops
   );
@@ -124,5 +124,4 @@ router
   );
 
 export const UserRoutes = router;
-
 

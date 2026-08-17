@@ -57,7 +57,7 @@ export type TUpdateLocationPayload = {
 export type TUpdateDeliveryLocationPayload = {
   longitude: number;
   latitude: number;
-  deliveryAddress: string;
+  address: string;
   timeZone?: string;
 };
 

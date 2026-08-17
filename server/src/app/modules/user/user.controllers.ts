@@ -51,7 +51,7 @@ const getNearbyShops = asyncHandler(async (req: Request, res: Response) => {
   const data = await UserService.getNearbyShops(
     traceId,
     req.query as any,
-    req.user.userId
+    req.user?.userId
   );
 
   sendResponse(res, {
@@ -266,5 +266,4 @@ export const UserControllers = {
   verifySecurityCode,
   deleteUserProfile,
 };
-
 

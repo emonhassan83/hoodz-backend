@@ -36,12 +36,17 @@ import {
 } from '@/app/modules/orders/orders.constant';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { Payment } from '@/app/modules/payment/payment.model';
-import { calculateDistanceKm } from '@/app/modules/user/user.helpers';
+import {
+  calculateDistanceKm,
+  getGoogleDistanceMatrix,
+} from '@/app/modules/user/user.helpers';
+import { TGoogleDistanceElement } from '@/app/modules/user/user.types';
 import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 
 const NEARBY_BRAND_LIMIT = 6;
-const NEARBY_RADIUS_KM = 50;
+const NEARBY_RADIUS_KM = 10;
+const GOOGLE_DESTINATION_LIMIT = 25;
 
 const toNumber = (value: unknown) => {
   const parsed = Number(value);
@@ -119,15 +124,48 @@ export const getNearbyBrands = async (
     .select('name profileAvatar location')
     .lean();
 
-  return vendors
+  const candidates = vendors
     .map((vendor) => {
       const [longitude, latitude] = vendor.location?.coordinates ?? [0, 0];
       return {
         _id: vendor._id,
         name: vendor.name,
         profileAvatar: vendor.profileAvatar ?? null,
-        distanceKm: calculateDistanceKm(origin, { latitude, longitude }),
+        coordinate: { latitude, longitude },
+        straightKm: calculateDistanceKm(origin, { latitude, longitude }),
       };
+    })
+    .filter((vendor) => vendor.straightKm <= NEARBY_RADIUS_KM);
+
+  if (candidates.length === 0) return [];
+
+  const googleElements: TGoogleDistanceElement[] = [];
+  try {
+    for (let i = 0; i < candidates.length; i += GOOGLE_DESTINATION_LIMIT) {
+      const chunk = candidates.slice(i, i + GOOGLE_DESTINATION_LIMIT);
+      const elements = await getGoogleDistanceMatrix(
+        origin,
+        chunk.map((vendor) => vendor.coordinate)
+      );
+      googleElements.push(...elements);
+    }
+  } catch (error) {
+    console.warn(
+      '[Nearby Brands] Google Maps distance lookup failed:',
+      error instanceof Error ? error.message : error
+    );
+    return [];
+  }
+
+  return candidates
+    .map((vendor, index) => {
+      const element = googleElements[index];
+      const distanceKm =
+        element?.status === 'OK' && element.distance?.value !== undefined
+          ? element.distance.value / 1000
+          : Number.POSITIVE_INFINITY;
+
+      return { ...vendor, distanceKm };
     })
     .filter((vendor) => vendor.distanceKm <= NEARBY_RADIUS_KM)
     .sort((a, b) => a.distanceKm - b.distanceKm)

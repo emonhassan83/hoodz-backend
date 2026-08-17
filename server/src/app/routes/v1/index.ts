@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
-import { AnalysisRoutes } from '@/app/modules/analysis/analysis.routes';
 import { AiAssistantRoutes } from '@/app/modules/aiAssistant/aiAssistant.routes';
+import { AnalysisRoutes } from '@/app/modules/analysis/analysis.routes';
 import { AuthRoutes } from '@/app/modules/auth/auth.routes';
 import { BannerRoutes } from '@/app/modules/banner/banner.routes';
 import { CartRoutes } from '@/app/modules/cart/cart.routes';

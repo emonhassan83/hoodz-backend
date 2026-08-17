@@ -57,9 +57,8 @@ const updateDeliveryLocationValidationSchema = z.object({
     latitude: z.number({
       message: 'latitude is required!',
     }),
-    deliveryAddress: z
-      .string()
-      .min(1, { message: 'Delivery address cannot be empty.' }),
+    address: z.string().min(1, { message: 'Address cannot be empty.' }),
+    timeZone: z.string().optional(),
   }),
 });
 

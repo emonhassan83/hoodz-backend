@@ -332,20 +332,18 @@ const getAiRecommendedProducts = async (
 ) => {
   const actorKey = getProductActorKey(actor);
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `ai-recommended:${actorKey}:cards:v1:${JSON.stringify(query)}`
+    `ai-recommended:${actorKey}:cards:v2:${JSON.stringify(query)}`
   );
   const cached = await getCache<TProductListResponse>(cacheKey);
   if (cached) return cached;
 
   const { page, limit, skip } = getPagination(query);
   const [
-    recentProductIds,
     wishlistSignals,
     cartProductIds,
     orderedProductCounts,
     followedVendorIds,
   ] = await Promise.all([
-    getRecentlyViewedProductIds(actorKey),
     actor.userId
       ? Wishlist.find(productWishlistMatch(actor.userId))
           .select('reference -_id')
@@ -363,7 +361,6 @@ const getAiRecommendedProducts = async (
     .filter(Boolean);
   const signalProductIds = [
     ...new Set([
-      ...recentProductIds,
       ...wishlistProductIds,
       ...cartProductIds,
       ...orderedProductCounts.keys(),
@@ -372,25 +369,19 @@ const getAiRecommendedProducts = async (
 
   const signalProducts = signalProductIds.length
     ? await Product.find({ _id: { $in: signalProductIds }, isDeleted: false })
-        .select('_id category vendor brandType')
+        .select('_id category')
         .lean()
     : [];
 
-  const categoryIds = new Set(signalProducts.map((product: any) =>
-    product.category?.toString()
-  ).filter(Boolean));
-  const brandTypes = new Set(
-    signalProducts.map((product: any) => product.brandType).filter(Boolean)
-  );
-  const signalVendorIds = new Set(
-    signalProducts.map((product: any) => product.vendor?.toString()).filter(Boolean)
+  const categoryIds = new Set(
+    signalProducts
+      .map((product: any) => product.category?.toString())
+      .filter(Boolean)
   );
 
   const recommendationFilter: Record<string, unknown> = { isDeleted: false };
   const orFilters: Record<string, unknown>[] = [];
   if (categoryIds.size > 0) orFilters.push({ category: { $in: [...categoryIds] } });
-  if (brandTypes.size > 0) orFilters.push({ brandType: { $in: [...brandTypes] } });
-  if (signalVendorIds.size > 0) orFilters.push({ vendor: { $in: [...signalVendorIds] } });
   if (followedVendorIds.size > 0) {
     orFilters.push({ vendor: { $in: [...followedVendorIds] } });
   }
@@ -399,33 +390,25 @@ const getAiRecommendedProducts = async (
   const candidates = await Product.find(recommendationFilter)
     .populate(productPopulate)
     .select(productListSelect)
-    .sort({ avgRating: -1, ratingCount: -1, sold: -1, createdAt: -1 })
+    .sort({ createdAt: -1 })
     .limit(200)
     .lean();
 
-  const recentRank = new Map(
-    recentProductIds.map((productId, index) => [productId, index])
-  );
   const wishlistSet = new Set(wishlistProductIds);
   const cartSet = new Set(cartProductIds);
   const scoredProducts = candidates
     .map((product: any) => {
       const productId = product._id.toString();
-      const categoryId = product.category?._id?.toString?.() ?? product.category?.toString?.();
-      const vendorId = product.vendor?._id?.toString?.() ?? product.vendor?.toString?.();
-      const recentIndex = recentRank.get(productId);
+      const categoryId =
+        product.category?._id?.toString?.() ?? product.category?.toString?.();
+      const vendorId =
+        product.vendor?._id?.toString?.() ?? product.vendor?.toString?.();
       const score =
         (wishlistSet.has(productId) ? 500 : 0) +
         (cartSet.has(productId) ? 450 : 0) +
-        (recentIndex !== undefined ? 320 - recentIndex * 15 : 0) +
-        ((orderedProductCounts.get(productId) ?? 0) * 300) +
+        (orderedProductCounts.get(productId) ?? 0) * 300 +
         (categoryIds.has(categoryId) ? 260 : 0) +
-        (signalVendorIds.has(vendorId) ? 180 : 0) +
-        (followedVendorIds.has(vendorId) ? 240 : 0) +
-        (brandTypes.has(product.brandType) ? 100 : 0) +
-        (product.avgRating ?? 0) * 30 +
-        (product.ratingCount ?? 0) * 2 +
-        (product.sold ?? 0);
+        (followedVendorIds.has(vendorId) ? 240 : 0);
 
       return { product, score };
     })

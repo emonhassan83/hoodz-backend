@@ -111,7 +111,8 @@ const getNearbyShops = async (
     longitude: query.longitude,
   };
   const limit = query.limit ?? 10;
-  const radiusKm = query.radiusKm ?? 50;
+  const radiusKm = query.radiusKm ?? 10;
+  const googleDestinationLimit = 25;
 
   const vendors = await User.find({
     role: USER_ROLE.vendor,
@@ -123,7 +124,7 @@ const getNearbyShops = async (
     .select('name email phone profileAvatar address location')
     .lean();
 
-  const nearbyVendors = vendors
+  const candidates = vendors
     .map((vendor) => {
       const [longitude, latitude] = vendor.location?.coordinates ?? [0, 0];
       const distanceKm = calculateDistanceKm(origin, { latitude, longitude });
@@ -134,16 +135,18 @@ const getNearbyShops = async (
         coordinate: { latitude, longitude },
       };
     })
-    .filter((vendor) => vendor.distanceKm <= radiusKm)
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, limit);
+    .filter((vendor) => vendor.distanceKm <= radiusKm);
 
   let googleElements: TGoogleDistanceElement[] = [];
   try {
-    googleElements = await getGoogleDistanceMatrix(
-      origin,
-      nearbyVendors.map((vendor) => vendor.coordinate)
-    );
+    for (let i = 0; i < candidates.length; i += googleDestinationLimit) {
+      const chunk = candidates.slice(i, i + googleDestinationLimit);
+      const elements = await getGoogleDistanceMatrix(
+        origin,
+        chunk.map((vendor) => vendor.coordinate)
+      );
+      googleElements.push(...elements);
+    }
   } catch (error) {
     console.warn(
       '[Nearby Shops] Google Maps distance lookup failed:',
@@ -151,39 +154,57 @@ const getNearbyShops = async (
     );
   }
 
+  const hasGoogleDistances = googleElements.length > 0;
   const followedVendorIds = await getFollowedVendorIdSet(userId);
 
-  return nearbyVendors.map((vendor, index) => {
-    const element = googleElements[index];
-    const googleDistanceKm =
-      element?.status === 'OK' && element.distance?.value !== undefined
-        ? Number((element.distance.value / 1000).toFixed(2))
-        : Number(vendor.distanceKm.toFixed(2));
-    const durationMinutes =
-      element?.status === 'OK' && element.duration?.value !== undefined
-        ? Math.ceil(element.duration.value / 60)
-        : null;
+  return candidates
+    .map((vendor, index) => {
+      const element = googleElements[index];
+      const googleDistanceKm =
+        element?.status === 'OK' && element.distance?.value !== undefined
+          ? Number((element.distance.value / 1000).toFixed(2))
+          : hasGoogleDistances
+            ? Number.POSITIVE_INFINITY
+            : Number(vendor.distanceKm.toFixed(2));
+      const durationMinutes =
+        element?.status === 'OK' && element.duration?.value !== undefined
+          ? Math.ceil(element.duration.value / 60)
+          : null;
 
-    return withFollowingFlag({
-      _id: vendor._id,
-      name: vendor.name,
-      email: vendor.email,
-      phone: vendor.phone,
-      profileAvatar: vendor.profileAvatar,
-      address: vendor.address,
-      location: vendor.location,
-      distanceKm: googleDistanceKm,
-      distanceText:
-        element?.status === 'OK' && element.distance?.text
-          ? element.distance.text
-          : `${googleDistanceKm} km`,
-      durationMinutes,
-      durationText:
-        element?.status === 'OK' && element.duration?.text
-          ? element.duration.text
-          : null,
-    }, followedVendorIds);
-  });
+      return {
+        vendor,
+        element,
+        googleDistanceKm,
+        durationMinutes,
+      };
+    })
+    .filter((item) => item.googleDistanceKm <= radiusKm)
+    .sort((a, b) => a.googleDistanceKm - b.googleDistanceKm)
+    .slice(0, limit)
+    .map(({ vendor, element, googleDistanceKm, durationMinutes }) =>
+      withFollowingFlag(
+        {
+          _id: vendor._id,
+          name: vendor.name,
+          email: vendor.email,
+          phone: vendor.phone,
+          profileAvatar: vendor.profileAvatar,
+          address: vendor.address,
+          location: vendor.location,
+          distanceKm: googleDistanceKm,
+          distanceText:
+            element?.status === 'OK' && element.distance?.text
+              ? element.distance.text
+              : `${googleDistanceKm} km`,
+          durationMinutes,
+          durationText:
+            element?.status === 'OK' && element.duration?.text
+              ? element.duration.text
+              : null,
+        },
+        followedVendorIds
+      )
+    );
 };
 
 // ─── Update ────────────────────────────────────────────────────────────────
@@ -501,7 +522,7 @@ const updateDeliveryLocationFromDB = async (
   userId: string,
   payload: TUpdateDeliveryLocationPayload
 ) => {
-  const { longitude, latitude, deliveryAddress, timeZone } = payload;
+  const { longitude, latitude, address, timeZone } = payload;
 
   await findActiveUserOrThrow(userId, traceId);
 
@@ -509,7 +530,7 @@ const updateDeliveryLocationFromDB = async (
     userId,
     {
       deliveryLocation: buildGeoLocation(longitude, latitude),
-      deliveryAddress,
+      deliveryAddress: address,
       ...(timeZone ? { timeZone } : {}),
     },
     { returnDocument: 'after' }
