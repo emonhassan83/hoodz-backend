@@ -18,12 +18,12 @@ router
 
 router
   .route('/global')
-  .get(auth(...AUTHENTICATED_ROLES), VoucherController.getGlobalVoutures);
+  .get(auth(USER_ROLE.admin, USER_ROLE.agent), VoucherController.getGlobalVoutures);
 
 router
   .route('/shopwise/:vendorId')
   .get(
-    auth(...AUTHENTICATED_ROLES),
+    auth(USER_ROLE.vendor),
     validateRequest(VoucherValidation.vendorIdParamValidationSchema),
     VoucherController.getShopwiseVoutures
   );
@@ -38,7 +38,7 @@ router
 
 router
   .route('/compension')
-  .get(auth(...AUTHENTICATED_ROLES), VoucherController.getCompensionVoutures);
+  .get(auth(USER_ROLE.admin, USER_ROLE.agent, USER_ROLE.user), VoucherController.getCompensionVoutures);
 
 router
   .route('/status/:voucherId')
@@ -51,7 +51,6 @@ router
 router
   .route('/:voucherId')
   .get(
-    auth(...AUTHENTICATED_ROLES),
     validateRequest(VoucherValidation.voucherIdParamValidationSchema),
     VoucherController.getAVouture
   )
