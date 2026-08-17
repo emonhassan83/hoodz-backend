@@ -9,6 +9,7 @@ import { generateTokens } from '@/app/modules/auth/auth.helpers';
 import { CoinService } from '@/app/modules/coin/coin.services';
 import {
   getFollowedVendorIdSet,
+  isFollowingVendor,
   withFollowingFlag,
 } from '@/app/modules/follow/follow.helpers';
 import { JOB_STATUS } from '@/app/modules/job/job.constant';
@@ -316,7 +317,7 @@ const getShopDetails = async (
     }
   }
 
-  const [categories, policies, followedVendorIds, wishlisted] = await Promise.all([
+  const [categories, policies, isFollowing, isWishlisted] = await Promise.all([
     Product.aggregate([
       { $match: { vendor: new mongoose.Types.ObjectId(vendorId), isDeleted: false } },
       { $group: { _id: '$category', productCount: { $sum: 1 } } },
@@ -338,30 +339,26 @@ const getShopDetails = async (
       { $sort: { productCount: -1, title: 1 } },
     ]),
     SettingService.getSettingGenerals(traceId, vendorId).catch(() => null),
-    getFollowedVendorIdSet(userId),
+    isFollowingVendor(userId, vendorId),
     isShopWishlisted(userId, vendorId),
   ]);
 
   const shop = {
-    ...withFollowingFlag(
-      {
-        _id: vendor._id,
-        name: vendor.name,
-        profileAvatar: vendor.profileAvatar,
-        coverPhoto: vendor.coverPhoto ?? null,
-        description: vendor.description,
-        phone: vendor.phone,
-        location: vendor.location,
-        id: vendor.id,
-        createdAt: vendor.createdAt,
-        followers: vendor.followers,
-        address: vendor.address,
-        avgRating: vendor.avgRating,
-        ratingCount: vendor.ratingCount,
-      },
-      followedVendorIds
-    ),
-    isWishlisted: wishlisted,
+    _id: vendor._id,
+    name: vendor.name,
+    profileAvatar: vendor.profileAvatar,
+    coverPhoto: vendor.coverPhoto ?? null,
+    description: vendor.description,
+    phone: vendor.phone,
+    location: vendor.location,
+    id: vendor.id,
+    createdAt: vendor.createdAt,
+    followers: vendor.followers,
+    address: vendor.address,
+    avgRating: vendor.avgRating,
+    ratingCount: vendor.ratingCount,
+    isFollowing,
+    isWishlisted,
   };
 
   return {

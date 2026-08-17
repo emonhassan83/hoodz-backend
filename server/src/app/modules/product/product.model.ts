@@ -85,6 +85,12 @@ const productSchema = new Schema<IProduct, IProductModel>(
       enum: Object.values(COLLECTION_TYPE),
       required: true,
     },
+    brand: {
+      type: String,
+      required: true,
+      trim: true,
+      index: true,
+    },
     brandType: {
       type: String,
       enum: Object.values(PRODUCT_BRAND_TYPE),

@@ -10,11 +10,25 @@ import { IUserRole } from '@/app/modules/user/user.types';
 import { User } from '@/app/modules/user/user.model';
 import { asyncHandler } from '@/app/utils/system.utils';
 
+const getAccessToken = (header?: string) => {
+  if (!header) return null;
+  const value = header.trim();
+  if (value.toLowerCase().startsWith('bearer ')) {
+    return value.slice(7).trim() || null;
+  }
+  return value || null;
+};
+
+const toUserPayload = (decoded: JwtPayload) => {
+  const userId = String(decoded.userId ?? decoded.id ?? decoded._id ?? '');
+  return { ...decoded, userId } as JwtPayload & { userId: string };
+};
+
 const auth = (...requiredRoles: IUserRole[]) => {
   return asyncHandler(
     async (req: Request, _res: Response, next: NextFunction) => {
       const traceId = getTraceId();
-      const token = req.headers.authorization;
+      const token = getAccessToken(req.headers.authorization);
 
       if (!token) {
         throw new ApiError(
@@ -89,7 +103,7 @@ const auth = (...requiredRoles: IUserRole[]) => {
         }
       }
 
-      req.user = decoded as any;
+      req.user = toUserPayload(decoded) as any;
       next();
     }
   );
@@ -98,7 +112,7 @@ const auth = (...requiredRoles: IUserRole[]) => {
 /** Attaches req.user when a valid token is present and keeps public routes open. */
 export const optionalAuth = asyncHandler(
   async (req: Request, _res: Response, next: NextFunction) => {
-    const token = req.headers.authorization;
+    const token = getAccessToken(req.headers.authorization);
     if (!token) return next();
 
     try {
@@ -109,7 +123,10 @@ export const optionalAuth = asyncHandler(
 
       const user = await User.isUserExistsByEmail(decoded.email);
       if (user && !user.isDeleted && user.status !== 'blocked') {
-        req.user = decoded as any;
+        req.user = toUserPayload({
+          ...decoded,
+          userId: decoded.userId ?? user._id,
+        }) as any;
       }
     } catch (_err) {
       // Public routes should continue as anonymous when optional auth fails.

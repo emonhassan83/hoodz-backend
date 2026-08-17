@@ -37,6 +37,11 @@ const getCategoryByShopValidationSchema = z.object({
   }),
   query: z.object({
     brandType: brandTypeSchema.optional(),
+    latitude: z.coerce.number().min(-90).max(90).optional(),
+    longitude: z.coerce.number().min(-180).max(180).optional(),
+    lat: z.coerce.number().min(-90).max(90).optional(),
+    lng: z.coerce.number().min(-180).max(180).optional(),
+    lang: z.coerce.number().min(-180).max(180).optional(),
   }),
 });
 

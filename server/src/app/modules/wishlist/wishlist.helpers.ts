@@ -1,4 +1,5 @@
 import { HttpStatusCode } from 'axios';
+import { Types } from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
 import { Product } from '@/app/modules/product/product.model';
@@ -68,13 +69,15 @@ export const getWishlistProductReferenceIds = async (userId: string) => {
 };
 
 export const isShopWishlisted = async (userId: string | undefined, shopId: string) => {
-  if (!userId) return false;
+  if (!userId || !Types.ObjectId.isValid(userId) || !Types.ObjectId.isValid(shopId)) {
+    return false;
+  }
 
   return Boolean(
     await Wishlist.exists({
-      user: userId,
+      user: new Types.ObjectId(userId),
       modelType: WISHLIST_MODEL_TYPE.shop,
-      reference: shopId,
+      reference: new Types.ObjectId(shopId),
     })
   );
 };

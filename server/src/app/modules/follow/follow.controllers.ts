@@ -38,9 +38,29 @@ const unfollow = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const toggle = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await FollowService.toggle(
+    traceId,
+    req.user.userId,
+    req.params.vendorId as string
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: data.isFollowing
+      ? 'Shop followed successfully'
+      : 'Shop unfollowed successfully',
+    data,
+    traceId,
+  });
+});
+
 export const FollowController = {
   follow,
   unfollow,
+  toggle,
 };
 
 

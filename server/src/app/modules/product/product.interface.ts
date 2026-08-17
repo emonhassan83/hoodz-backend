@@ -16,6 +16,7 @@ export interface IProduct {
   sku: string;
   inventoryType: TProductInventoryType;
   collectionType: ICollectionType;
+  brand: string;
   brandType: TProductBrandType;
   title: string;
   description: string;

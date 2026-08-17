@@ -119,6 +119,19 @@ const reindexIntoTypesense = asyncHandler(async (_req: Request, res: Response) =
   });
 });
 
+const getFilterPageData = asyncHandler(async (_req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await SearchService.getFilterPageDataIntoDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Filter page data fetched successfully',
+    data,
+    traceId,
+  });
+});
+
 export const SearchController = {
   searchDataIntoDB,
   insertIntoDB,
@@ -126,5 +139,6 @@ export const SearchController = {
   clearSearchHistory,
   deleteAIntoDB,
   reindexIntoTypesense,
+  getFilterPageData,
 };
 

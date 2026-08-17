@@ -25,8 +25,8 @@ import {
   invalidateProductCaches,
   notifyProductRestockedSubscribers,
   toNumber,
-  toStringArray,
   getUserOrigin,
+  buildProductListFilter,
 } from '@/app/modules/product/product.helpers';
 import {
   Product,
@@ -51,7 +51,10 @@ import {
   upsertProductToTypesense,
 } from '@/app/modules/search/search.typesense';
 import { SettingService } from '@/app/modules/settings/settings.services';
-import { getGoogleDistanceMatrix } from '@/app/modules/user/user.helpers';
+import {
+  calculateDistanceKm,
+  getGoogleDistanceMatrix,
+} from '@/app/modules/user/user.helpers';
 import {
   VOUCHER_STATUS,
   VOUCHER_TYPE,
@@ -76,7 +79,7 @@ const productPopulate = [
 ];
 
 const productListSelect =
-  '_id category vendor title inventoryType collectionType brandType banner price discount discountPrice stock avgRating ratingCount sold createdAt';
+  '_id category vendor title inventoryType collectionType brand brandType banner price discount discountPrice stock avgRating ratingCount sold createdAt';
 
 type TProductPaginationMeta = {
   page: number;
@@ -440,6 +443,34 @@ const getAiRecommendedProducts = async (
   return result;
 };
 
+const GOOGLE_DESTINATION_LIMIT = 25;
+
+const getGoogleDistanceElements = async (
+  origin: { latitude: number; longitude: number },
+  destinations: { latitude: number; longitude: number }[]
+) => {
+  const elements: Array<{
+    status?: string;
+    distance?: { value?: number };
+    duration?: { value?: number };
+  }> = [];
+
+  try {
+    for (let i = 0; i < destinations.length; i += GOOGLE_DESTINATION_LIMIT) {
+      const chunk = destinations.slice(i, i + GOOGLE_DESTINATION_LIMIT);
+      const chunkElements = await getGoogleDistanceMatrix(origin, chunk);
+      elements.push(...chunkElements);
+    }
+  } catch (error) {
+    console.warn(
+      '[Products] Google Maps distance lookup failed:',
+      error instanceof Error ? error.message : error
+    );
+  }
+
+  return elements;
+};
+
 const getAllProduct = async (
   traceId: string,
   query: TProductListQuery,
@@ -447,55 +478,41 @@ const getAllProduct = async (
 ) => {
   const productQuery = query as TProductFilterQuery;
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `all:${userId ?? 'anonymous'}:cards:v5:${JSON.stringify(query)}`
+    `all:${userId ?? 'anonymous'}:cards:v7:${JSON.stringify(query)}`
   );
   const cached = await getCache<TProductListResponse>(cacheKey);
   if (cached) return cached;
 
-  const filter: Record<string, unknown> = { isDeleted: false };
-  const minPrice = toNumber(productQuery.minPrice ?? productQuery.minimumPrice);
-  const maxPrice = toNumber(productQuery.maxPrice ?? productQuery.maximumPrice);
-  const brandTypes = toStringArray(productQuery.brandType);
-  const colors = toStringArray(productQuery.color);
-  const sizes = toStringArray(productQuery.size);
-  const gender = productQuery.gender || productQuery.collectionType;
-
-  if (productQuery.category) filter.category = productQuery.category;
-  if (gender && gender !== 'all') filter.collectionType = gender;
-  if (brandTypes.length > 0) filter.brandType = { $in: brandTypes };
-  if (colors.length > 0) filter['colors.name'] = { $in: colors };
-  if (sizes.length > 0) filter.sizes = { $in: sizes };
-  if (minPrice !== undefined || maxPrice !== undefined) {
-    filter.discountPrice = {
-      ...(minPrice !== undefined ? { $gte: minPrice } : {}),
-      ...(maxPrice !== undefined ? { $lte: maxPrice } : {}),
-    };
-  }
-
-  const productsQuery = new QueryBuilder(
-    Product.find(filter)
-      .populate(productPopulate)
-      .select(productListSelect)
-      .lean(),
-    query
-  )
-    .search(['title', 'sku'])
-    .sort()
-    .paginate();
-
-  const [initialProducts, meta] = await Promise.all([
-    productsQuery.modelQuery,
-    productsQuery.countTotal(),
-  ]);
-  let products = initialProducts;
-
+  const filter = await buildProductListFilter(productQuery);
   const maxDistanceKm = toNumber(
     productQuery.maxDistanceKm ?? productQuery.maxDistance
   );
   const maxDeliveryTimeMinutes = toNumber(
     productQuery.maxDeliveryTimeMinutes ?? productQuery.maxDeliveryTime
   );
-  if (maxDistanceKm !== undefined || maxDeliveryTimeMinutes !== undefined) {
+  const needsGeoFilter =
+    maxDistanceKm !== undefined || maxDeliveryTimeMinutes !== undefined;
+
+  const baseQuery = Product.find(filter)
+    .populate(productPopulate)
+    .select(productListSelect)
+    .lean();
+
+  let products: any[];
+  let meta: TProductPaginationMeta;
+
+  if (!needsGeoFilter) {
+    const productsQuery = new QueryBuilder(baseQuery, query)
+      .search(['title', 'sku'])
+      .sort()
+      .paginate();
+    const [initialProducts, queryMeta] = await Promise.all([
+      productsQuery.modelQuery,
+      productsQuery.countTotal(),
+    ]);
+    products = initialProducts;
+    meta = queryMeta;
+  } else {
     const origin = await getUserOrigin(traceId, userId, productQuery);
     if (!origin) {
       throw new ApiError(
@@ -505,11 +522,23 @@ const getAllProduct = async (
       );
     }
 
-    const vendorCoordinateById = new Map<string, { latitude: number; longitude: number }>();
-    products.forEach((product: any) => {
+    const productsQuery = new QueryBuilder(baseQuery, query)
+      .search(['title', 'sku'])
+      .sort();
+    const candidates = await productsQuery.modelQuery;
+
+    const vendorCoordinateById = new Map<
+      string,
+      { latitude: number; longitude: number }
+    >();
+    candidates.forEach((product: any) => {
       const vendor = product.vendor;
       const coordinates = vendor?.location?.coordinates;
-      if (!vendor?._id || !coordinates || coordinates.every((item: number) => item === 0)) {
+      if (
+        !vendor?._id ||
+        !coordinates ||
+        coordinates.every((item: number) => item === 0)
+      ) {
         return;
       }
 
@@ -520,18 +549,20 @@ const getAllProduct = async (
     });
 
     const vendorIds = [...vendorCoordinateById.keys()];
-    const googleElements = await getGoogleDistanceMatrix(
-      origin,
-      vendorIds.map((vendorId) => vendorCoordinateById.get(vendorId)!)
+    const destinations = vendorIds.map(
+      (vendorId) => vendorCoordinateById.get(vendorId)!
     );
+    const googleElements = await getGoogleDistanceElements(origin, destinations);
 
     const distanceByVendorId = new Map(
       vendorIds.map((vendorId, index) => {
         const element = googleElements[index];
+        const coordinate = vendorCoordinateById.get(vendorId)!;
+        const fallbackKm = calculateDistanceKm(origin, coordinate);
         const distanceKm =
           element?.status === 'OK' && element.distance?.value !== undefined
             ? element.distance.value / 1000
-            : Number.POSITIVE_INFINITY;
+            : fallbackKm;
         const deliveryMinutes =
           element?.status === 'OK' && element.duration?.value !== undefined
             ? Math.ceil(element.duration.value / 60)
@@ -541,7 +572,7 @@ const getAllProduct = async (
       })
     );
 
-    products = products.filter((product: any) => {
+    const filteredProducts = candidates.filter((product: any) => {
       const vendorId = product.vendor?._id?.toString();
       const delivery = vendorId ? distanceByVendorId.get(vendorId) : null;
       if (!delivery) return false;
@@ -555,9 +586,20 @@ const getAllProduct = async (
       if (!distanceMatches || !timeMatches) return false;
 
       product.distanceKm = Number(delivery.distanceKm.toFixed(2));
-      product.deliveryTimeMinutes = delivery.deliveryMinutes;
+      product.deliveryTimeMinutes = Number.isFinite(delivery.deliveryMinutes)
+        ? delivery.deliveryMinutes
+        : null;
       return true;
     });
+
+    const { page, limit, skip } = getPagination(query);
+    products = filteredProducts.slice(skip, skip + limit);
+    meta = {
+      page,
+      limit,
+      total: filteredProducts.length,
+      totalPage: Math.ceil(filteredProducts.length / limit),
+    };
   }
 
   const wishlistIds = await getWishlistProductIdSet(userId);
@@ -591,7 +633,7 @@ const getShopProducts = async (
 ) => {
   await assertVendorExists(traceId, vendorId);
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `shop:${vendorId}:${userId ?? 'anonymous'}:cards:v3:${JSON.stringify(query)}`
+    `shop:${vendorId}:${userId ?? 'anonymous'}:cards:v4:${JSON.stringify(query)}`
   );
   const cached = await getCache<{
     meta: TProductPaginationMeta;
@@ -602,9 +644,12 @@ const getShopProducts = async (
   }>(cacheKey);
   if (cached) return cached;
 
-  const baseFilter = { vendor: vendorId, isDeleted: false };
+  const listFilter = await buildProductListFilter(query as TProductFilterQuery);
+  listFilter.vendor = vendorId;
+  listFilter.isDeleted = false;
+
   const allProductsQuery = new QueryBuilder(
-    Product.find(baseFilter)
+    Product.find(listFilter)
       .populate(productPopulate)
       .select(productListSelect)
       .lean(),
@@ -614,13 +659,18 @@ const getShopProducts = async (
     .sort()
     .paginate();
 
-  const [allProducts, meta, shopProducts, wishlistSignals, cart, orderSignals] = await Promise.all([
-    allProductsQuery.modelQuery,
-    allProductsQuery.countTotal(),
-    Product.find(baseFilter)
+  const recommendQuery = new QueryBuilder(
+    Product.find(listFilter)
       .populate(productPopulate)
       .select(productListSelect)
       .lean(),
+    query
+  ).search(['title', 'sku', 'description']);
+
+  const [allProducts, meta, shopProducts, wishlistSignals, cart, orderSignals] = await Promise.all([
+    allProductsQuery.modelQuery,
+    allProductsQuery.countTotal(),
+    recommendQuery.modelQuery,
     userId
       ? Wishlist.find(productWishlistMatch(userId))
           .select('reference -_id')

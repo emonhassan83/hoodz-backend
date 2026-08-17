@@ -42,13 +42,121 @@ export const toStringArray = (value: unknown) =>
       ? value.split(',').map((item) => item.trim()).filter(Boolean)
       : [];
 
+export const isObjectIdString = (value: string) =>
+  /^[0-9a-fA-F]{24}$/.test(value);
+
+export const escapeRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const exactInsensitive = (value: string) => ({
+  $regex: `^${escapeRegex(value)}$`,
+  $options: 'i',
+});
+
+export const buildProductListFilter = async (
+  productQuery: TProductFilterQuery
+) => {
+  const filter: Record<string, unknown> = { isDeleted: false };
+  const andFilters: Record<string, unknown>[] = [];
+
+  const minPrice = toNumber(productQuery.minPrice ?? productQuery.minimumPrice);
+  const maxPrice = toNumber(productQuery.maxPrice ?? productQuery.maximumPrice);
+  const brandTypes = toStringArray(productQuery.brandType);
+  const colors = toStringArray(productQuery.color);
+  const sizes = toStringArray(productQuery.size);
+  const collectionTypes = toStringArray(
+    productQuery.gender ?? productQuery.collectionType
+  ).filter((value) => value.toLowerCase() !== 'all');
+  const categoryValues = toStringArray(
+    productQuery.category ?? productQuery.categories ?? productQuery.categoryId
+  );
+  const brandValues = toStringArray(productQuery.brand);
+  const vendorValues = toStringArray(
+    productQuery.vendor ?? productQuery.vendorId
+  );
+
+  const categoryIds = categoryValues.filter(isObjectIdString);
+  const categoryTitles = categoryValues.filter((value) => !isObjectIdString(value));
+  if (categoryTitles.length > 0) {
+    const categories = await Category.find({
+      $or: categoryTitles.map((title) => ({ title: exactInsensitive(title) })),
+    })
+      .select('_id')
+      .lean();
+    categoryIds.push(...categories.map((category) => category._id.toString()));
+  }
+  if (categoryValues.length > 0) {
+    filter.category = { $in: [...new Set(categoryIds)] };
+  }
+
+  if (collectionTypes.length === 1) {
+    filter.collectionType = collectionTypes[0].toLowerCase();
+  }
+  if (collectionTypes.length > 1) {
+    filter.collectionType = {
+      $in: collectionTypes.map((value) => value.toLowerCase()),
+    };
+  }
+
+  if (brandTypes.length > 0) {
+    filter.brandType = { $in: brandTypes.map((value) => value.toLowerCase()) };
+  }
+
+  if (brandValues.length === 1) {
+    filter.brand = exactInsensitive(brandValues[0]);
+  }
+  if (brandValues.length > 1) {
+    andFilters.push({
+      $or: brandValues.map((brand) => ({ brand: exactInsensitive(brand) })),
+    });
+  }
+
+  const vendorIds = vendorValues.filter(isObjectIdString);
+  const vendorNames = vendorValues.filter((value) => !isObjectIdString(value));
+  if (vendorNames.length > 0) {
+    const vendors = await User.find({
+      role: USER_ROLE.vendor,
+      isDeleted: false,
+      $or: vendorNames.map((name) => ({ name: exactInsensitive(name) })),
+    })
+      .select('_id')
+      .lean();
+    vendorIds.push(...vendors.map((vendor) => vendor._id.toString()));
+  }
+  if (vendorValues.length > 0) {
+    filter.vendor = { $in: [...new Set(vendorIds)] };
+  }
+
+  if (colors.length > 0) {
+    andFilters.push({
+      $or: colors.map((color) => ({ 'colors.name': exactInsensitive(color) })),
+    });
+  }
+  if (sizes.length > 0) {
+    andFilters.push({
+      $or: sizes.map((size) => ({ sizes: exactInsensitive(size) })),
+    });
+  }
+  if (minPrice !== undefined || maxPrice !== undefined) {
+    filter.discountPrice = {
+      ...(minPrice !== undefined ? { $gte: minPrice } : {}),
+      ...(maxPrice !== undefined ? { $lte: maxPrice } : {}),
+    };
+  }
+  if (andFilters.length > 0) filter.$and = andFilters;
+
+  return filter;
+};
+
 export const getUserOrigin = async (
   traceId: string,
   userId?: string,
   query?: TProductFilterQuery
 ) => {
-  const queryLatitude = toNumber(query?.latitude);
-  const queryLongitude = toNumber(query?.longitude);
+  const queryLatitude = toNumber(query?.latitude ?? query?.lat);
+  const queryLongitude = toNumber(
+    query?.longitude ?? query?.lng ?? query?.lang
+  );
   if (queryLatitude !== undefined && queryLongitude !== undefined) {
     return { latitude: queryLatitude, longitude: queryLongitude };
   }
@@ -425,6 +533,7 @@ export const formatProductListItem = (
     title: product.title,
     inventoryType: product.inventoryType,
     collectionType: product.collectionType,
+    brand: product.brand ?? null,
     brandType: product.brandType,
     banner: product.banner ?? null,
     price: product.price ?? 0,

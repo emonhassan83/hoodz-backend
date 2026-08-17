@@ -1,4 +1,5 @@
 export const COLLECTION_TYPE = {
+  all: 'all',
   men: 'men',
   women: 'women',
   unisex: 'unisex',

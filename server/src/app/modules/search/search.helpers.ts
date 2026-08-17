@@ -2,6 +2,11 @@ import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
 import { Category } from '@/app/modules/category/category.model';
+import { Product } from '@/app/modules/product/product.model';
+import {
+  FILTER_PAGE_GENDERS,
+  FILTER_PAGE_SIZES,
+} from '@/app/modules/search/search.constant';
 import { TSearchActor } from '@/app/modules/search/search.types';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
@@ -102,20 +107,114 @@ export const buildProductSuggestions = (
   return suggestions;
 };
 
-/** Returns all category chips for search screen discovery. */
-export const getPopularCategories = async () =>
-  Category.find().select('_id title').sort({ title: 1 }).lean();
+/** Returns categories that currently have at least one product. */
+export const getPopularCategories = async () => {
+  const categoryIds = await Product.distinct('category', { isDeleted: false });
+  if (categoryIds.length === 0) return [];
 
-/** Returns max 10 high-rated vendors for search screen discovery. */
+  return Category.find({ _id: { $in: categoryIds } })
+    .select('_id title icon')
+    .sort({ title: 1 })
+    .lean();
+};
+
+/** Returns max 10 vendors ranked by highest rating. */
 export const getFeaturedSearchVendors = async () =>
   User.find({
     role: USER_ROLE.vendor,
     status: 'active',
     isDeleted: false,
+    avgRating: { $gt: 0 },
   })
     .select('_id name profileAvatar location avgRating ratingCount')
     .sort({ avgRating: -1, ratingCount: -1, createdAt: -1 })
     .limit(10)
     .lean();
+
+/** Returns filter-page options from live product catalog usage. */
+export const getFilterPageData = async () => {
+  const productMatch = { isDeleted: false };
+
+  const [priceRows, categories, brands, colors] = await Promise.all([
+    Product.aggregate([
+      { $match: productMatch },
+      {
+        $group: {
+          _id: null,
+          maxPrice: { $max: { $ifNull: ['$discountPrice', '$price'] } },
+        },
+      },
+    ]),
+    Product.aggregate([
+      { $match: { ...productMatch, category: { $ne: null } } },
+      { $group: { _id: '$category', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 12 },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'category',
+        },
+      },
+      { $unwind: '$category' },
+      {
+        $project: {
+          _id: '$category._id',
+          title: '$category.title'
+        },
+      },
+    ]),
+    Product.aggregate([
+      {
+        $match: {
+          ...productMatch,
+          brand: { $exists: true, $nin: [null, ''] },
+        },
+      },
+      {
+        $group: {
+          _id: { $toLower: '$brand' },
+          brand: { $first: '$brand' },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+      { $limit: 12 },
+      { $project: { _id: 0, brand: 1 } },
+    ]),
+    Product.aggregate([
+      { $match: productMatch },
+      { $unwind: '$colors' },
+      {
+        $match: {
+          'colors.name': { $exists: true, $nin: [null, ''] },
+        },
+      },
+      {
+        $group: {
+          _id: { $toLower: '$colors.name' },
+          name: { $first: '$colors.name' },
+          code: { $first: '$colors.code' },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+      { $limit: 12 },
+      { $project: { _id: 0, name: 1, code: 1 } },
+    ]),
+  ]);
+
+  return {
+    minPrice: 0,
+    maxPrice: Number(priceRows[0]?.maxPrice ?? 0),
+    category: categories,
+    brand: brands.map((item) => item.brand),
+    color: colors,
+    size: [...FILTER_PAGE_SIZES],
+    gender: [...FILTER_PAGE_GENDERS],
+  };
+};
 
 

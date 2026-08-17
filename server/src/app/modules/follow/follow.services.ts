@@ -52,9 +52,28 @@ const unfollow = async (
   return { following: vendorId, isFollowing: false };
 };
 
+/** Follows if not following, otherwise unfollows. */
+const toggle = async (
+  traceId: string,
+  followerId: string,
+  vendorId: string
+) => {
+  const existing = await Follow.exists({
+    follower: followerId,
+    following: vendorId,
+  });
+
+  if (existing) {
+    return unfollow(traceId, followerId, vendorId);
+  }
+
+  return follow(traceId, followerId, vendorId);
+};
+
 export const FollowService = {
   follow,
   unfollow,
+  toggle,
 };
 
 

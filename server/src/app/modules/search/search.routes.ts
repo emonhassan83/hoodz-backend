@@ -27,6 +27,10 @@ router
   );
 
 router
+  .route('/filter-page-data')
+  .get(optionalAuth, SearchController.getFilterPageData);
+
+router
   .route('/reindex')
   .post(auth(USER_ROLE.admin), SearchController.reindexIntoTypesense);
 

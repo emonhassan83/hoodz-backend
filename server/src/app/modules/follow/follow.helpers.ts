@@ -1,4 +1,5 @@
 import { HttpStatusCode } from 'axios';
+import { Types } from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
 import { Follow } from '@/app/modules/follow/follow.model';
@@ -32,7 +33,32 @@ export const getFollowedVendorIdSet = async (userId?: string) => {
     .select('following -_id')
     .lean();
 
-  return new Set(follows.map((follow) => follow.following.toString()));
+  return new Set(
+    follows.map((follow) => {
+      const following = follow.following as { _id?: unknown } | string;
+      if (following && typeof following === 'object' && '_id' in following) {
+        return String(following._id);
+      }
+      return String(following);
+    })
+  );
+};
+
+/** Returns whether the user currently follows this vendor. */
+export const isFollowingVendor = async (
+  userId: string | undefined,
+  vendorId: string
+) => {
+  if (!userId || !Types.ObjectId.isValid(userId) || !Types.ObjectId.isValid(vendorId)) {
+    return false;
+  }
+
+  return Boolean(
+    await Follow.exists({
+      follower: new Types.ObjectId(userId),
+      following: new Types.ObjectId(vendorId),
+    })
+  );
 };
 
 /** Adds isFollowing boolean to one vendor-like object. */

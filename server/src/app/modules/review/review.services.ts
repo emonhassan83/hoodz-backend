@@ -29,15 +29,46 @@ const create = async (
     throw new ApiError(HttpStatusCode.BadRequest, 'You cannot review yourself', traceId);
   }
 
-  const review = await Review.create({
+  const alreadyReviewed = await Review.exists({
     user: userId,
-    author,
     modelType: payload.modelType,
     reference: payload.reference,
-    review: payload.review,
-    files: payload.files ?? [],
-    rating: payload.rating,
   });
+  if (alreadyReviewed) {
+    throw new ApiError(
+      HttpStatusCode.Conflict,
+      payload.modelType === REVIEW_MODEL_TYPE.Product
+        ? 'You have already reviewed this product'
+        : 'You have already reviewed this job',
+      traceId
+    );
+  }
+
+  let review;
+  try {
+    review = await Review.create({
+      user: userId,
+      author,
+      modelType: payload.modelType,
+      reference: payload.reference,
+      review: payload.review,
+      files: payload.files ?? [],
+      rating: payload.rating,
+    });
+  } catch (error) {
+    const duplicate =
+      (error as { code?: number }).code === 11000;
+    if (duplicate) {
+      throw new ApiError(
+        HttpStatusCode.Conflict,
+        payload.modelType === REVIEW_MODEL_TYPE.Product
+          ? 'You have already reviewed this product'
+          : 'You have already reviewed this job',
+        traceId
+      );
+    }
+    throw error;
+  }
 
   if (payload.modelType === REVIEW_MODEL_TYPE.Product) {
     await CoinService.addReviewBonus(

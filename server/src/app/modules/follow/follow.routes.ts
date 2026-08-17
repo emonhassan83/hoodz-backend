@@ -9,6 +9,14 @@ import validateRequest from '@/app/utils/validateRequest';
 const router = Router();
 
 router
+  .route('/toggle/:vendorId')
+  .post(
+    auth(...AUTHENTICATED_ROLES),
+    validateRequest(FollowValidation.followVendorValidationSchema),
+    FollowController.toggle
+  );
+
+router
   .route('/follow/:vendorId')
   .post(
     auth(...AUTHENTICATED_ROLES),

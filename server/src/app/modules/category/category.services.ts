@@ -9,6 +9,7 @@ import {
   findCategories,
   findShopsByCategory,
   updateCategoryById,
+  withShopDistance,
 } from '@/app/modules/category/category.helpers';
 import {
   TCategoryPayload,
@@ -51,12 +52,14 @@ const getAll = async () => {
 const getCategoryByBrandType = async (traceId: string, brandType: string) => {
   assertValidBrandType(brandType, traceId);
 
-  const cacheKey = `${REDIS_KEYS.CATEGORY_LIST}:brand-type:${brandType}`;
+  const cacheKey = `${REDIS_KEYS.CATEGORY_LIST}:brand-type:v3:${brandType.toLowerCase()}`;
   const cached = await getCache(cacheKey);
-  if (cached) return cached;
+  if (cached !== null && cached !== undefined) return cached;
 
   const categories = await findCategoriesByBrandType(brandType);
-  await setCache(cacheKey, categories, 300);
+  if (categories.length > 0) {
+    await setCache(cacheKey, categories, 300);
+  }
   return categories;
 };
 
@@ -69,13 +72,8 @@ const getCategoryByShop = async (
   assertValidObjectId(categoryId, 'category id', traceId);
   if (query.brandType) assertValidBrandType(query.brandType, traceId);
 
-  const cacheKey = `${REDIS_KEYS.CATEGORY_LIST}:shops:${categoryId}:${query.brandType ?? 'all'}`;
-  const cached = await getCache(cacheKey);
-  if (cached) return cached;
-
   const shops = await findShopsByCategory(categoryId, query);
-  await setCache(cacheKey, shops, 300);
-  return shops;
+  return withShopDistance(shops, query);
 };
 
 /** Updates a category and invalidates category/product caches. */

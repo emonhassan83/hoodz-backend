@@ -9,6 +9,7 @@ import {
   buildSearchActorFilter,
   escapeRegex,
   getFeaturedSearchVendors,
+  getFilterPageData,
   getPopularCategories,
   getSearchActorCacheKey,
   invalidateSearchActorCache,
@@ -260,7 +261,7 @@ const getAllIntoDB = async (
 ) => {
   const cacheKey = REDIS_KEYS.SEARCH_HISTORY(
     getSearchActorCacheKey(actor),
-    `v2:${JSON.stringify(query)}`
+    `v4:${JSON.stringify(query)}`
   );
   const cached = await getCache(cacheKey);
   if (cached) return cached;
@@ -277,14 +278,13 @@ const getAllIntoDB = async (
   const historyQuery = actor.userId || actor.guestId
     ? new QueryBuilder(
         Search.find(buildSearchActorFilter(actor))
-          .select('query normalizedQuery source resultCount lastSearchedAt createdAt updatedAt')
+          .select('query source lastSearchedAt -_id')
           .lean(),
         historyQueryParams
       )
         .filter()
         .paginate()
         .sort()
-        .fields()
     : null;
 
   const [categories, featuredVendors, histories, meta] =
@@ -397,6 +397,17 @@ const mergeGuestSearchHistory = async (guestId: string | undefined, userId: stri
 /** Rebuilds the Typesense product index from MongoDB. */
 const reindexIntoTypesense = async () => reindexTypesense();
 
+/** Returns catalog-backed options for the product filter page. */
+const getFilterPageDataIntoDB = async () => {
+  const cacheKey = REDIS_KEYS.SEARCH_RESULT('public', 'filter-page-data:v1');
+  const cached = await getCache(cacheKey);
+  if (cached) return cached;
+
+  const data = await getFilterPageData();
+  await setCache(cacheKey, data, 300);
+  return data;
+};
+
 export const SearchService = {
   searchDataIntoDB,
   insertIntoDB,
@@ -405,5 +416,6 @@ export const SearchService = {
   deleteAIntoDB,
   mergeGuestSearchHistory,
   reindexIntoTypesense,
+  getFilterPageDataIntoDB,
 };
 

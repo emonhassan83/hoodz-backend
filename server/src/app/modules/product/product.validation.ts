@@ -90,6 +90,7 @@ const baseProductSchema = {
   sku: z.string().trim().min(1, 'SKU is required'),
   inventoryType: inventoryTypeSchema,
   collectionType: z.enum(Object.values(COLLECTION_TYPE) as [string, ...string[]]),
+  brand: z.string().trim().min(1, 'Brand is required'),
   brandType: brandTypeSchema.default(PRODUCT_BRAND_TYPE.local),
   title: z.string().trim().min(1, 'Title is required'),
   description: z.string().trim().min(1, 'Description is required'),
@@ -125,6 +126,7 @@ const updateProductValidationSchema = z.object({
       collectionType: z
         .enum(Object.values(COLLECTION_TYPE) as [string, ...string[]])
         .optional(),
+      brand: z.string().trim().min(1, 'Brand is required').optional(),
       brandType: brandTypeSchema.optional(),
       title: z.string().trim().min(1, 'Title is required').optional(),
       description: z.string().trim().min(1, 'Description is required').optional(),
@@ -159,6 +161,22 @@ const shopProductsValidationSchema = z.object({
   params: z.object({
     vendorId: objectIdSchema,
   }),
+  query: z.object({
+    searchTerm: z.string().trim().optional(),
+    category: z.string().trim().optional(),
+    categoryId: z.string().trim().optional(),
+    categories: z.string().trim().optional(),
+    minPrice: z.coerce.number().optional(),
+    maxPrice: z.coerce.number().optional(),
+    color: z.string().trim().optional(),
+    size: z.string().trim().optional(),
+    gender: z.string().trim().optional(),
+    collectionType: z.string().trim().optional(),
+    brand: z.string().trim().optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).optional(),
+    sort: z.string().optional(),
+  }).passthrough(),
 });
 
 const searchShopProductsValidationSchema = z.object({

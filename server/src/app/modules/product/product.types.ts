@@ -36,6 +36,7 @@ export type TProductPayload = {
   sku: string;
   inventoryType: TProductInventoryType;
   collectionType: ICollectionType;
+  brand: string;
   brandType?: TProductBrandType;
   title: string;
   description: string;
@@ -66,18 +67,26 @@ export type TProductRequester = {
 export type TProductListQuery = Record<string, unknown>;
 
 export type TProductFilterQuery = {
-  category?: string;
-  brandType?: string;
-  color?: string;
-  size?: string;
-  collectionType?: string;
-  gender?: string;
+  category?: string | string[];
+  categories?: string | string[];
+  categoryId?: string | string[];
+  brand?: string | string[];
+  brandType?: string | string[];
+  vendor?: string | string[];
+  vendorId?: string | string[];
+  color?: string | string[];
+  size?: string | string[];
+  collectionType?: string | string[];
+  gender?: string | string[];
   minPrice?: string | number;
   maxPrice?: string | number;
   minimumPrice?: string | number;
   maximumPrice?: string | number;
   latitude?: string | number;
   longitude?: string | number;
+  lat?: string | number;
+  lng?: string | number;
+  lang?: string | number;
   maxDistanceKm?: string | number;
   maxDistance?: string | number;
   maxDeliveryTimeMinutes?: string | number;

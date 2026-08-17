@@ -58,6 +58,11 @@ const getCategoryByShop = asyncHandler(async (req: Request, res: Response) => {
         typeof req.query.brandType === 'string'
           ? req.query.brandType
           : undefined,
+      latitude: req.query.latitude as string | undefined,
+      longitude: req.query.longitude as string | undefined,
+      lat: req.query.lat as string | undefined,
+      lng: req.query.lng as string | undefined,
+      lang: req.query.lang as string | undefined,
     }
   );
 
