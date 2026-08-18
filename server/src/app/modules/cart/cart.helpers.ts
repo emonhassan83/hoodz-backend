@@ -2,6 +2,7 @@ import { HttpStatusCode } from 'axios';
 import { Types } from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
+import { CART_RECOMMENDED_LIMIT } from '@/app/modules/cart/cart.constant';
 import { Cart } from '@/app/modules/cart/cart.model';
 import {
   TCartItem,
@@ -203,41 +204,42 @@ const formatCartRecommendedProduct = (product: any): TCartRecommendedProduct => 
   inStock: (product.stock ?? 0) > 0,
 });
 
-/** Ranks products by relation to the cart and product performance signals. */
-const getCartRecommendationScore = (
-  product: any,
+/** Picks recommendations by collectionType, then category, then brandType. */
+const pickRecommendedByPriority = (
+  products: any[],
   signals: {
-    vendorIds: Set<string>;
     categoryIds: Set<string>;
     collectionTypes: Set<string>;
     brandTypes: Set<string>;
   }
 ) => {
-  const vendorScore = signals.vendorIds.has(getRelationId(product.vendor))
-    ? 400
-    : 0;
-  const categoryScore = signals.categoryIds.has(getRelationId(product.category))
-    ? 300
-    : 0;
-  const collectionScore = signals.collectionTypes.has(product.collectionType)
-    ? 150
-    : 0;
-  const brandTypeScore = signals.brandTypes.has(product.brandType) ? 100 : 0;
-  const qualityScore =
-    Number(product.avgRating ?? 0) * 30 +
-    Number(product.ratingCount ?? 0) * 2 +
-    Number(product.sold ?? 0);
+  const picked = new Set<string>();
+  const selected: any[] = [];
 
-  return (
-    vendorScore +
-    categoryScore +
-    collectionScore +
-    brandTypeScore +
-    qualityScore
+  const takeMatching = (matches: (product: any) => boolean) => {
+    for (const product of products) {
+      if (selected.length >= CART_RECOMMENDED_LIMIT) break;
+
+      const id = product._id.toString();
+      if (picked.has(id) || !matches(product)) continue;
+
+      picked.add(id);
+      selected.push(product);
+    }
+  };
+
+  takeMatching((product) =>
+    signals.collectionTypes.has(product.collectionType)
   );
+  takeMatching((product) =>
+    signals.categoryIds.has(getRelationId(product.category))
+  );
+  takeMatching((product) => signals.brandTypes.has(product.brandType));
+
+  return selected;
 };
 
-/** Finds max ten products related to the current cart contents. */
+/** Finds up to six products related to the current cart contents. */
 export const getCartRecommendedProducts = async (
   cartProducts: any[],
   excludedProductIds: Set<string>
@@ -245,30 +247,28 @@ export const getCartRecommendedProducts = async (
   if (!cartProducts.length) return [];
 
   const signals = {
-    vendorIds: new Set<string>(),
     categoryIds: new Set<string>(),
     collectionTypes: new Set<string>(),
     brandTypes: new Set<string>(),
   };
 
   cartProducts.forEach((product) => {
-    const vendorId = getRelationId(product.vendor);
     const categoryId = getRelationId(product.category);
-    if (vendorId) signals.vendorIds.add(vendorId);
     if (categoryId) signals.categoryIds.add(categoryId);
-    if (product.collectionType) signals.collectionTypes.add(product.collectionType);
+    if (product.collectionType) {
+      signals.collectionTypes.add(product.collectionType);
+    }
     if (product.brandType) signals.brandTypes.add(product.brandType);
   });
 
   const matchSignals: Record<string, unknown>[] = [];
-  if (signals.vendorIds.size) {
-    matchSignals.push({ vendor: { $in: [...signals.vendorIds] } });
+  if (signals.collectionTypes.size) {
+    matchSignals.push({
+      collectionType: { $in: [...signals.collectionTypes] },
+    });
   }
   if (signals.categoryIds.size) {
     matchSignals.push({ category: { $in: [...signals.categoryIds] } });
-  }
-  if (signals.collectionTypes.size) {
-    matchSignals.push({ collectionType: { $in: [...signals.collectionTypes] } });
   }
   if (signals.brandTypes.size) {
     matchSignals.push({ brandType: { $in: [...signals.brandTypes] } });
@@ -283,26 +283,15 @@ export const getCartRecommendedProducts = async (
   })
     .populate([{ path: 'category', select: 'title' }])
     .select(
-      '_id category vendor title collectionType brandType banner price discount discountPrice avgRating ratingCount stock sold createdAt'
+      '_id category title collectionType brandType banner price discount discountPrice avgRating ratingCount stock sold createdAt'
     )
     .sort({ avgRating: -1, ratingCount: -1, sold: -1, createdAt: -1 })
     .limit(40)
     .lean();
 
-  return products
-    .sort((left, right) => {
-      const scoreDiff =
-        getCartRecommendationScore(right, signals) -
-        getCartRecommendationScore(left, signals);
-      if (scoreDiff !== 0) return scoreDiff;
-
-      return (
-        new Date(right.createdAt).getTime() -
-        new Date(left.createdAt).getTime()
-      );
-    })
-    .slice(0, 10)
-    .map(formatCartRecommendedProduct);
+  return pickRecommendedByPriority(products, signals).map(
+    formatCartRecommendedProduct
+  );
 };
 
 

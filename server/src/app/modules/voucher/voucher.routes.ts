@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import auth, { optionalAuth } from '@/app/middlewares/auth';
-import { AUTHENTICATED_ROLES, USER_ROLE } from '@/app/modules/user/user.constant';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { VoucherController } from '@/app/modules/voucher/voucher.controllers';
 import { VoucherValidation } from '@/app/modules/voucher/voucher.validation';
 import validateRequest from '@/app/utils/validateRequest';
@@ -51,6 +51,7 @@ router
 router
   .route('/:voucherId')
   .get(
+    optionalAuth,
     validateRequest(VoucherValidation.voucherIdParamValidationSchema),
     VoucherController.getAVouture
   )

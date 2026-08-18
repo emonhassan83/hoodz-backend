@@ -185,3 +185,28 @@ export const normalizeVoucherPayload = <T extends TVoucherPayload | TUpdateVouch
   if (payload.voucherType === VOUCHER_TYPE.compensation) normalized.shop = null;
   return normalized as T;
 };
+
+export const voucherListSelect =
+  '_id code title voucherType discountType discountValue maxDiscountAmount giftDetails minSpend expiryDate status';
+
+/** Shapes voucher list cards for frontend. */
+export const formatVoucherListItem = (voucher: Record<string, any>) => ({
+  _id: voucher._id,
+  code: voucher.code,
+  title: voucher.title,
+  voucherType: voucher.voucherType,
+  discountType: voucher.discountType,
+  discountValue: voucher.discountValue ?? 0,
+  maxDiscountAmount: voucher.maxDiscountAmount ?? null,
+  giftDetails: {
+    name: voucher.giftDetails?.name ?? null,
+    bannerImage: voucher.giftDetails?.bannerImage ?? [],
+    description: voucher.giftDetails?.description ?? null,
+  },
+  minSpend: voucher.minSpend ?? 0,
+  expiryDate: voucher.expiryDate,
+  status: voucher.status,
+});
+
+export const formatVoucherListItems = (vouchers: Record<string, any>[]) =>
+  vouchers.map(formatVoucherListItem);

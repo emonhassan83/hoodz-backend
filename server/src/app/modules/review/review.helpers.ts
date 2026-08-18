@@ -3,7 +3,11 @@ import { HttpStatusCode } from 'axios';
 import ApiError from '@/app/errors/ApiError';
 import { Job } from '@/app/modules/job/job.model';
 import { Product } from '@/app/modules/product/product.model';
-import { REVIEW_MODEL_TYPE } from '@/app/modules/review/review.constant';
+import {
+  REVIEW_MODEL_TYPE,
+  REVIEW_SORT,
+  REVIEW_SORT_MAP,
+} from '@/app/modules/review/review.constant';
 import { TCreateReviewPayload } from '@/app/modules/review/review.types';
 
 /** Resolves the reviewed author from the reference document. */
@@ -34,3 +38,7 @@ export const resolveReviewAuthorOrThrow = async (
 
   return job.rider;
 };
+
+/** Maps `latest|highest|lowest` to a mongoose sort string. */
+export const resolveReviewSort = (sort?: unknown) =>
+  REVIEW_SORT_MAP[sort as string] || REVIEW_SORT_MAP[REVIEW_SORT.latest];

@@ -4,11 +4,11 @@ import { Types } from 'mongoose';
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import { CoinService } from '@/app/modules/coin/coin.services';
+import { REVIEW_MODEL_TYPE } from '@/app/modules/review/review.constant';
 import {
-  REVIEW_MODEL_TYPE,
-  REVIEW_PRODUCT_FILTER,
-} from '@/app/modules/review/review.constant';
-import { resolveReviewAuthorOrThrow } from '@/app/modules/review/review.helpers';
+  resolveReviewAuthorOrThrow,
+  resolveReviewSort,
+} from '@/app/modules/review/review.helpers';
 import { Review } from '@/app/modules/review/review.model';
 import { TCreateReviewPayload } from '@/app/modules/review/review.types';
 
@@ -86,12 +86,18 @@ const getReviewByAuthor = async (
   authorId: string,
   query: Record<string, unknown>
 ) => {
+  const restQuery = { ...query };
+  delete restQuery.sort;
+
   const reviewQuery = new QueryBuilder(
     Review.find({ author: authorId })
       .populate(reviewPopulate)
       .select('-__v')
       .lean(),
-    query
+    {
+      ...restQuery,
+      sort: resolveReviewSort(query.sort),
+    }
   )
     .filter()
     .sort()
@@ -111,16 +117,8 @@ const getReviewByProduct = async (
   productId: string,
   query: Record<string, unknown>
 ) => {
-  const filter =
-    (query.filter as string) || REVIEW_PRODUCT_FILTER.latest;
   const restQuery = { ...query };
-  delete restQuery.filter;
-
-  const sortMap: Record<string, string> = {
-    [REVIEW_PRODUCT_FILTER.latest]: '-createdAt',
-    [REVIEW_PRODUCT_FILTER.highest]: '-rating -createdAt',
-    [REVIEW_PRODUCT_FILTER.lowest]: 'rating -createdAt',
-  };
+  delete restQuery.sort;
 
   const reviewQuery = new QueryBuilder(
     Review.find({ modelType: REVIEW_MODEL_TYPE.Product, reference: productId })
@@ -129,7 +127,7 @@ const getReviewByProduct = async (
       .lean(),
     {
       ...restQuery,
-      sort: sortMap[filter] || sortMap[REVIEW_PRODUCT_FILTER.latest],
+      sort: resolveReviewSort(query.sort),
     }
   )
     .filter()

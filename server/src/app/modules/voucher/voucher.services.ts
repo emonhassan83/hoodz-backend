@@ -15,7 +15,9 @@ import {
   assertVoucherExists,
   assertVoucherMutationAccess,
   assertVoucherReferences,
+  formatVoucherListItems,
   normalizeVoucherPayload,
+  voucherListSelect,
 } from '@/app/modules/voucher/voucher.helpers';
 import { Voucher } from '@/app/modules/voucher/voucher.model';
 import {
@@ -47,76 +49,73 @@ const addVouture = async (
   return Voucher.findById(voucher._id).populate(voucherPopulate).select('-__v');
 };
 
-/** Returns platform-wide active vouchers. */
+/** Returns platform-wide vouchers of every status. */
 const getGlobalVoutures = async (query: Record<string, unknown>) => {
   const voucherQuery = new QueryBuilder(
     Voucher.find({
-      ...activeVoucherFilter(),
+      isDeleted: false,
       voucherType: VOUCHER_TYPE.global,
     })
-      .populate(voucherPopulate)
-      .select('-__v')
+      .select(voucherListSelect)
       .lean(),
     query
   )
     .filter()
     .sort()
-    .paginate()
-    .fields();
+    .paginate();
 
-  const [data, meta] = await Promise.all([
+  const [vouchers, meta] = await Promise.all([
     voucherQuery.modelQuery,
     voucherQuery.countTotal(),
   ]);
 
-  return { meta, data };
+  return { meta, data: formatVoucherListItems(vouchers) };
 };
 
-/** Returns active vouchers for one vendor shop. */
+/** Returns shop vouchers of every status for one vendor. */
 const getShopwiseVoutures = async (
   vendorId: string,
   query: Record<string, unknown>
 ) => {
   const voucherQuery = new QueryBuilder(
     Voucher.find({
-      ...activeVoucherFilter(),
+      isDeleted: false,
       voucherType: VOUCHER_TYPE.shop,
       shop: vendorId,
     })
-      .populate(voucherPopulate)
-      .select('-__v')
+      .select(voucherListSelect)
       .lean(),
     query
   )
     .filter()
     .sort()
-    .paginate()
-    .fields();
+    .paginate();
 
-  const [data, meta] = await Promise.all([
+  const [vouchers, meta] = await Promise.all([
     voucherQuery.modelQuery,
     voucherQuery.countTotal(),
   ]);
 
-  return { meta, data };
+  return { meta, data: formatVoucherListItems(vouchers) };
 };
 
 /** Returns compact active shop and global vouchers for product details. */
-const getActiveShopAndGlobalVoutures = async (vendorId: string) =>
-  Voucher.find({
+const getActiveShopAndGlobalVoutures = async (vendorId: string) => {
+  const vouchers = await Voucher.find({
     ...activeVoucherFilter(),
     $or: [
       { voucherType: VOUCHER_TYPE.global },
       { voucherType: VOUCHER_TYPE.shop, shop: vendorId },
     ],
   })
-    .select(
-      '_id title code voucherType discountType discountValue maxDiscountAmount minSpend expiryDate'
-    )
+    .select(voucherListSelect)
     .sort({ expiryDate: 1, createdAt: -1 })
     .lean();
 
-/** Returns compensation vouchers for the user, or all for admin/agent. */
+  return formatVoucherListItems(vouchers);
+};
+
+/** Returns compensation vouchers of every status for the user, or all for admin/agent. */
 const getCompensionVoutures = async (
   requester: TVoucherRequester,
   query: Record<string, unknown>
@@ -125,33 +124,32 @@ const getCompensionVoutures = async (
     requester.role === USER_ROLE.admin || requester.role === USER_ROLE.agent
       ? { voucherType: VOUCHER_TYPE.compensation, isDeleted: false }
       : {
-          ...activeVoucherFilter(),
+          isDeleted: false,
           voucherType: VOUCHER_TYPE.compensation,
           user: requester.userId,
         };
 
   const voucherQuery = new QueryBuilder(
-    Voucher.find(filter).populate(voucherPopulate).select('-__v').lean(),
+    Voucher.find(filter).select(voucherListSelect).lean(),
     query
   )
     .filter()
     .sort()
-    .paginate()
-    .fields();
+    .paginate();
 
-  const [data, meta] = await Promise.all([
+  const [vouchers, meta] = await Promise.all([
     voucherQuery.modelQuery,
     voucherQuery.countTotal(),
   ]);
 
-  return { meta, data };
+  return { meta, data: formatVoucherListItems(vouchers) };
 };
 
-/** Returns one voucher if requester can view it. */
+/** Returns one voucher. Public; compensation vouchers stay owner-only when a user is logged in. */
 const getAVouture = async (
   traceId: string,
   voucherId: string,
-  requester: TVoucherRequester
+  requester?: TVoucherRequester
 ) => {
   const voucher = await Voucher.findOne({ _id: voucherId, isDeleted: false })
     .populate(voucherPopulate)
@@ -159,7 +157,7 @@ const getAVouture = async (
   assertVoucherExists(voucher, traceId);
 
   if (
-    requester.role === USER_ROLE.user &&
+    requester?.role === USER_ROLE.user &&
     voucher!.voucherType === VOUCHER_TYPE.compensation &&
     voucher!.user?.toString() !== requester.userId
   ) {
