@@ -171,6 +171,50 @@ export const activeVoucherFilter = () => ({
   isDeleted: false,
 });
 
+/** Returns an active, non-expired voucher by code or throws. */
+export const getActiveVoucherByCodeOrThrow = async (
+  traceId: string,
+  code: string
+) => {
+  const voucher = await Voucher.findOne({
+    code: normalizeVoucherCode(code),
+    ...activeVoucherFilter(),
+  });
+  if (!voucher) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Voucher code is invalid or expired', traceId);
+  }
+
+  return voucher;
+};
+
+/** Calculates money discount for a voucher against an eligible subtotal. */
+export const calculateVoucherDiscountAmount = (
+  voucher: Pick<IVoucher, 'discountType' | 'discountValue' | 'maxDiscountAmount'>,
+  eligibleAmount: number
+) => {
+  if (eligibleAmount <= 0) return 0;
+  if (voucher.discountType === VOUCHER_DISCOUNT_TYPE.gift) return 0;
+
+  if (voucher.discountType === VOUCHER_DISCOUNT_TYPE.fixed) {
+    return Number(Math.min(voucher.discountValue, eligibleAmount).toFixed(2));
+  }
+
+  const percentDiscount = (eligibleAmount * voucher.discountValue) / 100;
+  const maxDiscount = voucher.maxDiscountAmount ?? percentDiscount;
+  return Number(Math.min(percentDiscount, maxDiscount, eligibleAmount).toFixed(2));
+};
+
+/** Shapes gift payload for checkout and order documents. */
+export const formatCheckoutGiftDetails = (voucher: IVoucher) => {
+  if (voucher.discountType !== VOUCHER_DISCOUNT_TYPE.gift) return null;
+
+  return {
+    name: voucher.giftDetails?.name ?? null,
+    bannerImage: voucher.giftDetails?.bannerImage ?? [],
+    description: voucher.giftDetails?.description ?? null,
+  };
+};
+
 /** Normalizes payload references by voucher type. */
 export const normalizeVoucherPayload = <T extends TVoucherPayload | TUpdateVoucherPayload>(
   payload: T

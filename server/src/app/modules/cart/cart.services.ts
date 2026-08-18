@@ -182,7 +182,7 @@ const getCart = async (actor: TCartActor) => {
           _id: product._id,
           vendor: product.vendor,
           title: product.title,
-          images: product.images,
+          banner: product.banner ?? null,
           inventoryType: product.inventoryType,
           price: product.price,
           discountPrice: product.discountPrice,

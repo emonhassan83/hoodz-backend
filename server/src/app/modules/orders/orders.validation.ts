@@ -44,6 +44,7 @@ const createOrderValidationSchema = z.object({
       deliveryCharge: z.number().nonnegative().default(0),
       transactionId: z.string().trim().nullable().optional(),
       redeemCoins: z.number().int().nonnegative().optional(),
+      voucherCode: z.string().trim().min(1).nullable().optional(),
     }),
   }),
 });

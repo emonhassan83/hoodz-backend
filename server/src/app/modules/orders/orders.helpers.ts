@@ -6,11 +6,24 @@ import { TEnrichedCartItem } from '@/app/modules/cart/cart.types';
 import { Items } from '@/app/modules/items/items.model';
 import { DELIVERY_TYPE } from '@/app/modules/orders/orders.constant';
 import { IOrders } from '@/app/modules/orders/orders.interface';
-import { TCreateOrderPayload } from '@/app/modules/orders/orders.types';
+import {
+  TCheckoutVoucherQuote,
+  TCreateOrderPayload,
+} from '@/app/modules/orders/orders.types';
 import { PRODUCT_INVENTORY_TYPE } from '@/app/modules/product/product.constant';
 import { Product } from '@/app/modules/product/product.model';
 import { Setting } from '@/app/modules/settings/settings.model';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
+import {
+  VOUCHER_STATUS,
+  VOUCHER_TYPE,
+} from '@/app/modules/voucher/voucher.constant';
+import {
+  calculateVoucherDiscountAmount,
+  formatCheckoutGiftDetails,
+  getActiveVoucherByCodeOrThrow,
+} from '@/app/modules/voucher/voucher.helpers';
+import { Voucher } from '@/app/modules/voucher/voucher.model';
 
 type TDeliveryChargeSetting = {
   state: string;
@@ -40,6 +53,151 @@ export const distributeDeliveryCharge = (
 
   return Array.from({ length: orderCount }, (_, index) =>
     Number(((baseCents + (index < remainder ? 1 : 0)) / 100).toFixed(2))
+  );
+};
+
+const getAuthorSubtotal = (items: TEnrichedCartItem[]) =>
+  Number(items.reduce((total, item) => total + item.totalPrice, 0).toFixed(2));
+
+const emptyVoucherQuote = (orderCount: number): TCheckoutVoucherQuote => ({
+  voucherId: null,
+  code: null,
+  voucherType: null,
+  discountType: null,
+  voucherDiscount: 0,
+  giftDetails: null,
+  perOrderDiscounts: Array.from({ length: orderCount }, () => 0),
+  perOrderGifts: Array.from({ length: orderCount }, () => null),
+  consumeOnCreate: false,
+});
+
+/** Splits a checkout-level money amount by vendor subtotals without losing cents. */
+const distributeAmountBySubtotals = (total: number, subtotals: number[]) => {
+  const totalWeight = subtotals.reduce((sum, value) => sum + value, 0);
+  if (total <= 0 || totalWeight <= 0) return subtotals.map(() => 0);
+
+  const totalCents = Math.round(total * 100);
+  const allocations = subtotals.map((subtotal, index) => {
+    const rawCents = (subtotal / totalWeight) * totalCents;
+    return {
+      index,
+      cents: Math.floor(rawCents),
+      fraction: rawCents - Math.floor(rawCents),
+    };
+  });
+  let remainingCents =
+    totalCents - allocations.reduce((sum, item) => sum + item.cents, 0);
+
+  allocations
+    .sort((left, right) => right.fraction - left.fraction)
+    .forEach((allocation) => {
+      if (remainingCents <= 0) return;
+      allocation.cents += 1;
+      remainingCents -= 1;
+    });
+
+  return allocations
+    .sort((left, right) => left.index - right.index)
+    .map((allocation) => Number((allocation.cents / 100).toFixed(2)));
+};
+
+/** Resolves a checkout voucher code into per-order discount or gift. */
+export const applyCheckoutVoucherOrThrow = async (
+  traceId: string,
+  userId: string,
+  voucherCode: string | null | undefined,
+  groupedItems: [string, TEnrichedCartItem[]][],
+  basketSubtotal: number
+): Promise<TCheckoutVoucherQuote> => {
+  if (!voucherCode?.trim()) return emptyVoucherQuote(groupedItems.length);
+
+  const voucher = await getActiveVoucherByCodeOrThrow(traceId, voucherCode);
+
+  if (
+    voucher.voucherType === VOUCHER_TYPE.compensation &&
+    voucher.user?.toString() !== userId
+  ) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'This compensation voucher is not assigned to you',
+      traceId
+    );
+  }
+
+  const authorSubtotals = groupedItems.map(([, items]) => getAuthorSubtotal(items));
+  const quote = emptyVoucherQuote(groupedItems.length);
+  const giftDetails = formatCheckoutGiftDetails(voucher);
+
+  quote.voucherId = voucher._id;
+  quote.code = voucher.code;
+  quote.voucherType = voucher.voucherType;
+  quote.discountType = voucher.discountType;
+  quote.giftDetails = giftDetails;
+  quote.consumeOnCreate = voucher.voucherType === VOUCHER_TYPE.compensation;
+
+  if (voucher.voucherType === VOUCHER_TYPE.shop) {
+    const shopId = voucher.shop?.toString();
+    const shopIndex = groupedItems.findIndex(([authorId]) => authorId === shopId);
+    if (shopIndex < 0) {
+      throw new ApiError(
+        HttpStatusCode.BadRequest,
+        'This shop voucher is not valid for the current items',
+        traceId
+      );
+    }
+
+    const shopSubtotal = authorSubtotals[shopIndex] ?? 0;
+    if (shopSubtotal < (voucher.minSpend ?? 0)) {
+      throw new ApiError(
+        HttpStatusCode.BadRequest,
+        `Minimum spend for this voucher is ${voucher.minSpend}`,
+        traceId
+      );
+    }
+
+    quote.voucherDiscount = calculateVoucherDiscountAmount(voucher, shopSubtotal);
+    quote.perOrderDiscounts[shopIndex] = quote.voucherDiscount;
+    quote.perOrderGifts[shopIndex] = giftDetails;
+    return quote;
+  }
+
+  if (basketSubtotal < (voucher.minSpend ?? 0)) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      `Minimum spend for this voucher is ${voucher.minSpend}`,
+      traceId
+    );
+  }
+
+  quote.voucherDiscount = calculateVoucherDiscountAmount(voucher, basketSubtotal);
+  quote.perOrderDiscounts = distributeAmountBySubtotals(
+    quote.voucherDiscount,
+    authorSubtotals
+  );
+
+  if (giftDetails) {
+    const largestIndex = authorSubtotals.reduce(
+      (maxIndex, subtotal, index) =>
+        subtotal > (authorSubtotals[maxIndex] ?? 0) ? index : maxIndex,
+      0
+    );
+    quote.perOrderGifts[largestIndex] = giftDetails;
+  }
+
+  return quote;
+};
+
+/** Marks a one-time compensation voucher as used. */
+export const consumeCheckoutVoucher = async (
+  quote: TCheckoutVoucherQuote,
+  session: ClientSession
+) => {
+  if (!quote.consumeOnCreate || !quote.voucherId) return;
+
+  await Voucher.updateOne(
+    { _id: quote.voucherId },
+    { status: VOUCHER_STATUS.deactivated },
+    { session }
   );
 };
 
@@ -86,7 +244,7 @@ export const resolveCheckoutItemsOrThrow = async (
   const products = await Product.find({
     _id: { $in: items.map((item) => item.product) },
     isDeleted: false,
-  }).select('vendor title images price discount discountPrice stock inventoryType variants');
+  }).select('vendor title banner price discount discountPrice stock inventoryType variants');
 
   const productById = new Map(
     products.map((product) => [product._id.toString(), product])
@@ -154,7 +312,7 @@ export const resolveCheckoutItemsOrThrow = async (
         _id: product._id,
         vendor: product.vendor,
         title: product.title,
-        images: product.images,
+        banner: product.banner ?? null,
         inventoryType: product.inventoryType,
         price: product.price,
         discount: product.discount,

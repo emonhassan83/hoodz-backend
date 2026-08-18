@@ -30,6 +30,19 @@ const ordersSchema = new Schema<IOrders, IOrdersModel>(
     },
     amount: { type: Number, required: true, min: 0 },
     coinDiscount: { type: Number, default: 0, min: 0 },
+    voucher: {
+      type: Schema.Types.ObjectId,
+      ref: 'Voucher',
+      default: null,
+      index: true,
+    },
+    voucherCode: { type: String, default: null, trim: true, uppercase: true },
+    voucherDiscount: { type: Number, default: 0, min: 0 },
+    giftDetails: {
+      name: { type: String, default: null, trim: true },
+      bannerImage: { type: [String], default: [] },
+      description: { type: String, default: null, trim: true },
+    },
     deliveryCharge: { type: Number, default: 0, min: 0 },
     totalAmount: { type: Number, default: 0, min: 0 },
     status: {
@@ -88,7 +101,8 @@ ordersSchema.pre('save', function calculateTotal() {
   this.totalAmount = Number(
     (
       (this.amount ?? 0) -
-      (this.coinDiscount ?? 0) +
+      (this.coinDiscount ?? 0) -
+      (this.voucherDiscount ?? 0) +
       (this.deliveryCharge ?? 0)
     ).toFixed(2)
   );

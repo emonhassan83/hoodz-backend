@@ -15,7 +15,9 @@ import {
   PAYMENT_STATUS,
 } from '@/app/modules/orders/orders.constant';
 import {
+  applyCheckoutVoucherOrThrow,
   assertOrderAccess,
+  consumeCheckoutVoucher,
   createOrderItems,
   distributeDeliveryCharge,
   getDeliveryChargeFromSettingsOrThrow,
@@ -95,8 +97,7 @@ const distributeCoinDiscount = (
     .map((allocation) => allocation.coins);
 };
 
-/** Returns checkout preview without creating orders or items. */
-const getOrderSummary = async (
+const buildCheckoutQuote = async (
   traceId: string,
   userId: string,
   payload: TCreateOrderPayload
@@ -113,14 +114,40 @@ const getOrderSummary = async (
     groupedItems.length
   );
   const amount = getBasketSubtotal(checkoutItems);
+  const voucherQuote = await applyCheckoutVoucherOrThrow(
+    traceId,
+    userId,
+    payload.orderData.voucherCode,
+    groupedItems,
+    amount
+  );
+  const remainingAfterVoucher = Math.max(
+    0,
+    Number((amount - voucherQuote.voucherDiscount).toFixed(2))
+  );
   const redemption = await CoinService.getRedemptionPreview(
     traceId,
     userId,
     payload.orderData.redeemCoins ?? 0,
     amount,
-    getCoinEligibleSubtotal(checkoutItems)
+    Math.min(getCoinEligibleSubtotal(checkoutItems), remainingAfterVoucher)
   );
-  const coinDiscounts = distributeCoinDiscount(redemption.redeemCoins, groupedItems);
+  const coinDiscounts = distributeCoinDiscount(
+    redemption.redeemCoins,
+    groupedItems
+  ).map((coinDiscount, index) => {
+    const orderAmount = Number(
+      groupedItems[index][1].reduce((total, item) => total + item.totalPrice, 0).toFixed(2)
+    );
+    const voucherDiscount = voucherQuote.perOrderDiscounts[index] ?? 0;
+    return Math.min(
+      coinDiscount,
+      Math.max(0, Number((orderAmount - voucherDiscount).toFixed(2)))
+    );
+  });
+  const coinDiscount = Number(
+    coinDiscounts.reduce((total, value) => total + value, 0).toFixed(2)
+  );
 
   const orders = groupedItems.map(([authorId, items], index) => {
     const amount = Number(
@@ -128,27 +155,67 @@ const getOrderSummary = async (
     );
     const orderDeliveryCharge = deliveryCharges[index] ?? 0;
     const coinDiscount = coinDiscounts[index] ?? 0;
+    const voucherDiscount = voucherQuote.perOrderDiscounts[index] ?? 0;
 
     return {
       author: authorId,
       amount,
+      voucherDiscount,
+      giftDetails: voucherQuote.perOrderGifts[index],
       coinDiscount,
       deliveryCharge: orderDeliveryCharge,
-      totalAmount: Number((amount - coinDiscount + orderDeliveryCharge).toFixed(2)),
+      totalAmount: Number(
+        (
+          amount - voucherDiscount - coinDiscount + orderDeliveryCharge
+        ).toFixed(2)
+      ),
       items,
     };
   });
 
   return {
-    amount,
-    redeemCoins: redemption.redeemCoins,
-    coinDiscount: redemption.coinDiscount,
+    groupedItems,
     deliveryCharge,
-    totalAmount: Number((amount - redemption.coinDiscount + deliveryCharge).toFixed(2)),
+    deliveryCharges,
+    amount,
+    voucherQuote,
+    redemption: {
+      redeemCoins: coinDiscount,
+      coinDiscount,
+    },
+    coinDiscounts,
+    orders,
+  };
+};
+
+/** Returns checkout preview without creating orders or items. */
+const getOrderSummary = async (
+  traceId: string,
+  userId: string,
+  payload: TCreateOrderPayload
+) => {
+  const checkout = await buildCheckoutQuote(traceId, userId, payload);
+
+  return {
+    amount: checkout.amount,
+    voucherCode: checkout.voucherQuote.code,
+    voucherDiscount: checkout.voucherQuote.voucherDiscount,
+    giftDetails: checkout.voucherQuote.giftDetails,
+    redeemCoins: checkout.redemption.redeemCoins,
+    coinDiscount: checkout.redemption.coinDiscount,
+    deliveryCharge: checkout.deliveryCharge,
+    totalAmount: Number(
+      (
+        checkout.amount -
+        checkout.voucherQuote.voucherDiscount -
+        checkout.redemption.coinDiscount +
+        checkout.deliveryCharge
+      ).toFixed(2)
+    ),
     deliveryType: payload.orderData.deliveryType,
     city: payload.orderData.billingDetails.city,
     billingDetails: payload.orderData.billingDetails,
-    orders,
+    orders: checkout.orders,
   };
 };
 
@@ -183,38 +250,22 @@ const createOrders = async (
   userId: string,
   payload: TCreateOrderPayload
 ) => {
-  const checkoutItems = await resolveCheckoutItemsOrThrow(traceId, payload.items);
-  const groupedItems = [...groupCartItemsByAuthor(checkoutItems).entries()];
-  const deliveryCharge = await getDeliveryChargeFromSettingsOrThrow(
-    traceId,
-    payload.orderData.billingDetails.city,
-    payload.orderData.deliveryType
-  );
-  const deliveryCharges = distributeDeliveryCharge(
-    deliveryCharge,
-    groupedItems.length
-  );
-  const amount = getBasketSubtotal(checkoutItems);
-  const redemption = await CoinService.getRedemptionPreview(
-    traceId,
-    userId,
-    payload.orderData.redeemCoins ?? 0,
-    amount,
-    getCoinEligibleSubtotal(checkoutItems)
-  );
-  const coinDiscounts = distributeCoinDiscount(redemption.redeemCoins, groupedItems);
+  const checkout = await buildCheckoutQuote(traceId, userId, payload);
   const session = await mongoose.startSession();
 
   try {
     session.startTransaction();
     const orders = [];
 
-    for (const [index, [authorId, items]] of groupedItems.entries()) {
+    for (const [index, [authorId, items]] of checkout.groupedItems.entries()) {
       const amount = Number(
         items.reduce((total, item) => total + item.totalPrice, 0).toFixed(2)
       );
-      const deliveryCharge = deliveryCharges[index] ?? 0;
-      const coinDiscount = coinDiscounts[index] ?? 0;
+      const deliveryCharge = checkout.deliveryCharges[index] ?? 0;
+      const coinDiscount = checkout.coinDiscounts[index] ?? 0;
+      const voucherDiscount = checkout.voucherQuote.perOrderDiscounts[index] ?? 0;
+      const giftDetails = checkout.voucherQuote.perOrderGifts[index];
+      const hasVoucherBenefit = voucherDiscount > 0 || Boolean(giftDetails);
 
       const [order] = await Orders.create(
         [
@@ -223,8 +274,14 @@ const createOrders = async (
             author: authorId,
             amount,
             coinDiscount,
+            voucher: hasVoucherBenefit ? checkout.voucherQuote.voucherId : null,
+            voucherCode: hasVoucherBenefit ? checkout.voucherQuote.code : null,
+            voucherDiscount,
+            giftDetails: giftDetails ?? null,
             deliveryCharge,
-            totalAmount: Number((amount - coinDiscount + deliveryCharge).toFixed(2)),
+            totalAmount: Number(
+              (amount - voucherDiscount - coinDiscount + deliveryCharge).toFixed(2)
+            ),
             transactionId: payload.orderData.transactionId ?? null,
             billingDetails: payload.orderData.billingDetails,
             deliveryType: payload.orderData.deliveryType,
@@ -245,11 +302,12 @@ const createOrders = async (
       orders.push(order);
     }
 
+    await consumeCheckoutVoucher(checkout.voucherQuote, session);
     await session.commitTransaction();
-    if (redemption.redeemCoins > 0) {
+    if (checkout.redemption.redeemCoins > 0) {
       await CoinService.sendRedemptionNotification(
         userId,
-        redemption.redeemCoins,
+        checkout.redemption.redeemCoins,
         orders[0]?._id
       );
     }

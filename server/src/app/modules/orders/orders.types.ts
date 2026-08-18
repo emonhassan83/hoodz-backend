@@ -5,6 +5,10 @@ import {
   ORDER_STATUS,
   PAYMENT_STATUS,
 } from '@/app/modules/orders/orders.constant';
+import {
+  TVoucherDiscountType,
+  TVoucherType,
+} from '@/app/modules/voucher/voucher.types';
 
 export type TOrderStatus = (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS];
 export type TPaymentStatus =
@@ -37,7 +41,26 @@ export type TCreateOrderPayload = {
     deliveryCharge?: number;
     transactionId?: string | null;
     redeemCoins?: number;
+    voucherCode?: string | null;
   };
+};
+
+export type TOrderGiftDetails = {
+  name?: string | null;
+  bannerImage?: string[];
+  description?: string | null;
+};
+
+export type TCheckoutVoucherQuote = {
+  voucherId: Types.ObjectId | null;
+  code: string | null;
+  voucherType: TVoucherType | null;
+  discountType: TVoucherDiscountType | null;
+  voucherDiscount: number;
+  giftDetails: TOrderGiftDetails | null;
+  perOrderDiscounts: number[];
+  perOrderGifts: Array<TOrderGiftDetails | null>;
+  consumeOnCreate: boolean;
 };
 
 export type TChangeOrderStatusPayload = {
