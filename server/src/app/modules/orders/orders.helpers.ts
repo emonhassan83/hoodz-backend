@@ -4,8 +4,13 @@ import { ClientSession, Types } from 'mongoose';
 import ApiError from '@/app/errors/ApiError';
 import { TEnrichedCartItem } from '@/app/modules/cart/cart.types';
 import { Items } from '@/app/modules/items/items.model';
+import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
 import { DELIVERY_TYPE } from '@/app/modules/orders/orders.constant';
 import { IOrders } from '@/app/modules/orders/orders.interface';
+import { Orders } from '@/app/modules/orders/orders.model';
+import { User } from '@/app/modules/user/user.model';
+import { sendNotificationViaQueue } from '@/app/utils/notification-queue.service';
+import { getEmailQueueInstance } from '@/app/utils/queueHelper';
 import {
   TCheckoutVoucherQuote,
   TCreateOrderPayload,
@@ -403,6 +408,90 @@ export const assertOrderAccess = (
   if (!isAdmin && !isOwner && !(allowAuthor && isAuthor)) {
     throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this order', traceId);
   }
+};
+
+export type TOrderUserNotice = 'paid' | 'confirmed' | 'processing';
+
+const orderNoticeCopy: Record<
+  TOrderUserNotice,
+  { title: string; body: (orderId: string) => string }
+> = {
+  paid: {
+    title: 'Payment received',
+    body: (orderId) =>
+      `We received your payment for order ${orderId}. The shop will confirm it shortly.`,
+  },
+  confirmed: {
+    title: 'Order confirmed',
+    body: (orderId) =>
+      `The shop confirmed your order ${orderId}. They will start preparing it soon.`,
+  },
+  processing: {
+    title: 'Order is being prepared',
+    body: (orderId) =>
+      `Your order ${orderId} is now being processed by the shop.`,
+  },
+};
+
+/** Emails and notifies the buyer about payment or order status changes. */
+export const notifyOrderUser = async (
+  order: Pick<IOrders, '_id' | 'id' | 'user' | 'billingDetails'> | Record<string, any>,
+  notice: TOrderUserNotice
+) => {
+  const userId = order.user?._id?.toString?.() ?? order.user?.toString?.();
+  if (!userId) return;
+
+  const orderId = order.id || order._id?.toString?.();
+  const copy = orderNoticeCopy[notice];
+  const title = copy.title;
+  const body = copy.body(orderId);
+
+  const user = await User.findById(userId).select('name email fcmToken').lean();
+  const email = order.billingDetails?.email || user?.email;
+  const name = order.billingDetails?.name || user?.name || 'there';
+
+  await sendNotificationViaQueue({
+    userId,
+    fcmToken: user?.fcmToken,
+    channel: 'both',
+    title,
+    message: body,
+    data: {
+      modelType: NOTIFICATION_MODEL_TYPE.Order,
+      reference: order._id?.toString?.(),
+      notice,
+    },
+  }).catch((error) => {
+    console.warn('[Order] Failed to queue order notification', error);
+  });
+
+  if (!email) return;
+
+  const emailQueue = await getEmailQueueInstance();
+  await emailQueue
+    .add(
+      'send-order-status-email',
+      { email, name, orderId, title, body },
+      {
+        priority: 1,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+      }
+    )
+    .catch((error) => {
+      console.warn('[Order] Failed to queue order email', error);
+    });
+};
+
+export const notifyOrdersPaid = async (orderIds: Array<string | Types.ObjectId>) => {
+  const orders = await Orders.find({
+    _id: { $in: orderIds },
+    isDeleted: false,
+  })
+    .select('_id id user billingDetails')
+    .lean();
+
+  await Promise.all(orders.map((order) => notifyOrderUser(order, 'paid')));
 };
 
 

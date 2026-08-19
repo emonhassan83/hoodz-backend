@@ -114,6 +114,23 @@ const confirmOrder = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const processOrder = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await OrdersService.processOrder(
+    traceId,
+    req.params.orderId as string,
+    req.user
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Order moved to processing successfully',
+    data,
+    traceId,
+  });
+});
+
 const changeOrderStatus = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await OrdersService.changeOrderStatus(
@@ -157,6 +174,7 @@ export const OrdersController = {
   getAuthorOrders,
   getOrdersById,
   confirmOrder,
+  processOrder,
   changeOrderStatus,
   deleteOrder,
 };

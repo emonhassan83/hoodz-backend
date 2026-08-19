@@ -2,6 +2,7 @@ import { Worker, Job } from 'bullmq';
 
 import { getAgentInviteEmailTemplate } from '@/app/worker/templates/agent-invite-email.template';
 import { getKycStatusEmailTemplate } from '@/app/worker/templates/kyc-status-email.template';
+import { getOrderStatusEmailTemplate } from '@/app/worker/templates/order-status-email.template';
 import { getOtpEmailTemplate } from '@/app/worker/templates/otp-email.template';
 import { getRiderSignupVerifiedEmailTemplate } from '@/app/worker/templates/rider-signup-verified-email.template';
 import { getVendorInviteEmailTemplate } from '@/app/worker/templates/vendor-invite-email.template';
@@ -137,6 +138,30 @@ export const initializeEmailWorker = () => {
             console.log(`[Email Worker] Successfully sent KYC status email to ${email}`);
           } catch (error) {
             console.error(`[Email Worker] Error sending KYC status email to ${email}:`, error);
+            throw error;
+          }
+          break;
+        }
+
+        case 'send-order-status-email': {
+          const { email, name, orderId, title, body } = job.data;
+          console.log(`[Email Worker] Processing order status email for ${email}`);
+
+          const mailOptions = {
+            from: env.SMTP_USER,
+            to: email,
+            subject: title,
+            html: getOrderStatusEmailTemplate({ name, orderId, title, body }),
+          };
+
+          try {
+            await sendEmail(mailOptions);
+            console.log(`[Email Worker] Successfully sent order status email to ${email}`);
+          } catch (error) {
+            console.error(
+              `[Email Worker] Error sending order status email to ${email}:`,
+              error
+            );
             throw error;
           }
           break;

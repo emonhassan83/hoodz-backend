@@ -11,7 +11,7 @@ const router = Router();
 router
   .route('/summary')
   .post(
-    auth(...AUTHENTICATED_ROLES),
+    auth(USER_ROLE.user),
     validateRequest(OrdersValidation.createOrderValidationSchema),
     OrdersController.getOrderSummary
   );
@@ -19,7 +19,7 @@ router
 router
   .route('/')
   .post(
-    auth(...AUTHENTICATED_ROLES),
+    auth(USER_ROLE.user),
     validateRequest(OrdersValidation.createOrderValidationSchema),
     OrdersController.createOrders
   )
@@ -27,24 +27,32 @@ router
 
 router
   .route('/my-orders')
-  .get(auth(...AUTHENTICATED_ROLES), OrdersController.getMyOrders);
+  .get(auth(USER_ROLE.user), OrdersController.getMyOrders);
 
 router
   .route('/author-orders')
-  .get(auth(USER_ROLE.vendor, USER_ROLE.admin), OrdersController.getAuthorOrders);
+  .get(auth(USER_ROLE.vendor), OrdersController.getAuthorOrders);
 
 router
   .route('/:orderId/confirm')
   .patch(
-    auth(USER_ROLE.admin, USER_ROLE.vendor),
+    auth(USER_ROLE.admin, USER_ROLE.agent, USER_ROLE.vendor),
     validateRequest(OrdersValidation.orderIdParamValidationSchema),
     OrdersController.confirmOrder
   );
 
 router
-  .route('/:orderId/status')
+  .route('/:orderId/processing')
   .patch(
     auth(USER_ROLE.admin, USER_ROLE.vendor),
+    validateRequest(OrdersValidation.orderIdParamValidationSchema),
+    OrdersController.processOrder
+  );
+
+router
+  .route('/:orderId/status')
+  .patch(
+    auth(USER_ROLE.admin, USER_ROLE.agent),
     validateRequest(OrdersValidation.changeOrderStatusValidationSchema),
     OrdersController.changeOrderStatus
   );

@@ -22,6 +22,7 @@ import {
   distributeDeliveryCharge,
   getDeliveryChargeFromSettingsOrThrow,
   groupCartItemsByAuthor,
+  notifyOrderUser,
   resolveCheckoutItemsOrThrow,
 } from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
@@ -476,12 +477,10 @@ const confirmOrder = async (
     );
   }
 
-  if (
-    ![ORDER_STATUS.pending, ORDER_STATUS.confirmed].includes(order.status as any)
-  ) {
+  if (order.status !== ORDER_STATUS.pending) {
     throw new ApiError(
       HttpStatusCode.BadRequest,
-      'Only pending orders can be confirmed for job matching',
+      'Only pending orders can be confirmed',
       traceId
     );
   }
@@ -490,6 +489,7 @@ const confirmOrder = async (
   await order.save();
 
   const job = await JobService.startJobMatching(traceId, orderId);
+  await notifyOrderUser(order, 'confirmed');
   await invalidateOrderCaches();
 
   const confirmedOrder = await Orders.findById(orderId)
@@ -498,6 +498,35 @@ const confirmOrder = async (
     .lean();
 
   return { order: confirmedOrder, job };
+};
+
+/** Moves a confirmed order into processing. Vendor/author access only. */
+const processOrder = async (
+  traceId: string,
+  orderId: string,
+  requester: TOrderRequester
+) => {
+  const order = await Orders.findOne({ _id: orderId, isDeleted: false });
+  if (!order) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Order not found', traceId);
+  }
+
+  assertOrderAccess(traceId, order, requester);
+
+  if (order.status !== ORDER_STATUS.confirmed) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Only confirmed orders can be moved to processing',
+      traceId
+    );
+  }
+
+  order.status = ORDER_STATUS.processing;
+  await order.save();
+  await notifyOrderUser(order, 'processing');
+  await invalidateOrderCaches();
+
+  return Orders.findById(orderId).populate(orderPopulate).select('-__v').lean();
 };
 
 /** Soft deletes an order. */
@@ -531,6 +560,7 @@ export const OrdersService = {
   getOrdersById,
   changeOrderStatus,
   confirmOrder,
+  processOrder,
   deleteOrder,
 };
 

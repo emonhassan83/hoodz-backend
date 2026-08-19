@@ -7,6 +7,7 @@ import {
   PAYMENT_STATUS as ORDER_PAYMENT_STATUS,
 } from '@/app/modules/orders/orders.constant';
 import { CoinService } from '@/app/modules/coin/coin.services';
+import { notifyOrdersPaid } from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { PAYMENT_METHOD, PAYMENT_STATUS } from '@/app/modules/payment/payment.constant';
 import {
@@ -277,6 +278,7 @@ const initiateWalletPayment = async (
   }
 
   await CoinService.processPaidOrderRewards(orders.map((order) => order._id));
+  await notifyOrdersPaid(orders.map((order) => order._id));
   await Promise.all(
     orders.map((order) =>
       WalletTransactionService.createWalletTransaction({
@@ -378,6 +380,8 @@ const confirmPayment = async (
     transactionId = String(transaction.id ?? payload.transactionId);
   }
 
+  const alreadyPaid = payment.isPaid;
+
   payment.status = status;
   payment.isPaid = status === PAYMENT_STATUS.paid;
   payment.transactionId = transactionId;
@@ -399,8 +403,9 @@ const confirmPayment = async (
     ...orderUpdate,
   });
 
-  if (status === PAYMENT_STATUS.paid) {
+  if (status === PAYMENT_STATUS.paid && !alreadyPaid) {
     await CoinService.processPaidOrderRewards([payment.order]);
+    await notifyOrdersPaid([payment.order]);
   }
 
   return payment.populate(paymentPopulate);
@@ -448,6 +453,7 @@ const confirmPaymentByWebhook = async (
   }
 
   const status = resolvePaymentStatusFromPaymob(transaction);
+  const unpaidPayments = payments.filter((payment) => !payment.isPaid);
   await Payment.updateMany(
     { _id: { $in: payments.map((payment) => payment._id) } },
     {
@@ -487,10 +493,11 @@ const confirmPaymentByWebhook = async (
     orderUpdate
   );
 
-  if (status === PAYMENT_STATUS.paid) {
+  if (status === PAYMENT_STATUS.paid && unpaidPayments.length > 0) {
     await CoinService.processPaidOrderRewards(
-      payments.map((payment) => payment.order)
+      unpaidPayments.map((payment) => payment.order)
     );
+    await notifyOrdersPaid(unpaidPayments.map((payment) => payment.order));
   }
 
   return {
