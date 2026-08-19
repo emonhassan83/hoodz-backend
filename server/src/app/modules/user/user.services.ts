@@ -620,7 +620,9 @@ const verifySecurityCode = async (
     );
   }
 
-  return { verified: true };
+  await User.findByIdAndUpdate(userId, { hasRiderActivateMode: true });
+
+  return { verified: true, hasRiderActivateMode: true };
 };
 
 /** Creates an invited vendor or agent and queues their invite email. */

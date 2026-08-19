@@ -6,8 +6,10 @@ export type TJobRequester = {
 };
 
 export type TGeoPayload = {
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
+  lat?: number;
+  lng?: number;
   heading?: number;
 };
 

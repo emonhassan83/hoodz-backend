@@ -49,7 +49,10 @@ import { notifyOrderUser } from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { Payment } from '@/app/modules/payment/payment.model';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
-import { RiderAvailabilitySocketHelper } from '@/app/socket/utils/riderAvailability.helpers';
+import {
+  RiderAvailabilitySocketHelper,
+  normalizeRiderGeo,
+} from '@/app/socket/utils/riderAvailability.helpers';
 
 const jobPopulate = [
   {
@@ -68,11 +71,21 @@ const riderGoOnline = async (
   traceId: string,
   riderId: string,
   payload: TGeoPayload
-) => RiderAvailabilitySocketHelper.goOnline(traceId, riderId, payload);
+) => {
+  const geo = normalizeRiderGeo(payload);
+  if (!geo) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Rider latitude and longitude are required',
+      traceId
+    );
+  }
+  return RiderAvailabilitySocketHelper.goOnline(traceId, riderId, geo);
+};
 
 /** Marks rider offline for delivery jobs. */
-const riderGoOffline = async (riderId: string) =>
-  RiderAvailabilitySocketHelper.goOffline(riderId);
+const riderGoOffline = async (riderId: string, payload?: TGeoPayload) =>
+  RiderAvailabilitySocketHelper.goOffline(riderId, normalizeRiderGeo(payload));
 
 /** Finds nearby online riders for a vendor/admin order assignment. */
 const findOnlineRider = async (
@@ -82,10 +95,19 @@ const findOnlineRider = async (
 ) => {
   const order = await getAssignableOrderOrThrow(traceId, payload.orderId);
   assertCanAssignOrder(traceId, order, requester);
+  const shop = order.author as { location?: { coordinates?: number[] } };
+  const [longitude, latitude] = shop?.location?.coordinates ?? [];
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !latitude || !longitude) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Shop location is required to find nearby riders',
+      traceId
+    );
+  }
 
-  return RiderAvailabilitySocketHelper.findOnlineRiders(
-    payload.latitude,
-    payload.longitude,
+  return RiderAvailabilitySocketHelper.findOnlineRidersNearShop(
+    latitude,
+    longitude,
     payload.radiusKm
   );
 };
@@ -422,10 +444,19 @@ const riderLocationUpdate = async (
     activeJob = payload.jobId;
   }
 
+  const geo = normalizeRiderGeo(payload);
+  if (!geo) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Rider latitude and longitude are required',
+      traceId
+    );
+  }
+
   const availability = await RiderAvailabilitySocketHelper.updateLocation(riderId, {
-    latitude: payload.latitude,
-    longitude: payload.longitude,
-    heading: payload.heading,
+    latitude: geo.latitude,
+    longitude: geo.longitude,
+    heading: geo.heading,
     activeJob: activeJob ?? undefined,
   });
 

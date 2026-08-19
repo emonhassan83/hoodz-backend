@@ -5,12 +5,12 @@ import { JobSocketActions } from '@/app/socket/utils/jobSocket.actions';
 import {
   assertSocketRole,
   sendJobAck,
-  socketVendorAdminRoles,
+  socketAssignRoles,
 } from '@/app/socket/utils/jobSocket.helpers';
 
 export const findOnlineRiderHandler = eventHandler<TFindOnlineRiderSocketPayload>(
   async (socket: TSocket, payload, callback) => {
-    assertSocketRole(socket.auth.role, socketVendorAdminRoles);
+    assertSocketRole(socket.auth.role, socketAssignRoles);
     const data = await JobSocketActions.findOnlineRider(
       'socket',
       { userId: socket.auth._id, role: socket.auth.role! },

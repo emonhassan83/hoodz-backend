@@ -15,6 +15,24 @@ export type TRiderAvailabilityPayload = {
   heading?: number;
 };
 
+export const normalizeRiderGeo = (payload?: {
+  latitude?: number;
+  longitude?: number;
+  lat?: number;
+  lng?: number;
+  heading?: number;
+} | null): TRiderAvailabilityPayload | null => {
+  if (!payload) return null;
+  const latitude = Number(payload.latitude ?? payload.lat);
+  const longitude = Number(payload.longitude ?? payload.lng);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return {
+    latitude,
+    longitude,
+    heading: payload.heading,
+  };
+};
+
 type TRedisAvailability = {
   rider: string;
   isOnline: boolean;
@@ -41,6 +59,40 @@ const haversineMeters = (
   return 2 * 6371000 * Math.asin(Math.sqrt(a));
 };
 
+const ELIGIBLE_ONLINE_RIDER_FILTER = {
+  role: USER_ROLE.rider,
+  isOnline: true,
+  status: USER_STATUS.active,
+  isDeleted: false,
+} as const;
+
+/** Returns rider ids that are online, active, and KYC approved. */
+const filterJobEligibleRiderIds = async (riderIds: string[]) => {
+  if (!riderIds.length) return new Set<string>();
+
+  const [users, kycs] = await Promise.all([
+    User.find({
+      _id: { $in: riderIds },
+      ...ELIGIBLE_ONLINE_RIDER_FILTER,
+    })
+      .select('_id')
+      .lean(),
+    Kyc.find({
+      user: { $in: riderIds },
+      status: KYC_STATUS.approved,
+    })
+      .select('user')
+      .lean(),
+  ]);
+
+  const approvedKycUserIds = new Set(kycs.map((kyc) => kyc.user.toString()));
+  return new Set(
+    users
+      .map((user) => user._id.toString())
+      .filter((id) => approvedKycUserIds.has(id))
+  );
+};
+
 const persistUserLastAvailable = async (
   riderId: string,
   latitude: number,
@@ -62,9 +114,7 @@ const hydrateOnlineRiderGeo = async () => {
   lastGeoHydrateAt = Date.now();
 
   const riders = await User.find({
-    role: USER_ROLE.rider,
-    isOnline: true,
-    isDeleted: false,
+    ...ELIGIBLE_ONLINE_RIDER_FILTER,
     'lastAvailable.coordinates.0': { $ne: 0 },
     'lastAvailable.coordinates.1': { $ne: 0 },
   })
@@ -169,6 +219,15 @@ const goOnline = async (
 ) => {
   await assertRiderReadyForJobs(traceId, riderId);
 
+  const riderDoc = await User.findById(riderId).select('hasRiderActivateMode').lean();
+  if (!riderDoc?.hasRiderActivateMode) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'Verify security code to activate rider mode',
+      traceId
+    );
+  }
+
   const availability = await setAvailability(riderId, {
     ...payload,
     isOnline: true,
@@ -182,39 +241,55 @@ const goOnline = async (
   );
   const rider = await User.findByIdAndUpdate(
     riderId,
-    { isOnline: true },
+    {
+      isOnline: true,
+      lastAvailable: {
+        type: 'Point',
+        coordinates: [payload.longitude, payload.latitude],
+      },
+      lastAvailableAt: new Date(),
+    },
     { returnDocument: 'after' }
   )
-    .select('name email phone profileAvatar avgRating ratingCount isOnline')
+    .select(
+      'name email phone profileAvatar avgRating ratingCount isOnline hasRiderActivateMode lastAvailable lastAvailableAt'
+    )
     .lean();
 
   return { ...availability, rider };
 };
 
 /** Marks a rider offline and removes them from Redis geo index. */
-const goOffline = async (riderId: string) => {
+const goOffline = async (riderId: string, payload?: TRiderAvailabilityPayload | null) => {
   const redis = getRedisClient();
   const current = parseAvailability(
     riderId,
     await redis.hgetall(REDIS_KEYS.RIDER_AVAILABILITY(riderId))
   );
+  const latitude = payload?.latitude ?? current?.latitude ?? 0;
+  const longitude = payload?.longitude ?? current?.longitude ?? 0;
 
   const availability = await setAvailability(riderId, {
-    latitude: current?.latitude ?? 0,
-    longitude: current?.longitude ?? 0,
-    heading: current?.heading ?? undefined,
+    latitude,
+    longitude,
+    heading: payload?.heading ?? current?.heading ?? undefined,
     isOnline: false,
     activeJob: null,
   });
-  if (current) {
-    await persistUserLastAvailable(riderId, current.latitude, current.longitude);
-  }
+  await persistUserLastAvailable(riderId, latitude, longitude);
   const rider = await User.findByIdAndUpdate(
     riderId,
-    { isOnline: false },
+    {
+      isOnline: false,
+      hasRiderActivateMode: false,
+      lastAvailable: { type: 'Point', coordinates: [longitude, latitude] },
+      lastAvailableAt: new Date(),
+    },
     { returnDocument: 'after' }
   )
-    .select('name email phone profileAvatar avgRating ratingCount isOnline')
+    .select(
+      'name email phone profileAvatar avgRating ratingCount isOnline hasRiderActivateMode lastAvailable lastAvailableAt'
+    )
     .lean();
 
   return { ...availability, rider };
@@ -260,24 +335,76 @@ const findOnlineRiders = async (
   const availableRiderIds = availabilityList
     .filter((item) => item?.isOnline && !item.activeJob)
     .map((item) => item!.rider);
+  const eligibleRiderIds = await filterJobEligibleRiderIds(availableRiderIds);
   const users = await User.find({
-    _id: { $in: availableRiderIds },
-    role: USER_ROLE.rider,
-    isOnline: true,
-    isDeleted: false,
+    _id: { $in: [...eligibleRiderIds] },
   })
     .select('name email phone profileAvatar avgRating ratingCount')
     .lean();
   const userById = new Map(users.map((user) => [user._id.toString(), user]));
 
   return rawResults
-    .filter(([riderId]) => availableRiderIds.includes(riderId))
+    .filter(([riderId]) => eligibleRiderIds.has(riderId))
     .map(([riderId, distance]) => ({
       availability: availabilityList.find((item) => item?.rider === riderId),
       rider: userById.get(riderId),
       distanceKm: Number(Number(distance).toFixed(2)),
     }))
     .filter((item) => item.rider);
+};
+
+/** Lists online riders by lastAvailable distance from the shop, nearest first. */
+const findOnlineRidersNearShop = async (
+  latitude: number,
+  longitude: number,
+  radiusKm?: number
+) => {
+  const geoNear: Record<string, unknown> = {
+    near: { type: 'Point', coordinates: [longitude, latitude] },
+    key: 'lastAvailable',
+    distanceField: 'distanceMeters',
+    spherical: true,
+    query: {
+      ...ELIGIBLE_ONLINE_RIDER_FILTER,
+      'lastAvailable.coordinates.0': { $ne: 0 },
+      'lastAvailable.coordinates.1': { $ne: 0 },
+    },
+  };
+  if (radiusKm && radiusKm > 0) {
+    geoNear.maxDistance = radiusKm * 1000;
+  }
+
+  const riders = await User.aggregate([
+    { $geoNear: geoNear },
+    {
+      $lookup: {
+        from: Kyc.collection.name,
+        localField: '_id',
+        foreignField: 'user',
+        as: 'kyc',
+      },
+    },
+    {
+      $match: {
+        'kyc.status': KYC_STATUS.approved,
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        name: 1,
+        email: 1,
+        phone: 1,
+        avgRating: 1,
+        ratingCount: 1,
+        distance: {
+          $round: [{ $divide: ['$distanceMeters', 1000] }, 2],
+        },
+      },
+    },
+  ]);
+
+  return riders;
 };
 
 /** Updates rider location in Redis while online or during a job. */
@@ -381,6 +508,7 @@ export const RiderAvailabilitySocketHelper = {
   goOnline,
   goOffline,
   findOnlineRiders,
+  findOnlineRidersNearShop,
   updateLocation,
   setActiveJob,
   persistOnlineRiderLocations,

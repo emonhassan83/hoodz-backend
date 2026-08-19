@@ -133,6 +133,7 @@ const userSchema = new Schema<IUser, IUserModal>(
       },
     },
     isOnline: { type: Boolean, default: false, index: true },
+    hasRiderActivateMode: { type: Boolean, default: false, index: true },
     lastAvailable: {
       type: {
         type: String,

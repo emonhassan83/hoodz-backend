@@ -30,6 +30,7 @@ export interface IUser extends Document {
   deliveryAddress?: string | null;
   deliveryLocation?: IGeoLocation | null;
   isOnline: boolean;
+  hasRiderActivateMode: boolean;
   lastAvailable?: IGeoLocation | null;
   lastAvailableAt?: Date | null;
   timeZone: string;

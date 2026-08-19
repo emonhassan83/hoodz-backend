@@ -39,7 +39,10 @@ import {
 import { ORDER_STATUS } from '@/app/modules/orders/orders.constant';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
-import { RiderAvailabilitySocketHelper } from '@/app/socket/utils/riderAvailability.helpers';
+import {
+  RiderAvailabilitySocketHelper,
+  normalizeRiderGeo,
+} from '@/app/socket/utils/riderAvailability.helpers';
 
 const jobPopulate = [
   {
@@ -56,11 +59,20 @@ const riderGoOnline = async (
   traceId: string,
   riderId: string,
   payload: TGeoPayload
-) => RiderAvailabilitySocketHelper.goOnline(traceId, riderId, payload);
+) => {
+  const geo = normalizeRiderGeo(payload);
+  if (!geo) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Rider latitude and longitude are required'
+    );
+  }
+  return RiderAvailabilitySocketHelper.goOnline(traceId, riderId, geo);
+};
 
 /** Marks rider offline from socket delivery flow. */
-const riderGoOffline = async (riderId: string) =>
-  RiderAvailabilitySocketHelper.goOffline(riderId);
+const riderGoOffline = async (riderId: string, payload?: TGeoPayload) =>
+  RiderAvailabilitySocketHelper.goOffline(riderId, normalizeRiderGeo(payload));
 
 /** Finds nearby online riders for a socket assignment request. */
 const findOnlineRider = async (
@@ -70,10 +82,19 @@ const findOnlineRider = async (
 ) => {
   const order = await getAssignableOrderOrThrow(traceId, payload.orderId);
   assertCanAssignOrder(traceId, order, requester);
+  const shop = order.author as { location?: { coordinates?: number[] } };
+  const [longitude, latitude] = shop?.location?.coordinates ?? [];
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !latitude || !longitude) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Shop location is required to find nearby riders',
+      traceId
+    );
+  }
 
-  return RiderAvailabilitySocketHelper.findOnlineRiders(
-    payload.latitude,
-    payload.longitude,
+  return RiderAvailabilitySocketHelper.findOnlineRidersNearShop(
+    latitude,
+    longitude,
     payload.radiusKm
   );
 };

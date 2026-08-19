@@ -1,7 +1,5 @@
 export type TFindOnlineRiderSocketPayload = {
   orderId: string;
-  latitude: number;
-  longitude: number;
   radiusKm?: number;
 };
 
@@ -21,15 +19,27 @@ export type TJobRejectSocketPayload = TJobIdSocketPayload & {
 };
 
 export type TRiderGoOnlineSocketPayload = {
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
+  lat?: number;
+  lng?: number;
+  heading?: number;
+};
+
+export type TRiderGoOfflineSocketPayload = {
+  latitude?: number;
+  longitude?: number;
+  lat?: number;
+  lng?: number;
   heading?: number;
 };
 
 export type TRiderLocationUpdateSocketPayload = {
   jobId?: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
+  lat?: number;
+  lng?: number;
   heading?: number;
 };
 

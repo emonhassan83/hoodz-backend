@@ -10,6 +10,8 @@ import { IJob } from '@/app/modules/job/job.interface';
 import { Job } from '@/app/modules/job/job.model';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { REDIS_KEYS } from '@/app/redis/keys';
+import { KYC_STATUS } from '@/app/modules/kyc/kyc.constant';
+import { Kyc } from '@/app/modules/kyc/kyc.model';
 import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import { SettingService } from '@/app/modules/settings/settings.services';
@@ -192,13 +194,33 @@ export const getAssignableRiderOrThrow = async (
   traceId: string,
   riderId: string
 ) => {
-  const rider = await User.findOne({
-    _id: riderId,
-    role: USER_ROLE.rider,
-    isDeleted: false,
-  }).select('status');
+  const [rider, kyc] = await Promise.all([
+    User.findOne({
+      _id: riderId,
+      role: USER_ROLE.rider,
+      isDeleted: false,
+    }).select('status isOnline'),
+    Kyc.findOne({ user: riderId }).select('status').lean(),
+  ]);
   if (!rider) {
     throw new ApiError(HttpStatusCode.NotFound, 'Rider not found', traceId);
+  }
+  if (rider.status !== USER_STATUS.active) {
+    throw new ApiError(HttpStatusCode.BadRequest, 'Rider is not active', traceId);
+  }
+  if (!rider.isOnline) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Rider is not online',
+      traceId
+    );
+  }
+  if (!kyc || kyc.status !== KYC_STATUS.approved) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Rider KYC is not approved',
+      traceId
+    );
   }
   return rider;
 };
