@@ -103,7 +103,12 @@ const auth = (...requiredRoles: IUserRole[]) => {
         }
       }
 
-      req.user = toUserPayload(decoded) as any;
+      req.user = toUserPayload({
+        ...decoded,
+        userId: user._id.toString(),
+        role: user.role,
+        email: user.email,
+      }) as any;
       next();
     }
   );
@@ -125,7 +130,9 @@ export const optionalAuth = asyncHandler(
       if (user && !user.isDeleted && user.status !== 'blocked') {
         req.user = toUserPayload({
           ...decoded,
-          userId: decoded.userId ?? user._id,
+          userId: user._id.toString(),
+          role: user.role,
+          email: user.email,
         }) as any;
       }
     } catch (_err) {

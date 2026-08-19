@@ -38,7 +38,25 @@ const getAll = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const remove = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await WishlistService.remove(
+    traceId,
+    req.user.userId,
+    req.params.wishlistId as string
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Wishlist item removed successfully',
+    data,
+    traceId,
+  });
+});
+
 export const WishlistController = {
   toggle,
   getAll,
+  remove,
 };

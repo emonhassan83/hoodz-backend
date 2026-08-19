@@ -16,9 +16,16 @@ router
   .route('/toggle/:productId')
   .post(
     auth(USER_ROLE.user),
-
     validateRequest(WishlistValidation.toggleWishlistValidationSchema),
     WishlistController.toggle
+  );
+
+router
+  .route('/:wishlistId')
+  .delete(
+    auth(USER_ROLE.user),
+    validateRequest(WishlistValidation.wishlistIdParamValidationSchema),
+    WishlistController.remove
   );
 
 export const WishlistRoutes = router;

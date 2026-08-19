@@ -3,17 +3,22 @@ import { IErrorMessage } from "@/app/@types/system.types";
 
 const handleDuplicateError = (error: any, traceId?: string) => {
   const keys = error.keyValue ? Object.keys(error.keyValue) : [];
-  const isReviewDuplicate =
+  const collection = String(error.message || error.errmsg || '');
+  const isCompoundUserReference =
     keys.includes('user') &&
     keys.includes('modelType') &&
     keys.includes('reference');
 
+  const duplicateMessage = collection.includes('wishlist')
+    ? 'This item is already in your wishlist'
+    : isCompoundUserReference
+      ? 'You have already submitted a review for this item'
+      : `${keys[0] || 'field'} already exists`;
+
   const errorMessages: IErrorMessage[] = [
     {
-      path: isReviewDuplicate ? 'review' : keys[0] || 'unknown',
-      message: isReviewDuplicate
-        ? 'You have already submitted a review for this item'
-        : `${keys[0] || 'field'} already exists`,
+      path: isCompoundUserReference ? keys.join('.') : keys[0] || 'unknown',
+      message: duplicateMessage,
     },
   ];
 

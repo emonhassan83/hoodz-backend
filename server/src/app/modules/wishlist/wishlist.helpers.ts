@@ -9,9 +9,15 @@ import { WISHLIST_MODEL_TYPE } from '@/app/modules/wishlist/wishlist.constant';
 import { TWishlistModelType } from '@/app/modules/wishlist/wishlist.interface';
 import { Wishlist } from '@/app/modules/wishlist/wishlist.model';
 
+export const toObjectId = (id: string) => new Types.ObjectId(id);
+
 export const productWishlistMatch = (userId: string) => ({
-  user: userId,
-  modelType: WISHLIST_MODEL_TYPE.product,
+  user: toObjectId(userId),
+  $or: [
+    { modelType: WISHLIST_MODEL_TYPE.product },
+    { modelType: { $exists: false } },
+    { modelType: null },
+  ],
 });
 
 export const getWishlistItemReferenceId = (item: {
@@ -47,25 +53,61 @@ export const wishlistItemMatch = (
   modelType: TWishlistModelType,
   referenceId: string
 ) => ({
-  user: userId,
+  user: toObjectId(userId),
   modelType,
-  reference: referenceId,
+  reference: toObjectId(referenceId),
 });
 
 export const findWishlistItem = (
   userId: string,
   modelType: TWishlistModelType,
   referenceId: string
-) => Wishlist.findOne(wishlistItemMatch(userId, modelType, referenceId));
+) =>
+  Wishlist.findOne({
+    user: toObjectId(userId),
+    reference: toObjectId(referenceId),
+    ...(modelType === WISHLIST_MODEL_TYPE.shop
+      ? { modelType: WISHLIST_MODEL_TYPE.shop }
+      : {
+          $or: [
+            { modelType: WISHLIST_MODEL_TYPE.product },
+            { modelType: { $exists: false } },
+            { modelType: null },
+          ],
+        }),
+  });
 
-export const getWishlistProductReferenceIds = async (userId: string) => {
-  const items = await Wishlist.find(productWishlistMatch(userId))
-    .select('reference -_id')
+export const getWishlistProductItems = async (userId: string) =>
+  Wishlist.find(productWishlistMatch(userId))
+    .select('_id reference')
+    .sort({ createdAt: -1 })
     .lean();
 
+export const getWishlistProductReferenceIds = async (userId: string) => {
+  const items = await getWishlistProductItems(userId);
   return items
     .map((item) => getWishlistItemReferenceId(item))
     .filter((id): id is string => Boolean(id));
+};
+
+let wishlistIndexesReady = false;
+
+/** Drops a leftover unique-on-user index so one user can wishlist many products. */
+export const ensureWishlistIndexes = async () => {
+  if (wishlistIndexesReady) return;
+
+  const indexes = await Wishlist.collection.indexes();
+  const uniqueUserOnly = indexes.find(
+    (index) =>
+      Boolean(index.unique) &&
+      index.key?.user === 1 &&
+      Object.keys(index.key).length === 1
+  );
+  if (uniqueUserOnly?.name) {
+    await Wishlist.collection.dropIndex(uniqueUserOnly.name);
+  }
+  await Wishlist.syncIndexes();
+  wishlistIndexesReady = true;
 };
 
 export const isShopWishlisted = async (userId: string | undefined, shopId: string) => {
