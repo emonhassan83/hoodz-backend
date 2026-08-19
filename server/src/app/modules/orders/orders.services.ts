@@ -346,9 +346,17 @@ const getAllOrders = async (query: Record<string, unknown>) => {
 };
 
 /** Returns paginated orders created by the authenticated user. */
+/** Returns paginated orders for the authenticated buyer, excluding unpaid/failed checkouts. */
 const getMyOrders = async (userId: string, query: Record<string, unknown>) => {
   const ordersQuery = new QueryBuilder(
-    Orders.find({ user: userId, isDeleted: false })
+    Orders.find({
+      user: userId,
+      isDeleted: false,
+      $nor: [
+        { paymentStatus: PAYMENT_STATUS.unpaid, status: ORDER_STATUS.pending },
+        { paymentStatus: PAYMENT_STATUS.failed },
+      ],
+    })
       .populate(orderPopulate)
       .select('-__v')
       .lean(),

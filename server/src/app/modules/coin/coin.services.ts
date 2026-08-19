@@ -310,20 +310,29 @@ const getRedemptionPreview = async (
 
   await expireOldCoins(userId);
   const stats = await getActiveCoinStats(userId);
+  const availableCoins = stats.balance;
   const maxCoinsByBasket = Math.floor(
     (basketSubtotal * COIN_REDEMPTION_MAX_SUBTOTAL_PERCENT) / 100
   );
   const maxCoinsByEligibleSubtotal = Math.floor(eligibleSubtotal);
   const maxRedeemableCoins = Math.min(
-    stats.balance,
+    availableCoins,
     maxCoinsByBasket,
     maxCoinsByEligibleSubtotal
   );
 
-  if (stats.balance < COIN_REDEMPTION_MIN_BALANCE) {
+  if (requestedCoins > availableCoins) {
     throw new ApiError(
       HttpStatusCode.BadRequest,
-      `Minimum ${COIN_REDEMPTION_MIN_BALANCE} coins are required to redeem`,
+      `You have ${availableCoins} coins. You cannot redeem ${requestedCoins} coins`,
+      traceId
+    );
+  }
+
+  if (availableCoins < COIN_REDEMPTION_MIN_BALANCE) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      `You have ${availableCoins} coins. Minimum ${COIN_REDEMPTION_MIN_BALANCE} coins are required to redeem`,
       traceId
     );
   }
@@ -347,7 +356,7 @@ const getRedemptionPreview = async (
   if (requestedCoins > maxRedeemableCoins) {
     throw new ApiError(
       HttpStatusCode.BadRequest,
-      `You can redeem up to ${maxRedeemableCoins} coins for this basket`,
+      `You have ${availableCoins} coins, but you can redeem up to ${maxRedeemableCoins} coins for this basket`,
       traceId
     );
   }

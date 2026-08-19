@@ -87,9 +87,12 @@ const getSingleUser = async (traceId: string, userId: string) => {
     throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
   }
 
-  if (user.role !== USER_ROLE.rider) return user;
+  if (user.role !== USER_ROLE.rider) {
+    const coinSummary = await CoinService.getSummary(userId);
+    return { ...user, coins: coinSummary.balance };
+  }
 
-  const [kyc, completedDeliveries] = await Promise.all([
+  const [kyc, completedDeliveries, coinSummary] = await Promise.all([
     Kyc.findOne({ user: user._id })
       .select('-user -rejectedReason -updatedAt -__v')
       .lean(),
@@ -97,8 +100,9 @@ const getSingleUser = async (traceId: string, userId: string) => {
       rider: user._id,
       status: JOB_STATUS.delivered,
     }),
+    CoinService.getSummary(userId),
   ]);
-  return { ...user, kyc, completedDeliveries };
+  return { ...user, kyc, completedDeliveries, coins: coinSummary.balance };
 };
 
 /** Lists nearby vendor shops with distance and optional Google duration data. */

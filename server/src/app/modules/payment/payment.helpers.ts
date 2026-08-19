@@ -112,11 +112,31 @@ export const buildPaymobIframeUrl = (paymentToken: string) =>
 
 export const buildPaymobReturnHtml = (query: Record<string, any>) => {
   const success = query.success === 'true' || query.success === true;
-  const statusText = success ? 'Payment received' : 'Payment processing';
-  const title = success ? 'Payment Successful' : 'Payment Status';
+  const errorOccured =
+    query.error_occured === 'true' || query.error_occured === true;
+  const pending = query.pending === 'true' || query.pending === true;
+  const failed = !success && (errorOccured || !pending);
+  const errorMessage = String(query['data.message'] ?? query.message ?? '')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const statusText = success
+    ? 'Payment received'
+    : failed
+      ? 'Payment failed'
+      : 'Payment processing';
+  const title = success
+    ? 'Payment Successful'
+    : failed
+      ? 'Payment Failed'
+      : 'Payment Status';
   const message = success
-    ? 'Your payment response was received. You can now return to the app.'
-    : 'Your payment response was received. Final confirmation may take a moment.';
+    ? 'Your payment was successful. You can now return to the app.'
+    : failed
+      ? errorMessage ||
+        'Your card payment was declined. Please try another card or payment method.'
+      : 'Your payment response was received. Final confirmation may take a moment.';
+  const badgeColor = success ? '#16a34a' : failed ? '#dc2626' : '#f97316';
 
   return `<!doctype html>
 <html lang="en">
@@ -128,7 +148,7 @@ export const buildPaymobReturnHtml = (query: Record<string, any>) => {
       body { margin: 0; font-family: Arial, sans-serif; background: #f7f7f8; color: #1f2937; }
       .wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
       .box { max-width: 460px; width: 100%; background: #fff; border-radius: 12px; padding: 28px; box-shadow: 0 12px 30px rgba(0,0,0,.08); text-align: center; }
-      .badge { display: inline-block; padding: 8px 14px; border-radius: 999px; color: #fff; background: ${success ? '#16a34a' : '#f97316'}; font-size: 13px; font-weight: 700; }
+      .badge { display: inline-block; padding: 8px 14px; border-radius: 999px; color: #fff; background: ${badgeColor}; font-size: 13px; font-weight: 700; }
       h1 { margin: 18px 0 10px; font-size: 24px; }
       p { margin: 0; color: #6b7280; line-height: 1.5; }
       .hint { margin-top: 18px; font-size: 13px; color: #9ca3af; }

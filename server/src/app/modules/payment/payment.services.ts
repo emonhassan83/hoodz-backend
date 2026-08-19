@@ -4,7 +4,6 @@ import mongoose from 'mongoose';
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import {
-  ORDER_STATUS,
   PAYMENT_STATUS as ORDER_PAYMENT_STATUS,
 } from '@/app/modules/orders/orders.constant';
 import { CoinService } from '@/app/modules/coin/coin.services';
@@ -264,7 +263,6 @@ const initiateWalletPayment = async (
       { _id: { $in: orders.map((order) => order._id) } },
       {
         paymentStatus: ORDER_PAYMENT_STATUS.paid,
-        status: ORDER_STATUS.confirmed,
         transactionId: paymentIntentId,
       },
       { session }
@@ -320,7 +318,6 @@ const initiateCodPayment = async (
       { _id: { $in: orders.map((order) => order._id) } },
       {
         paymentStatus: ORDER_PAYMENT_STATUS.unpaid,
-        status: ORDER_STATUS.confirmed,
         transactionId: paymentIntentId,
       }
     ),
@@ -391,7 +388,6 @@ const confirmPayment = async (
     status === PAYMENT_STATUS.paid
       ? {
           paymentStatus: ORDER_PAYMENT_STATUS.paid,
-          status: ORDER_STATUS.confirmed,
           transactionId,
         }
       : {
@@ -479,7 +475,6 @@ const confirmPaymentByWebhook = async (
     status === PAYMENT_STATUS.paid
       ? {
           paymentStatus: ORDER_PAYMENT_STATUS.paid,
-          status: ORDER_STATUS.confirmed,
           transactionId,
         }
       : {
