@@ -1,5 +1,7 @@
 import { startCoinLifecycleJob } from '@/app/jobs/coinLifecycle.job';
 import { startHealthHeartbeatJob } from '@/app/jobs/healthHeartbeat.job';
+import { startRiderLocationPersistJob } from '@/app/jobs/riderLocationPersist.job';
+import { startRiderMatchJob } from '@/app/jobs/riderMatch.job';
 
 let jobs: any[] = [];
 
@@ -12,6 +14,8 @@ export const startCronJobs = async () => {
 
     jobs.push(startHealthHeartbeatJob(cron));
     jobs.push(startCoinLifecycleJob(cron));
+    jobs.push(startRiderMatchJob(cron));
+    jobs.push(startRiderLocationPersistJob(cron));
 
     console.log(`⏰ [Cron] ✓ ${jobs.length} cron schedules active`);
   } catch (error) {

@@ -10,6 +10,7 @@ import { COIN_REFERENCE_TYPE } from '@/app/modules/coin/coin.constant';
 import { CoinService } from '@/app/modules/coin/coin.services';
 import { Items } from '@/app/modules/items/items.model';
 import { JobService } from '@/app/modules/job/job.services';
+import { stopJobMatchingForOrder } from '@/app/modules/job/job.helpers';
 import {
   ORDER_STATUS,
   PAYMENT_STATUS,
@@ -22,6 +23,7 @@ import {
   distributeDeliveryCharge,
   getDeliveryChargeFromSettingsOrThrow,
   groupCartItemsByAuthor,
+  normalizeBillingDeliveryLocation,
   notifyOrderUser,
   resolveCheckoutItemsOrThrow,
 } from '@/app/modules/orders/orders.helpers';
@@ -284,7 +286,9 @@ const createOrders = async (
               (amount - voucherDiscount - coinDiscount + deliveryCharge).toFixed(2)
             ),
             transactionId: payload.orderData.transactionId ?? null,
-            billingDetails: payload.orderData.billingDetails,
+            billingDetails: normalizeBillingDeliveryLocation(
+              payload.orderData.billingDetails
+            ),
             deliveryType: payload.orderData.deliveryType,
           },
         ],
@@ -453,10 +457,15 @@ const changeOrderStatus = async (
   }
 
   await invalidateOrderCaches();
+
+  if (payload.status === ORDER_STATUS.cancelled) {
+    await stopJobMatchingForOrder(orderId);
+  }
+
   return updatedOrder;
 };
 
-/** Confirms an order and starts nearby rider job matching. */
+/** Confirms a pending paid order. Shop confirmation only; rider matching starts on processing. */
 const confirmOrder = async (
   traceId: string,
   orderId: string,
@@ -486,9 +495,9 @@ const confirmOrder = async (
   }
 
   order.status = ORDER_STATUS.confirmed;
+  order.confirmedAt = new Date();
   await order.save();
 
-  const job = await JobService.startJobMatching(traceId, orderId);
   await notifyOrderUser(order, 'confirmed');
   await invalidateOrderCaches();
 
@@ -497,10 +506,10 @@ const confirmOrder = async (
     .select('-__v')
     .lean();
 
-  return { order: confirmedOrder, job };
+  return confirmedOrder;
 };
 
-/** Moves a confirmed order into processing. Vendor/author access only. */
+/** Moves a confirmed order into processing and offers the job to nearby riders. */
 const processOrder = async (
   traceId: string,
   orderId: string,
@@ -522,11 +531,19 @@ const processOrder = async (
   }
 
   order.status = ORDER_STATUS.processing;
+  order.processedAt = new Date();
   await order.save();
+
+  const job = await JobService.startJobMatching(traceId, orderId);
   await notifyOrderUser(order, 'processing');
   await invalidateOrderCaches();
 
-  return Orders.findById(orderId).populate(orderPopulate).select('-__v').lean();
+  const processedOrder = await Orders.findById(orderId)
+    .populate(orderPopulate)
+    .select('-__v')
+    .lean();
+
+  return { order: processedOrder, job };
 };
 
 /** Soft deletes an order. */
@@ -547,6 +564,7 @@ const deleteOrder = async (
     { returnDocument: 'after' }
   ).select('-__v');
 
+  await stopJobMatchingForOrder(orderId);
   await invalidateOrderCaches();
   return deletedOrder;
 };

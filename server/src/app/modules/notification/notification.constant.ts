@@ -5,6 +5,7 @@ export const NOTIFICATION_MODEL_TYPE = {
   Product: 'Product',
   Coin: 'Coin',
   Order: 'Order',
+  Job: 'Job',
 } as const
 
 

@@ -76,6 +76,22 @@ export const createOrUpdateSettingZodSchema = z
       return;
     }
 
+    const numericSettingKeys = [
+      'riderMatchIntervalSeconds',
+      'riderMatchMaxAttempts',
+    ];
+    if (numericSettingKeys.includes(params.key)) {
+      const parsed = z.coerce.number().int().positive().safeParse(value);
+      if (!parsed.success) {
+        context.addIssue({
+          code: 'custom',
+          path: ['body', body.value === undefined ? params.key : 'value'],
+          message: `${params.key} must be a positive integer`,
+        });
+      }
+      return;
+    }
+
     if (typeof value !== 'string') {
       context.addIssue({
         code: 'custom',

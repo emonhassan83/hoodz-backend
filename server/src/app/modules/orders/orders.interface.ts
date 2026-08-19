@@ -26,6 +26,8 @@ export interface IOrders {
   transactionId?: string | null;
   billingDetails: TOrderBillingDetails;
   deliveryType: TDeliveryType;
+  confirmedAt?: Date | null;
+  processedAt?: Date | null;
   isOtpVerified: boolean;
   isDeleted: boolean;
   createdAt: Date;

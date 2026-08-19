@@ -24,6 +24,7 @@ export interface IJob {
   _id: Types.ObjectId;
   id: string;
   order: Types.ObjectId;
+  user?: Types.ObjectId | null;
   rider?: Types.ObjectId | null;
   requestedRider: Types.ObjectId[];
   assignedBy?: Types.ObjectId | null;
@@ -36,6 +37,10 @@ export interface IJob {
   earning: number;
   hasDeliveryOtpVerified: boolean;
   status: TJobStatus;
+  matchAttemptCount: number;
+  nextMatchAt?: Date | null;
+  matchingEnabled: boolean;
+  lastMatchedAt?: Date | null;
   acceptedAt?: Date | null;
   pickedUpAt?: Date | null;
   onTheWayAt?: Date | null;

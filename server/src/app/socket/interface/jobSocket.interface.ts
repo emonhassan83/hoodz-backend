@@ -8,7 +8,7 @@ export type TFindOnlineRiderSocketPayload = {
 export type TJobAssignSocketPayload = {
   orderId: string;
   riderId: string;
-  assignmentType?: 'vendor' | 'admin' | 'auto';
+  assignmentType?: 'vendor' | 'admin' | 'agent' | 'auto';
   paymentMethod?: 'card' | 'wallet' | 'cod';
 };
 
@@ -26,7 +26,8 @@ export type TRiderGoOnlineSocketPayload = {
   heading?: number;
 };
 
-export type TRiderLocationUpdateSocketPayload = TJobIdSocketPayload & {
+export type TRiderLocationUpdateSocketPayload = {
+  jobId?: string;
   latitude: number;
   longitude: number;
   heading?: number;

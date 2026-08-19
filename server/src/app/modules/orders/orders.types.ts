@@ -26,6 +26,12 @@ export type TOrderBillingDetails = {
   city?: string | null;
   country?: string | null;
   note?: string | null;
+  deliveryLocation?: {
+    latitude: number;
+    longitude: number;
+    type?: 'Point';
+    coordinates?: [number, number];
+  } | null;
 };
 
 export type TCreateOrderPayload = {

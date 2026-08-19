@@ -76,12 +76,27 @@ const ordersSchema = new Schema<IOrders, IOrdersModel>(
       city: { type: String, default: null },
       country: { type: String, default: null },
       note: { type: String, default: null },
+      deliveryLocation: {
+        type: {
+          type: String,
+          enum: ['Point'],
+          default: 'Point',
+        },
+        coordinates: {
+          type: [Number],
+          default: [0, 0],
+        },
+        latitude: { type: Number, default: null },
+        longitude: { type: Number, default: null },
+      },
     },
     deliveryType: {
       type: String,
       enum: Object.values(DELIVERY_TYPE),
       required: true,
     },
+    confirmedAt: { type: Date, default: null },
+    processedAt: { type: Date, default: null },
     isOtpVerified: {
       type: Boolean,
       default: false,

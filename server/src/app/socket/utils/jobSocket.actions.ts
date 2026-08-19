@@ -33,6 +33,7 @@ import {
   TJobIdPayload,
   TJobRequester,
   TRejectJobPayload,
+  TRiderLocationUpdatePayload,
   TVerifyDeliveryOtpPayload,
 } from '@/app/modules/job/job.types';
 import { ORDER_STATUS } from '@/app/modules/orders/orders.constant';
@@ -77,112 +78,24 @@ const findOnlineRider = async (
   );
 };
 
+/** Loads JobService after modules finish initializing to avoid a circular import. */
+const getJobService = () =>
+  require('../../modules/job/job.services').JobService as typeof import('@/app/modules/job/job.services').JobService;
+
 /** Creates or replaces an assignable rider job from socket flow. */
-const assignJob = async (
+const assignJob = (
   traceId: string,
   requester: TJobRequester,
   payload: TAssignJobPayload
-) => {
-  const [order] = await Promise.all([
-    getAssignableOrderOrThrow(traceId, payload.orderId),
-    getAssignableRiderOrThrow(traceId, payload.riderId),
-  ]);
-  assertCanAssignOrder(traceId, order, requester);
-
-  const existingJob = await Job.findOne({
-    order: payload.orderId,
-    status: { $ne: JOB_STATUS.delivered },
-  });
-  if (existingJob && !isReassignableJob(existingJob.status)) {
-    throw new ApiError(
-      HttpStatusCode.BadRequest,
-      'This order already has an active job',
-      traceId
-    );
-  }
-
-  const paymentMethod = payload.paymentMethod ?? JOB_PAYMENT_METHOD.card;
-  const moneyFields = buildJobMoneyFields(
-    paymentMethod,
-    order.totalAmount,
-    order.deliveryCharge
-  );
-  const locationFields = buildJobLocations(order);
-  const assignmentType =
-    payload.assignmentType ??
-    (requester.role === USER_ROLE.admin
-      ? JOB_ASSIGNMENT_TYPE.admin
-      : JOB_ASSIGNMENT_TYPE.vendor);
-
-  const job = await Job.findOneAndUpdate(
-    { order: payload.orderId },
-    {
-      order: payload.orderId,
-      rider: payload.riderId,
-      assignedBy:
-        assignmentType === JOB_ASSIGNMENT_TYPE.auto ? null : requester.userId,
-      assignmentType,
-      paymentMethod,
-      deliveryType: order.deliveryType,
-      ...locationFields,
-      ...moneyFields,
-      hasDeliveryOtpVerified: false,
-      status: JOB_STATUS.assigned,
-      acceptedAt: null,
-      pickedUpAt: null,
-      onTheWayAt: null,
-      completedAt: null,
-      cancelledAt: null,
-      rejectionReason: null,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  ).populate(jobPopulate);
-
-  await Promise.all([
-    Orders.findByIdAndUpdate(payload.orderId, { status: ORDER_STATUS.rider_assigned }),
-    RiderAvailabilitySocketHelper.setActiveJob(payload.riderId, job!._id.toString()),
-  ]);
-
-  return job;
-};
+) => getJobService().assignJob(traceId, requester, payload);
 
 /** Rider accepts their assigned socket job. */
-const acceptJob = async (
-  traceId: string,
-  riderId: string,
-  payload: TJobIdPayload
-) => {
-  const job = await Job.findById(payload.jobId);
-  if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  assertAssignedRider(traceId, job, riderId);
-  assertJobStatusIn(traceId, job, [JOB_STATUS.assigned], 'Only assigned jobs can be accepted');
-
-  job.status = JOB_STATUS.accepted;
-  job.acceptedAt = new Date();
-  await job.save();
-  await RiderAvailabilitySocketHelper.setActiveJob(riderId, job._id.toString());
-
-  return Job.findById(job._id).populate(jobPopulate);
-};
+const acceptJob = (traceId: string, riderId: string, payload: TJobIdPayload) =>
+  getJobService().acceptJob(traceId, riderId, payload);
 
 /** Rider rejects their assigned socket job. */
-const rejectJob = async (
-  traceId: string,
-  riderId: string,
-  payload: TRejectJobPayload
-) => {
-  const job = await Job.findById(payload.jobId);
-  if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  assertAssignedRider(traceId, job, riderId);
-  assertJobStatusIn(traceId, job, [JOB_STATUS.assigned], 'Only assigned jobs can be rejected');
-
-  job.status = JOB_STATUS.rejected;
-  job.rejectionReason = payload.reason ?? null;
-  await job.save();
-  await RiderAvailabilitySocketHelper.setActiveJob(riderId, null);
-
-  return Job.findById(job._id).populate(jobPopulate);
-};
+const rejectJob = (traceId: string, riderId: string, payload: TRejectJobPayload) =>
+  getJobService().rejectJob(traceId, riderId, payload);
 
 /** Moves accepted socket job into go-pickup state. */
 const goPickup = async (traceId: string, riderId: string, payload: TJobIdPayload) => {
@@ -333,25 +246,12 @@ const deliveredJob = async (
   }
 };
 
-/** Updates live rider location for a socket job. */
-const riderLocationUpdate = async (
+/** Updates live rider location for a socket job or idle online rider. */
+const riderLocationUpdate = (
   traceId: string,
   riderId: string,
-  payload: TJobIdPayload & { latitude: number; longitude: number; heading?: number }
-) => {
-  const job = await Job.findById(payload.jobId);
-  if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  assertAssignedRider(traceId, job, riderId);
-
-  const availability = await RiderAvailabilitySocketHelper.updateLocation(riderId, {
-    latitude: payload.latitude,
-    longitude: payload.longitude,
-    heading: payload.heading,
-    activeJob: payload.jobId,
-  });
-
-  return { jobId: payload.jobId, riderId, availability };
-};
+  payload: TRiderLocationUpdatePayload
+) => getJobService().riderLocationUpdate(traceId, riderId, payload);
 
 export const JobSocketActions = {
   riderGoOnline,

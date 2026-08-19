@@ -108,7 +108,7 @@ const confirmOrder = asyncHandler(async (req: Request, res: Response) => {
   sendResponse(res, {
     success: true,
     statusCode: 200,
-    message: 'Order confirmed and job matching started',
+    message: 'Order confirmed successfully',
     data,
     traceId,
   });
@@ -125,7 +125,7 @@ const processOrder = asyncHandler(async (req: Request, res: Response) => {
   sendResponse(res, {
     success: true,
     statusCode: 200,
-    message: 'Order moved to processing successfully',
+    message: 'Order processing started and nearby riders were notified',
     data,
     traceId,
   });

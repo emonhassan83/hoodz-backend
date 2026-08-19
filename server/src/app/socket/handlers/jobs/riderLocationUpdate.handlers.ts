@@ -20,11 +20,10 @@ export const riderLocationUpdateHandler =
         payload!
       );
 
-      await emitJobToAudience(
-        payload!.jobId,
-        SOCKET_EMIT.riderLocationUpdated,
-        data
-      );
+      const jobId = data.jobId || payload?.jobId;
+      if (jobId) {
+        await emitJobToAudience(jobId, SOCKET_EMIT.riderLocationUpdated, data);
+      }
       sendJobAck(callback, {
         success: true,
         status: 200,

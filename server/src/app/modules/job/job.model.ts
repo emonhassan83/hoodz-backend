@@ -31,6 +31,12 @@ const jobSchema = new Schema<IJob, IJobModel>(
       required: true,
       index: true,
     },
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
     rider: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -80,6 +86,10 @@ const jobSchema = new Schema<IJob, IJobModel>(
       default: JOB_STATUS.assigned,
       index: true,
     },
+    matchAttemptCount: { type: Number, default: 0, min: 0 },
+    nextMatchAt: { type: Date, default: null, index: true },
+    matchingEnabled: { type: Boolean, default: true, index: true },
+    lastMatchedAt: { type: Date, default: null },
     acceptedAt: { type: Date, default: null },
     pickedUpAt: { type: Date, default: null },
     onTheWayAt: { type: Date, default: null },
@@ -95,6 +105,7 @@ const jobSchema = new Schema<IJob, IJobModel>(
 jobSchema.index({ order: 1, status: 1 });
 jobSchema.index({ rider: 1, status: 1, createdAt: -1 });
 jobSchema.index({ requestedRider: 1, status: 1 });
+jobSchema.index({ matchingEnabled: 1, rider: 1, status: 1, nextMatchAt: 1 });
 
 export const Job = model<IJob, IJobModel>('Job', jobSchema);
 

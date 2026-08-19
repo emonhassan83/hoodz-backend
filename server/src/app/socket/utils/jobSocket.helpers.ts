@@ -30,12 +30,13 @@ export const assertSocketRole = (
 export const getJobAudienceIds = async (jobId: string) => {
   const job = await Job.findById(jobId)
     .populate([{ path: 'order', select: 'user author' }])
-    .select('rider assignedBy requestedRider order')
+    .select('rider user assignedBy requestedRider order')
     .lean();
   if (!job) return [];
 
   return [
     job.rider,
+    job.user,
     ...(Array.isArray((job as any).requestedRider) ? (job as any).requestedRider : []),
     job.assignedBy,
     (job.order as any)?.user,
@@ -57,6 +58,12 @@ export const emitJobToAudience = async (
   audienceIds.forEach((userId) => io.to(userId).emit(event, payload));
 };
 
+/** Emits an event to explicit user rooms. */
+export const emitToUserIds = (userIds: string[], event: string, payload: unknown) => {
+  const io = getIO();
+  [...new Set(userIds.filter(Boolean))].forEach((userId) => io.to(userId).emit(event, payload));
+};
+
 /** Returns job id from a populated or plain job result. */
 export const resolveJobId = (job: unknown) => String((job as IJob)?._id ?? '');
 
@@ -67,6 +74,7 @@ export const emitToAdmins = (event: string, payload: unknown) => {
 
 export const socketAdminRoles = [USER_ROLE.admin];
 export const socketVendorAdminRoles = [USER_ROLE.vendor, USER_ROLE.admin];
+export const socketAssignRoles = [USER_ROLE.vendor, USER_ROLE.admin, USER_ROLE.agent];
 export const socketRiderRoles = [USER_ROLE.rider];
 
 

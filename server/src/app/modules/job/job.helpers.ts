@@ -5,12 +5,19 @@ import twilio from 'twilio';
 import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
 import { getRedisClient } from '@/app/configs/redis.config';
-import { JOB_PAYMENT_METHOD, JOB_STATUS } from '@/app/modules/job/job.constant';
+import { JOB_MATCH_RADIUS_KM, JOB_PAYMENT_METHOD, JOB_STATUS, RIDER_MATCH_DEFAULTS } from '@/app/modules/job/job.constant';
 import { IJob } from '@/app/modules/job/job.interface';
+import { Job } from '@/app/modules/job/job.model';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { REDIS_KEYS } from '@/app/redis/keys';
-import { USER_ROLE } from '@/app/modules/user/user.constant';
+import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
+import { SettingService } from '@/app/modules/settings/settings.services';
+import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { SOCKET_EMIT } from '@/app/socket/socket.constant';
+import { RiderAvailabilitySocketHelper } from '@/app/socket/utils/riderAvailability.helpers';
+import { sendBatchNotificationViaQueue } from '@/app/utils/notification-queue.service';
+import mongoose from 'mongoose';
 
 /** Returns a random 6-digit delivery OTP. */
 export const generateDeliveryOtp = () =>
@@ -83,10 +90,11 @@ export const assertCanAssignOrder = (
   requester: { userId: string; role: string }
 ) => {
   const isAdmin = requester.role === USER_ROLE.admin;
+  const isAgent = requester.role === USER_ROLE.agent;
   const isVendorOwner =
     String((order.author as any)?._id ?? order.author) === requester.userId;
 
-  if (!isAdmin && !isVendorOwner) {
+  if (!isAdmin && !isAgent && !isVendorOwner) {
     throw new ApiError(HttpStatusCode.Forbidden, 'You cannot assign this order', traceId);
   }
 };
@@ -107,6 +115,7 @@ export const assertJobAccess = async (
   );
   const canAccess =
     requester.role === USER_ROLE.admin ||
+    requester.role === USER_ROLE.agent ||
     isRequestedRider ||
     String((job.rider as any)?._id ?? job.rider) === userId ||
     String((job.assignedBy as any)?._id ?? job.assignedBy) === userId ||
@@ -205,14 +214,19 @@ export const buildJobMoneyFields = (
   earning: Number((deliveryCharge || 0).toFixed(2)),
 });
 
-/** Builds pickup/destination snapshots from order/vendor/user data. */
+/** Builds pickup/destination snapshots from shop location and order delivery point. */
 export const buildJobLocations = (order: any) => {
   const vendor = order.author;
-  const customer = order.user;
   const pickupCoordinates = vendor?.location?.coordinates ?? [0, 0];
   const destinationCoordinates =
-    customer?.deliveryLocation?.coordinates ??
-    customer?.location?.coordinates ??
+    order.billingDetails?.deliveryLocation?.coordinates ??
+    (order.billingDetails?.deliveryLocation?.longitude !== undefined &&
+    order.billingDetails?.deliveryLocation?.latitude !== undefined
+      ? [
+          order.billingDetails.deliveryLocation.longitude,
+          order.billingDetails.deliveryLocation.latitude,
+        ]
+      : null) ??
     [0, 0];
 
   return {
@@ -221,11 +235,7 @@ export const buildJobLocations = (order: any) => {
       coordinates: pickupCoordinates,
     },
     destination: {
-      address:
-        order.billingDetails?.address ||
-        customer?.deliveryAddress ||
-        customer?.address ||
-        'Customer address',
+      address: order.billingDetails?.address || 'Customer address',
       coordinates: destinationCoordinates,
     },
   };
@@ -236,5 +246,139 @@ export const isReassignableJob = (status: string) =>
   [JOB_STATUS.assigned, JOB_STATUS.rejected, JOB_STATUS.cancelled].includes(
     status as any
   );
+
+const toIdString = (value: unknown) => String((value as any)?._id ?? value ?? '');
+
+/** Loads rider matching intervals and attempt limits from general settings. */
+export const getRiderMatchSettings = async () => {
+  const [intervalSeconds, maxAttempts] = await Promise.all([
+    SettingService.getNumericSetting(
+      'riderMatchIntervalSeconds',
+      RIDER_MATCH_DEFAULTS.intervalSeconds
+    ),
+    SettingService.getNumericSetting(
+      'riderMatchMaxAttempts',
+      RIDER_MATCH_DEFAULTS.maxAttempts
+    ),
+  ]);
+  return { intervalSeconds, maxAttempts };
+};
+
+/** Collects unique nearby online riders around shop coordinates. */
+export const collectNearbyRequestedRiders = async (
+  latitude: number,
+  longitude: number
+) => {
+  const seenRiderIds = new Set<string>();
+  const requestedRider: mongoose.Types.ObjectId[] = [];
+
+  for (const radiusKm of JOB_MATCH_RADIUS_KM) {
+    const nearbyRiders = await RiderAvailabilitySocketHelper.findOnlineRiders(
+      latitude,
+      longitude,
+      radiusKm,
+      200
+    );
+    nearbyRiders.forEach((item) => {
+      const riderId = item.rider?._id?.toString();
+      if (!riderId || seenRiderIds.has(riderId)) return;
+      seenRiderIds.add(riderId);
+      requestedRider.push(item.rider!._id);
+    });
+  }
+
+  return requestedRider;
+};
+
+const getSocketIO = () =>
+  (require('../../socket/socket.init') as typeof import('@/app/socket/socket.init')).getIO();
+
+/** Emits job:new-request and queues rider push notifications. */
+export const notifyJobOffer = async (job: any, riderIds: string[]) => {
+  if (!riderIds.length) return;
+  const io = getSocketIO();
+  riderIds.forEach((riderId) => io.to(riderId).emit(SOCKET_EMIT.jobNewRequest, job));
+  await sendBatchNotificationViaQueue({
+    userIds: riderIds,
+    channel: 'both',
+    title: 'New delivery nearby',
+    message: 'A nearby order is waiting for a rider. Open the app to accept.',
+    data: {
+      modelType: NOTIFICATION_MODEL_TYPE.Job,
+      reference: job._id?.toString?.(),
+      jobId: job._id?.toString?.(),
+      orderId: toIdString(job.order),
+      notice: 'new-request',
+    },
+  }).catch((error) => {
+    console.warn('[Job] Failed to queue rider offer notifications', error);
+  });
+};
+
+/** Notifies leftover riders that an offer is no longer available. */
+export const notifyJobRequestCancelled = async (job: any, riderIds: string[]) => {
+  if (!riderIds.length) return;
+  const io = getSocketIO();
+  riderIds.forEach((riderId) =>
+    io.to(riderId).emit(SOCKET_EMIT.jobRequestCancelled, job)
+  );
+};
+
+/** Emits job:rider-assigned and notifies the customer. */
+export const notifyJobRiderAssigned = async (job: any, extraRiderIds: string[] = []) => {
+  const io = getSocketIO();
+  const userId = toIdString(job.user || job.order?.user);
+  const authorId = toIdString(job.order?.author);
+  const assignedBy = toIdString(job.assignedBy);
+  const riderId = toIdString(job.rider);
+  const audience = [
+    ...extraRiderIds,
+    userId,
+    authorId,
+    assignedBy,
+    riderId,
+  ].filter((id) => id && id !== 'undefined' && id !== 'null');
+
+  [...new Set(audience)].forEach((id) => io.to(id).emit(SOCKET_EMIT.jobRiderAssigned, job));
+};
+
+/** Notifies agents that auto-matching stopped and they should assign manually. */
+export const notifyMatchingExhausted = async (job: any) => {
+  const agents = await User.find({
+    role: USER_ROLE.agent,
+    status: USER_STATUS.active,
+    isDeleted: false,
+  })
+    .select('_id')
+    .lean();
+  const agentIds = agents.map((agent) => agent._id.toString());
+  if (!agentIds.length) return;
+
+  const io = getSocketIO();
+  agentIds.forEach((agentId) => io.to(agentId).emit(SOCKET_EMIT.jobMatchingExhausted, job));
+  await sendBatchNotificationViaQueue({
+    userIds: agentIds,
+    channel: 'both',
+    title: 'Rider matching failed',
+    message: 'No rider accepted this job. Assign a rider manually.',
+    data: {
+      modelType: NOTIFICATION_MODEL_TYPE.Job,
+      reference: job._id?.toString?.(),
+      jobId: job._id?.toString?.(),
+      orderId: toIdString(job.order),
+      notice: 'matching-exhausted',
+    },
+  }).catch((error) => {
+    console.warn('[Job] Failed to queue matching-exhausted notifications', error);
+  });
+};
+
+/** Stops auto matching for an order job. */
+export const stopJobMatchingForOrder = async (orderId: string) => {
+  await Job.updateMany(
+    { order: orderId, matchingEnabled: true, rider: null },
+    { matchingEnabled: false, nextMatchAt: null }
+  );
+};
 
 

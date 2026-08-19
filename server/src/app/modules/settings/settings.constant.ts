@@ -27,6 +27,8 @@ export const ADMIN_SETTING_KEYS = [
   'agentTermsAndConditions',
   'agentPrivacyAndPolicy',
   'deliveryCharge',
+  'riderMatchIntervalSeconds',
+  'riderMatchMaxAttempts',
 ] as const;
 
 export const GENERAL_KEYS = VENDOR_GENERAL_KEYS;

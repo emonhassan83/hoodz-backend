@@ -13,7 +13,18 @@ export const JOB_STATUS = {
 export const JOB_ASSIGNMENT_TYPE = {
   vendor: 'vendor',
   admin: 'admin',
+  agent: 'agent',
   auto: 'auto',
+} as const;
+
+export const RIDER_MATCH_DEFAULTS = {
+  intervalSeconds: 180,
+  maxAttempts: 5,
+} as const;
+
+export const RIDER_LOCATION = {
+  persistIntervalSeconds: 300,
+  minMoveMeters: 50,
 } as const;
 
 export const JOB_PAYMENT_METHOD = {
@@ -26,6 +37,8 @@ export const DELIVERY_TYPE = {
   regular: 'regular',
   instant: 'instant',
 } as const;
+
+export const JOB_MATCH_RADIUS_KM = [5, 10, 20, 50] as const;
 
 export const JOB_DEPOSIT_STATUS = {
   not_required: 'not_required',

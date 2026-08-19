@@ -40,6 +40,18 @@ const getSetting = async (traceId: string, key: string) => {
   return setting;
 };
 
+/** Reads a numeric admin setting, falling back when missing or invalid. */
+const getNumericSetting = async (key: string, fallback: number) => {
+  try {
+    const setting = await getSetting('system', key);
+    const parsed = Number(setting?.value);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  } catch {
+    return fallback;
+  }
+  return fallback;
+};
+
 const getSettingGenerals = async (traceId: string, vendorId: string) => {
   if (!vendorId) {
     throw new ApiError(
@@ -159,6 +171,7 @@ const updateGenerals = async (
 
 export const SettingService = {
   getSetting,
+  getNumericSetting,
   getSettingGenerals,
   createOrUpdate,
   updateGenerals,

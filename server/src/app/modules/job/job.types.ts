@@ -27,6 +27,10 @@ export type TJobIdPayload = {
   jobId: string;
 };
 
+export type TRiderLocationUpdatePayload = TGeoPayload & {
+  jobId?: string;
+};
+
 export type TRejectJobPayload = TJobIdPayload & {
   reason?: string;
 };

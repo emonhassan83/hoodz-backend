@@ -77,6 +77,16 @@ const settingsData = [
     ],
     vendor: null,
   },
+  {
+    key: 'riderMatchIntervalSeconds',
+    value: 180,
+    vendor: null,
+  },
+  {
+    key: 'riderMatchMaxAttempts',
+    value: 5,
+    vendor: null,
+  },
 ];
 
 const run = async () => {

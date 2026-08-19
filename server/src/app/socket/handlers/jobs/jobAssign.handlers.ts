@@ -9,12 +9,12 @@ import {
   emitJobToAudience,
   resolveJobId,
   sendJobAck,
-  socketVendorAdminRoles,
+  socketAssignRoles,
 } from '@/app/socket/utils/jobSocket.helpers';
 
 export const jobAssignHandler = eventHandler<TJobAssignSocketPayload>(
   async (socket: TSocket, payload, callback) => {
-    assertSocketRole(socket.auth.role, socketVendorAdminRoles);
+    assertSocketRole(socket.auth.role, socketAssignRoles);
     const data = await JobSocketActions.assignJob(
       'socket',
       { userId: socket.auth._id, role: socket.auth.role! },

@@ -19,6 +19,10 @@ const billingDetailsSchema = z.object({
   city: z.string().trim().nullable().optional(),
   country: z.string().trim().nullable().optional(),
   note: z.string().trim().nullable().optional(),
+  deliveryLocation: z.object({
+    latitude: z.coerce.number().min(-90).max(90),
+    longitude: z.coerce.number().min(-180).max(180),
+  }),
 });
 
 const colorSchema = z.object({

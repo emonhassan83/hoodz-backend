@@ -30,6 +30,27 @@ import {
 } from '@/app/modules/voucher/voucher.helpers';
 import { Voucher } from '@/app/modules/voucher/voucher.model';
 
+/** Normalizes checkout lat/lng into GeoJSON [longitude, latitude]. */
+export const normalizeBillingDeliveryLocation = (
+  billingDetails: TCreateOrderPayload['orderData']['billingDetails']
+) => {
+  const latitude = billingDetails.deliveryLocation?.latitude;
+  const longitude = billingDetails.deliveryLocation?.longitude;
+  if (latitude === undefined || longitude === undefined) {
+    return billingDetails;
+  }
+
+  return {
+    ...billingDetails,
+    deliveryLocation: {
+      type: 'Point' as const,
+      coordinates: [longitude, latitude] as [number, number],
+      latitude,
+      longitude,
+    },
+  };
+};
+
 type TDeliveryChargeSetting = {
   state: string;
   regularDeliveryCharge: number;
@@ -410,7 +431,7 @@ export const assertOrderAccess = (
   }
 };
 
-export type TOrderUserNotice = 'paid' | 'confirmed' | 'processing';
+export type TOrderUserNotice = 'paid' | 'confirmed' | 'processing' | 'rider_assigned';
 
 const orderNoticeCopy: Record<
   TOrderUserNotice,
@@ -430,6 +451,10 @@ const orderNoticeCopy: Record<
     title: 'Order is being prepared',
     body: (orderId) =>
       `Your order ${orderId} is now being processed by the shop.`,
+  },
+  rider_assigned: {
+    title: 'Rider assigned',
+    body: (orderId) => `A rider has been assigned to your order ${orderId}.`,
   },
 };
 

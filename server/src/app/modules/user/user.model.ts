@@ -133,6 +133,18 @@ const userSchema = new Schema<IUser, IUserModal>(
       },
     },
     isOnline: { type: Boolean, default: false, index: true },
+    lastAvailable: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number],
+        default: [0, 0],
+      },
+    },
+    lastAvailableAt: { type: Date, default: null },
     isDeleted: { type: Boolean, default: false },
   },
   {
@@ -176,6 +188,7 @@ userSchema.statics.isSecurityCodeMatched = async function (
 // for location and auto expire inactive users
 userSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 userSchema.index({ location: '2dsphere' });
+userSchema.index({ lastAvailable: '2dsphere' });
 userSchema.index({ role: 1, status: 1, isDeleted: 1 });
 
 userSchema.pre('save', async function () {

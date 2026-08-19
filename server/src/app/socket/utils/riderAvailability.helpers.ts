@@ -4,6 +4,7 @@ import { getRedisClient } from '@/app/configs/redis.config';
 import ApiError from '@/app/errors/ApiError';
 import { KYC_STATUS } from '@/app/modules/kyc/kyc.constant';
 import { Kyc } from '@/app/modules/kyc/kyc.model';
+import { RIDER_LOCATION } from '@/app/modules/job/job.constant';
 import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import { REDIS_KEYS } from '@/app/redis/keys';
@@ -21,10 +22,72 @@ type TRedisAvailability = {
   latitude: number;
   heading?: number | null;
   lastSeenAt: string;
+  lastPersistedAt?: string | null;
   activeJob?: string | null;
 };
 
-/** Throws unless rider is active and KYC approved. */
+const haversineMeters = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+) => {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(a));
+};
+
+const persistUserLastAvailable = async (
+  riderId: string,
+  latitude: number,
+  longitude: number
+) => {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+  if (latitude === 0 && longitude === 0) return;
+  await User.findByIdAndUpdate(riderId, {
+    lastAvailable: { type: 'Point', coordinates: [longitude, latitude] },
+    lastAvailableAt: new Date(),
+  });
+};
+
+let lastGeoHydrateAt = 0;
+
+/** Rebuilds Redis GEO from persisted lastAvailable after a Redis flush. */
+const hydrateOnlineRiderGeo = async () => {
+  if (Date.now() - lastGeoHydrateAt < 30000) return;
+  lastGeoHydrateAt = Date.now();
+
+  const riders = await User.find({
+    role: USER_ROLE.rider,
+    isOnline: true,
+    isDeleted: false,
+    'lastAvailable.coordinates.0': { $ne: 0 },
+    'lastAvailable.coordinates.1': { $ne: 0 },
+  })
+    .select('_id lastAvailable')
+    .lean();
+
+  const redis = getRedisClient();
+  await Promise.all(
+    riders.map(async (rider) => {
+      const longitude = Number(rider.lastAvailable?.coordinates?.[0]);
+      const latitude = Number(rider.lastAvailable?.coordinates?.[1]);
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return;
+      const exists = await redis.zscore(REDIS_KEYS.RIDER_ONLINE_GEO, rider._id.toString());
+      if (exists !== null) return;
+      await redis.geoadd(
+        REDIS_KEYS.RIDER_ONLINE_GEO,
+        longitude,
+        latitude,
+        rider._id.toString()
+      );
+    })
+  );
+};
 const assertRiderReadyForJobs = async (traceId: string, riderId: string) => {
   const [rider, kyc] = await Promise.all([
     User.findById(riderId).select('role status isDeleted').lean(),
@@ -56,6 +119,7 @@ const parseAvailability = (
     latitude: Number(data.latitude || 0),
     heading: data.heading ? Number(data.heading) : null,
     lastSeenAt: data.lastSeenAt,
+    lastPersistedAt: data.lastPersistedAt || null,
     activeJob: data.activeJob || null,
   };
 };
@@ -66,6 +130,7 @@ const setAvailability = async (
   payload: TRiderAvailabilityPayload & {
     isOnline: boolean;
     activeJob?: string | null;
+    lastPersistedAt?: string | null;
   }
 ) => {
   const redis = getRedisClient();
@@ -78,6 +143,7 @@ const setAvailability = async (
     heading: payload.heading === undefined ? '' : String(payload.heading),
     activeJob: payload.activeJob ?? '',
     lastSeenAt: new Date().toISOString(),
+    lastPersistedAt: payload.lastPersistedAt ?? '',
   };
 
   await redis.hset(key, data);
@@ -107,6 +173,13 @@ const goOnline = async (
     ...payload,
     isOnline: true,
   });
+  await persistUserLastAvailable(riderId, payload.latitude, payload.longitude);
+  const redis = getRedisClient();
+  await redis.hset(
+    REDIS_KEYS.RIDER_AVAILABILITY(riderId),
+    'lastPersistedAt',
+    new Date().toISOString()
+  );
   const rider = await User.findByIdAndUpdate(
     riderId,
     { isOnline: true },
@@ -133,6 +206,9 @@ const goOffline = async (riderId: string) => {
     isOnline: false,
     activeJob: null,
   });
+  if (current) {
+    await persistUserLastAvailable(riderId, current.latitude, current.longitude);
+  }
   const rider = await User.findByIdAndUpdate(
     riderId,
     { isOnline: false },
@@ -148,11 +224,14 @@ const goOffline = async (riderId: string) => {
 const findOnlineRiders = async (
   latitude: number,
   longitude: number,
-  radiusKm = 10
+  radiusKm = 10,
+  count = 50
 ) => {
   if (radiusKm <= 0) {
     throw new ApiError(HttpStatusCode.BadRequest, 'radiusKm must be positive');
   }
+
+  await hydrateOnlineRiderGeo();
 
   const redis = getRedisClient();
   const rawResults = (await redis.geosearch(
@@ -166,7 +245,7 @@ const findOnlineRiders = async (
     'WITHDIST',
     'ASC',
     'COUNT',
-    50
+    count
   )) as unknown as [string, string][];
 
   const riderIds = rawResults.map(([riderId]) => riderId);
@@ -183,6 +262,7 @@ const findOnlineRiders = async (
     .map((item) => item!.rider);
   const users = await User.find({
     _id: { $in: availableRiderIds },
+    role: USER_ROLE.rider,
     isOnline: true,
     isDeleted: false,
   })
@@ -210,12 +290,83 @@ const updateLocation = async (
     riderId,
     await redis.hgetall(REDIS_KEYS.RIDER_AVAILABILITY(riderId))
   );
+  const minMoveMeters = RIDER_LOCATION.minMoveMeters;
+  const persistIntervalSeconds = RIDER_LOCATION.persistIntervalSeconds;
+  const movedMeters =
+    current && Number.isFinite(current.latitude) && Number.isFinite(current.longitude)
+      ? haversineMeters(
+          current.latitude,
+          current.longitude,
+          payload.latitude,
+          payload.longitude
+        )
+      : minMoveMeters;
 
-  return setAvailability(riderId, {
+  const shouldWriteGeo = !current || movedMeters >= minMoveMeters;
+  const lastPersistedAt = current?.lastPersistedAt
+    ? new Date(current.lastPersistedAt).getTime()
+    : 0;
+  const shouldPersist =
+    !lastPersistedAt || Date.now() - lastPersistedAt >= persistIntervalSeconds * 1000;
+
+  if (!shouldWriteGeo) {
+    await redis.hset(REDIS_KEYS.RIDER_AVAILABILITY(riderId), {
+      lastSeenAt: new Date().toISOString(),
+      heading: payload.heading === undefined ? '' : String(payload.heading),
+    });
+    if (shouldPersist) {
+      await persistUserLastAvailable(riderId, current!.latitude, current!.longitude);
+      await redis.hset(
+        REDIS_KEYS.RIDER_AVAILABILITY(riderId),
+        'lastPersistedAt',
+        new Date().toISOString()
+      );
+    }
+    return parseAvailability(
+      riderId,
+      await redis.hgetall(REDIS_KEYS.RIDER_AVAILABILITY(riderId))
+    );
+  }
+
+  const availability = await setAvailability(riderId, {
     ...payload,
     isOnline: current?.isOnline ?? true,
     activeJob: payload.activeJob ?? current?.activeJob ?? null,
+    lastPersistedAt: current?.lastPersistedAt,
   });
+
+  if (shouldPersist) {
+    await persistUserLastAvailable(riderId, payload.latitude, payload.longitude);
+    await redis.hset(
+      REDIS_KEYS.RIDER_AVAILABILITY(riderId),
+      'lastPersistedAt',
+      new Date().toISOString()
+    );
+  }
+
+  return availability;
+};
+
+/** Persists every online Redis rider point into User.lastAvailable. */
+const persistOnlineRiderLocations = async () => {
+  const redis = getRedisClient();
+  const riderIds = (await redis.zrange(REDIS_KEYS.RIDER_ONLINE_GEO, 0, -1)) as string[];
+  await Promise.all(
+    riderIds.map(async (riderId) => {
+      const current = parseAvailability(
+        riderId,
+        await redis.hgetall(REDIS_KEYS.RIDER_AVAILABILITY(riderId))
+      );
+      if (!current?.isOnline) return;
+      await persistUserLastAvailable(riderId, current.latitude, current.longitude);
+      await redis.hset(
+        REDIS_KEYS.RIDER_AVAILABILITY(riderId),
+        'lastPersistedAt',
+        new Date().toISOString()
+      );
+    })
+  );
+  return { persisted: riderIds.length };
 };
 
 /** Stores current active job marker for rider availability matching. */
@@ -232,6 +383,8 @@ export const RiderAvailabilitySocketHelper = {
   findOnlineRiders,
   updateLocation,
   setActiveJob,
+  persistOnlineRiderLocations,
+  hydrateOnlineRiderGeo,
 };
 
 
