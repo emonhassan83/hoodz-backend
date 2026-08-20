@@ -18,6 +18,8 @@ This folder contains the comprehensive development documentation for the reposit
    - [guideline/SEARCH_API_GUIDE.md](guideline/SEARCH_API_GUIDE.md): Frontend search flow, guest history, suggestions, and payload examples.
    - [guideline/CART_API_GUIDE.md](guideline/CART_API_GUIDE.md): Frontend cart flow, guest cart, merge behavior, and payload examples.
    - [guideline/SHOP_API_GUIDE.md](guideline/SHOP_API_GUIDE.md): Shop details, shop products, and recently viewed flows.
+   - [guideline/JOB_SOCKET_WORKFLOW.md](guideline/JOB_SOCKET_WORKFLOW.md): Rider and customer delivery socket flow in Bangla.
+   - [guideline/CHAT_SOCKET_WORKFLOW.md](guideline/CHAT_SOCKET_WORKFLOW.md): Chat socket flow in Bangla.
    - [DATABASE_SEEDING.md](DATABASE_SEEDING.md): Seeding rules, database models, and mock pipelines.
    - [DEPLOYMENT.md](DEPLOYMENT.md): Docker Stack configs, replica sets, and volumes.
    - [TESTING_WORKFLOW.md](TESTING_WORKFLOW.md): Verification checklists and test implementation guidelines.
@@ -36,6 +38,8 @@ This folder contains the comprehensive development documentation for the reposit
 | **Search APIs** | [guideline/SEARCH_API_GUIDE.md](guideline/SEARCH_API_GUIDE.md) | Frontend search flow, guest history, suggestions, and payloads |
 | **Cart APIs** | [guideline/CART_API_GUIDE.md](guideline/CART_API_GUIDE.md) | Frontend cart flow, guest cart, merge behavior, and payloads |
 | **Shop APIs** | [guideline/SHOP_API_GUIDE.md](guideline/SHOP_API_GUIDE.md) | Shop details, products, and recently viewed flows |
+| **Job sockets** | [guideline/JOB_SOCKET_WORKFLOW.md](guideline/JOB_SOCKET_WORKFLOW.md) | Rider and customer delivery socket events (Bangla) |
+| **Chat sockets** | [guideline/CHAT_SOCKET_WORKFLOW.md](guideline/CHAT_SOCKET_WORKFLOW.md) | Inbox, messages, typing, and AI socket events (Bangla) |
 | **Style & Standard** | [CODING_RULES.md](CODING_RULES.md) | Formatting controls, TypeScript structures, and naming |
 | **Data & Seeding** | [DATABASE_SEEDING.md](DATABASE_SEEDING.md) | Mongoose collections seeding scripts & idempotency rules |
 | **Containers** | [DEPLOYMENT.md](DEPLOYMENT.md) | Docker networks, MongoDB replica sets, and volumes |

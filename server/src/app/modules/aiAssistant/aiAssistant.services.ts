@@ -4,7 +4,7 @@ import ApiError from '@/app/errors/ApiError';
 import {
   buildAssistantReplyMessages,
   buildIntentMessages,
-  completeWithAiProvider,
+  completeWithGemini,
   escapeRegex,
   normalizeIntent,
   parseAiJsonObject,
@@ -106,7 +106,7 @@ const findSuggestedProducts = async (
 
 /** Gets a model-extracted intent with fallback-safe normalization. */
 const extractShoppingIntent = async (traceId: string, message: string) => {
-  const result = await completeWithAiProvider(traceId, buildIntentMessages(message));
+  const result = await completeWithGemini(traceId, buildIntentMessages(message));
   const parsed = parseAiJsonObject<Partial<TAiIntentResult>>(result.content);
 
   return {
@@ -136,7 +136,7 @@ const sendMessage = async (
     payload.message
   );
   const products = await findSuggestedProducts(requester.userId, intent);
-  const replyResult = await completeWithAiProvider(
+  const replyResult = await completeWithGemini(
     traceId,
     buildAssistantReplyMessages(payload.message, intent, products)
   );
@@ -151,7 +151,6 @@ const sendMessage = async (
       products: products.map((product) => product._id),
       provider: replyResult.provider,
       intentProvider,
-      fallbackUsed: intentProvider !== replyResult.provider,
     },
   });
 
@@ -161,7 +160,6 @@ const sendMessage = async (
     aiMessage,
     provider: replyResult.provider,
     intentProvider,
-    fallbackUsed: intentProvider !== replyResult.provider,
     intent,
     products,
   };

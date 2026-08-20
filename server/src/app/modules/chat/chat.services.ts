@@ -21,6 +21,7 @@ import {
   getMyParticipantChatIds,
   syncChatParticipants,
 } from '@/app/modules/participant/participant.helpers';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
 
 const chatPopulate = [
   { path: 'order', select: 'id status paymentStatus totalAmount deliveryType' },
@@ -42,7 +43,10 @@ const getExistingUserChatByType = async (
   const chatIds = await getMyParticipantChatIds(userId);
   if (chatIds.length === 0) return null;
 
-  return Chat.findOne({ _id: { $in: chatIds }, type, order: null });
+  return Chat.findOne({ _id: { $in: chatIds }, type, order: null })
+    .sort({ createdAt: 1 })
+    .populate(chatPopulate)
+    .select('-__v');
 };
 
 /** Loads a chat with order details for API response. */
@@ -144,17 +148,46 @@ const createChat = async (
   return createOrderSupportChat(traceId, requester, payload.order);
 };
 
-/** Returns chats where requester participates. */
+/** Returns chats where requester participates, excluding the AI assistant. */
 const getMyChatList = async (requester: TChatRequester) => {
   const chatIds = await getMyParticipantChatIds(requester.userId);
-  const chats = await Chat.find({ _id: { $in: chatIds } })
+  const chats = await Chat.find({
+    _id: { $in: chatIds },
+    type: { $ne: CHAT_TYPES.ai_assistant },
+  })
     .populate(chatPopulate)
     .sort({ updatedAt: -1 })
     .select('-__v')
     .lean();
 
-  return attachParticipantsToChats(chats);
+  const withParticipants = await attachParticipantsToChats(chats);
+  const isStaffInbox =
+    requester.role === USER_ROLE.agent || requester.role === USER_ROLE.admin;
+
+  const ofType = (type: IChatType) =>
+    withParticipants.filter((chat) => chat.type === type);
+  const oldestOne = (type: IChatType) => {
+    const items = [...ofType(type)].sort(
+      (left, right) =>
+        new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+    );
+    return items[0] ?? null;
+  };
+
+  return {
+    customer_support: isStaffInbox
+      ? ofType(CHAT_TYPES.customer_support)
+      : oldestOne(CHAT_TYPES.customer_support),
+    staff_support: isStaffInbox
+      ? ofType(CHAT_TYPES.staff_support)
+      : oldestOne(CHAT_TYPES.staff_support),
+    order_support: ofType(CHAT_TYPES.order_support),
+  };
 };
+
+/** Returns or creates the user's single AI assistant chat. */
+const getOrCreateAiAssistantChat = async (userId: string) =>
+  createAiAssistantChat(userId);
 
 /** Returns one chat by chat id after access check. */
 const getChatId = async (
@@ -202,4 +235,5 @@ export const ChatService = {
   getMyChatList,
   getChatId,
   getChatOrderById,
+  getOrCreateAiAssistantChat,
 };

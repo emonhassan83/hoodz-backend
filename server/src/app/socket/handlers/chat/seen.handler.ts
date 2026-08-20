@@ -1,14 +1,14 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
-import { Messages } from '@/app/modules/messages/messages.model';
+import { MessagesService } from '@/app/modules/messages/messages.services';
 import { TSeenPayload } from '@/app/socket/interface/chatSocket.interface';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
-import { getIO } from '@/app/socket/socket.init';
 import {
   assertSocketChatAccess,
   emitChatListsToParticipants,
+  emitToChatParticipants,
   emitUnreadCountsToParticipants,
   sendAck,
 } from '@/app/socket/utils/chatSocket.helpers';
@@ -23,30 +23,20 @@ export const seenHandler = eventHandler<TSeenPayload>(
       throw new ApiError(HttpStatusCode.BadRequest, 'chatId is required');
     }
 
-    const { participantIds } = await assertSocketChatAccess(chatId, userId);
-
-    await Messages.updateMany(
-      {
-        chat: chatId,
-        seen: false,
-        sender: { $ne: userId },
-      },
-      { $set: { seen: true } }
+    const { participantIds } = await assertSocketChatAccess(
+      chatId,
+      userId,
+      socket.auth.role
+    );
+    const payloadData = await MessagesService.markMessagesSeen(
+      'socket',
+      { userId, role: socket.auth.role || 'user' },
+      chatId
     );
 
-    const payloadData = {
-      chatId,
-      seenBy: userId,
-      seenAt: new Date().toISOString(),
-    };
-    const io = getIO();
-
-    participantIds.forEach((participantId) => {
-      io.to(participantId).emit(SOCKET_EMIT.chatSeen, payloadData);
-    });
-
+    emitToChatParticipants(participantIds, SOCKET_EMIT.chatSeen, payloadData);
     await Promise.all([
-      emitChatListsToParticipants(participantIds, socket.auth.role),
+      emitChatListsToParticipants(participantIds),
       emitUnreadCountsToParticipants(chatId, participantIds),
     ]);
 
@@ -58,6 +48,3 @@ export const seenHandler = eventHandler<TSeenPayload>(
     });
   }
 );
-
-
-

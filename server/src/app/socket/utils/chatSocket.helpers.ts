@@ -1,36 +1,36 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
-import { Chat } from '@/app/modules/chat/chat.model';
+import { ChatService } from '@/app/modules/chat/chat.services';
 import { Messages } from '@/app/modules/messages/messages.model';
-import {
-  attachParticipantsToChats,
-  getMyParticipantChatIds,
-} from '@/app/modules/participant/participant.helpers';
+import { getPopulatedMessageById } from '@/app/modules/messages/messages.helpers';
+import { PARTICIPANT_STATUS } from '@/app/modules/participant/participant.constant';
 import { Participant } from '@/app/modules/participant/participant.model';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import { TSocketRequester } from '@/app/socket/interface/chatSocket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import { getIO } from '@/app/socket/socket.init';
 import ackHandler from '@/app/socket/utils/ackHandler';
-
-const chatPopulate = [
-  { path: 'order', select: 'id status paymentStatus totalAmount deliveryType' },
-];
+import { Chat } from '@/app/modules/chat/chat.model';
 
 /** Returns active participant user ids for a chat. */
 export const getChatParticipantIds = async (chatId: string) => {
-  const participants = await Participant.find({ chat: chatId, status: 'active' })
+  const participants = await Participant.find({
+    chat: chatId,
+    status: PARTICIPANT_STATUS.active,
+  })
     .select('user -_id')
     .lean();
 
   return participants.map((participant) => participant.user.toString());
 };
 
-/** Throws when chat is missing or requester is not an active participant. */
+/** Throws when chat is missing or requester is not an active participant or admin. */
 export const assertSocketChatAccess = async (
   chatId: string,
-  userId: string
+  userId: string,
+  role?: string
 ) => {
   const [chat, participants] = await Promise.all([
     Chat.findById(chatId).select('_id type').lean(),
@@ -40,45 +40,42 @@ export const assertSocketChatAccess = async (
   if (!chat) {
     throw new ApiError(HttpStatusCode.NotFound, 'Chat not found');
   }
-  if (!participants.includes(userId)) {
+
+  const isAdmin = role === USER_ROLE.admin;
+  if (!isAdmin && !participants.includes(userId)) {
     throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this chat');
   }
 
-  return { chat, participantIds: participants };
+  return {
+    chat,
+    participantIds: [...new Set([...participants, userId])],
+  };
 };
 
 /** Loads a socket-ready message payload. */
-export const getSocketMessageById = async (messageId: unknown) => {
-  return Messages.findById(messageId)
-    .populate([{ path: 'sender', select: 'name email profileAvatar role' }])
-    .select('text files seen isEdited sender senderType metadata chat createdAt updatedAt')
-    .lean();
-};
+export const getSocketMessageById = getPopulatedMessageById;
 
 /** Returns chats where socket requester participates. */
-export const getSocketMyChatList = async (requester: TSocketRequester) => {
-  const chatIds = await getMyParticipantChatIds(requester.userId);
-  const chats = await Chat.find({ _id: { $in: chatIds } })
-    .populate(chatPopulate)
-    .sort({ updatedAt: -1 })
-    .select('-__v')
-    .lean();
-
-  return attachParticipantsToChats(chats);
-};
+export const getSocketMyChatList = async (requester: TSocketRequester) =>
+  ChatService.getMyChatList(requester);
 
 /** Emits the latest chat list to every participant room. */
-export const emitChatListsToParticipants = async (
-  participantIds: string[],
-  role = 'user'
-) => {
+export const emitChatListsToParticipants = async (participantIds: string[]) => {
   const io = getIO();
+  const users = await User.find({ _id: { $in: participantIds } })
+    .select('_id role')
+    .lean();
+  const roleById = new Map(
+    users.map((user) => [user._id.toString(), user.role || 'user'])
+  );
 
   await Promise.all(
     participantIds.map(async (participantId) => {
-      const data = await getSocketMyChatList({ userId: participantId, role });
+      const data = await ChatService.getMyChatList({
+        userId: participantId,
+        role: roleById.get(participantId) || 'user',
+      });
       io.to(participantId).emit(SOCKET_EMIT.chatList, data);
-      io.to(participantId).emit('chat-list', data);
     })
   );
 };
@@ -102,9 +99,18 @@ export const emitUnreadCountsToParticipants = async (
         chatId,
         unreadCount,
       });
-      io.to(participantId).emit('new-notifications', unreadCount);
     })
   );
+};
+
+/** Sends a socket event to every chat audience room. */
+export const emitToChatParticipants = (
+  participantIds: string[],
+  event: string,
+  payload: unknown
+) => {
+  const io = getIO();
+  participantIds.forEach((participantId) => io.to(participantId).emit(event, payload));
 };
 
 /** Sends a socket ack response when callback is provided. */

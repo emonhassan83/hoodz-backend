@@ -1,11 +1,5 @@
 export const AI_PROVIDER = {
-  groq: 'groq',
   gemini: 'gemini',
-} as const;
-
-export const AI_PROVIDER_MODE = {
-  auto: 'auto',
-  manual: 'manual',
 } as const;
 
 export const AI_INTENT = {

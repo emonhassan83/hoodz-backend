@@ -1,14 +1,13 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
-import { Messages } from '@/app/modules/messages/messages.model';
+import { MessagesService } from '@/app/modules/messages/messages.services';
 import { TEditMessagePayload } from '@/app/socket/interface/chatSocket.interface';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
-import { getIO } from '@/app/socket/socket.init';
 import {
   assertSocketChatAccess,
-  getSocketMessageById,
+  emitToChatParticipants,
   sendAck,
 } from '@/app/socket/utils/chatSocket.helpers';
 import eventHandler from '@/app/socket/utils/eventHandler';
@@ -22,34 +21,26 @@ export const editMessageHandler = eventHandler<TEditMessagePayload>(
       throw new ApiError(HttpStatusCode.BadRequest, 'messageId is required');
     }
 
-    const message = await Messages.findById(messageId);
-    if (!message) {
-      throw new ApiError(HttpStatusCode.NotFound, 'Message not found');
-    }
-    if (!message.sender || message.sender.toString() !== userId) {
-      throw new ApiError(
-        HttpStatusCode.Forbidden,
-        'You can only edit your own message'
-      );
-    }
-
+    const updatedMessage = await MessagesService.editMessage(
+      'socket',
+      { userId, role: socket.auth.role || 'user' },
+      {
+        messageId,
+        text: payload.text,
+        files: payload.files,
+      }
+    );
     const { participantIds } = await assertSocketChatAccess(
-      message.chat.toString(),
-      userId
+      String((updatedMessage as any)?.chat?._id ?? (updatedMessage as any)?.chat),
+      userId,
+      socket.auth.role
     );
 
-    if (payload.text !== undefined) message.text = payload.text.trim();
-    if (payload.files !== undefined) message.files = payload.files;
-    message.isEdited = true;
-    await message.save();
-
-    const updatedMessage = await getSocketMessageById(message._id);
-    const io = getIO();
-
-    participantIds.forEach((participantId) => {
-      io.to(participantId).emit(SOCKET_EMIT.chatMessageUpdated, updatedMessage);
-      io.to(participantId).emit('message-updated', updatedMessage);
-    });
+    emitToChatParticipants(
+      participantIds,
+      SOCKET_EMIT.chatMessageUpdated,
+      updatedMessage
+    );
 
     sendAck(callback, {
       success: true,

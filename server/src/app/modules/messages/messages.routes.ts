@@ -9,6 +9,10 @@ import validateRequest from '@/app/utils/validateRequest';
 const router = Router();
 
 router
+  .route('/ai-assistant')
+  .get(auth(...AUTHENTICATED_ROLES), MessagesController.getAiAssistantMessages);
+
+router
   .route('/chat/:chatId')
   .get(
     auth(...AUTHENTICATED_ROLES),

@@ -26,8 +26,6 @@ export const aiSendMessageHandler = eventHandler<TAiSendMessagePayload>(
     socket.emit(SOCKET_EMIT.aiMessage, data);
     socket.emit(SOCKET_EMIT.chatNewMessage, data.userMessage);
     socket.emit(SOCKET_EMIT.chatNewMessage, data.aiMessage);
-    socket.emit('new-message', data.userMessage);
-    socket.emit('new-message', data.aiMessage);
 
     sendAck(callback, {
       success: true,

@@ -1,17 +1,15 @@
-import axios, { AxiosError, HttpStatusCode } from 'axios';
+import axios, { HttpStatusCode } from 'axios';
 
 import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
 import {
   AI_INTENT,
   AI_PROVIDER,
-  AI_PROVIDER_MODE,
 } from '@/app/modules/aiAssistant/aiAssistant.constant';
 import {
   TAiChatMessage,
   TAiIntentResult,
   TAiProductCard,
-  TAiProvider,
   TAiProviderResult,
 } from '@/app/modules/aiAssistant/aiAssistant.types';
 
@@ -48,55 +46,6 @@ export const normalizeIntent = (
   maxPrice: typeof intent.maxPrice === 'number' ? intent.maxPrice : null,
   collectionType: intent.collectionType ?? null,
 });
-
-/** Builds the provider order from env so fallback can run automatically. */
-const getProviderOrder = (): TAiProvider[] => {
-  const primary = (env.AI_PROVIDER || AI_PROVIDER.groq) as TAiProvider;
-  const fallback = (env.AI_FALLBACK_PROVIDER || AI_PROVIDER.gemini) as TAiProvider;
-
-  if (env.AI_PROVIDER_MODE === AI_PROVIDER_MODE.manual) return [primary];
-  return [...new Set([primary, fallback])];
-};
-
-/** Returns true when an AI provider error should move to the fallback provider. */
-const shouldFallback = (error: unknown) => {
-  const axiosError = error as AxiosError;
-  const status = axiosError.response?.status;
-  return (
-    status === 429 ||
-    status === 500 ||
-    status === 502 ||
-    status === 503 ||
-    status === 504 ||
-    axiosError.code === 'ECONNABORTED'
-  );
-};
-
-/** Calls Groq OpenAI-compatible chat completion API. */
-const callGroq = async (messages: TAiChatMessage[]) => {
-  if (!env.GROQ_API_KEY) {
-    throw new ApiError(HttpStatusCode.ServiceUnavailable, 'Groq API key is not configured');
-  }
-
-  const response = await axios.post(
-    'https://api.groq.com/openai/v1/chat/completions',
-    {
-      model: env.GROQ_MODEL,
-      messages,
-      temperature: 0.2,
-      max_tokens: 800,
-    },
-    {
-      timeout: aiTimeoutMs,
-      headers: {
-        Authorization: `Bearer ${env.GROQ_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-    }
-  );
-
-  return String(response.data?.choices?.[0]?.message?.content || '').trim();
-};
 
 /** Calls Google Gemini generateContent API. */
 const callGemini = async (messages: TAiChatMessage[]) => {
@@ -137,34 +86,22 @@ const callGemini = async (messages: TAiChatMessage[]) => {
   return String(response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 };
 
-/** Calls configured AI providers and automatically falls back on limit/server errors. */
-export const completeWithAiProvider = async (
+/** Completes a chat turn with Gemini. */
+export const completeWithGemini = async (
   traceId: string,
   messages: TAiChatMessage[]
 ): Promise<TAiProviderResult> => {
-  const providers = getProviderOrder();
-  let lastError: unknown;
-
-  for (const provider of providers) {
-    try {
-      const content =
-        provider === AI_PROVIDER.groq
-          ? await callGroq(messages)
-          : await callGemini(messages);
-
-      if (!content) throw new Error(`${provider} returned empty content`);
-      return { provider, content };
-    } catch (error) {
-      lastError = error;
-      if (!shouldFallback(error) && !(error instanceof ApiError)) break;
-    }
+  try {
+    const content = await callGemini(messages);
+    if (!content) throw new Error('gemini returned empty content');
+    return { provider: AI_PROVIDER.gemini, content };
+  } catch (error) {
+    const message =
+      error instanceof ApiError
+        ? error.message
+        : 'AI assistant is unavailable right now';
+    throw new ApiError(HttpStatusCode.ServiceUnavailable, message, traceId);
   }
-
-  const message =
-    lastError instanceof ApiError
-      ? lastError.message
-      : 'AI assistant is unavailable right now';
-  throw new ApiError(HttpStatusCode.ServiceUnavailable, message, traceId);
 };
 
 /** Builds a strict JSON prompt for ecommerce intent extraction. */

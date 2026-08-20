@@ -1,10 +1,7 @@
-import { HttpStatusCode } from 'axios';
-
-import ApiError from '@/app/errors/ApiError';
 import {
   buildAssistantReplyMessages,
   buildIntentMessages,
-  completeWithAiProvider,
+  completeWithGemini,
   escapeRegex,
   normalizeIntent,
   parseAiJsonObject,
@@ -13,14 +10,9 @@ import {
   TAiIntentResult,
   TAiRequester,
 } from '@/app/modules/aiAssistant/aiAssistant.types';
-import { CHAT_STATUS, CHAT_TYPES } from '@/app/modules/chat/chat.constant';
-import { Chat } from '@/app/modules/chat/chat.model';
+import { ChatService } from '@/app/modules/chat/chat.services';
 import { Messages } from '@/app/modules/messages/messages.model';
-import {
-  getMyParticipantChatIds,
-  isChatParticipant,
-  syncChatParticipants,
-} from '@/app/modules/participant/participant.helpers';
+import { touchChatUpdatedAt } from '@/app/modules/messages/messages.helpers';
 import {
   formatProductListItems,
   getWishlistProductIdSet,
@@ -33,42 +25,8 @@ const productSelect =
   '_id category title inventoryType collectionType banner price discount discountPrice stock avgRating ratingCount colors sizes';
 
 /** Finds or creates the socket user's singleton AI assistant chat. */
-const resolveAiSocketChat = async (
-  traceId: string,
-  requester: TAiRequester,
-  chatId?: string
-) => {
-  if (!chatId) {
-    const chatIds = await getMyParticipantChatIds(requester.userId);
-    const existingChat =
-      chatIds.length > 0
-        ? await Chat.findOne({ _id: { $in: chatIds }, type: CHAT_TYPES.ai_assistant })
-        : null;
-    const chat =
-      existingChat ||
-      (await Chat.create({
-        type: CHAT_TYPES.ai_assistant,
-        order: null,
-        status: CHAT_STATUS.active,
-      }));
-
-    await syncChatParticipants(chat!._id, [requester.userId]);
-    return chat;
-  }
-
-  const chat = await Chat.findById(chatId).select('type').lean();
-  if (!chat) {
-    throw new ApiError(HttpStatusCode.NotFound, 'AI chat not found', traceId);
-  }
-  if (chat.type !== CHAT_TYPES.ai_assistant) {
-    throw new ApiError(HttpStatusCode.BadRequest, 'Chat is not an AI assistant chat', traceId);
-  }
-  if (!(await isChatParticipant(chatId, requester.userId))) {
-    throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this chat', traceId);
-  }
-
-  return chat;
-};
+const resolveAiSocketChat = async (requester: TAiRequester) =>
+  ChatService.getOrCreateAiAssistantChat(requester.userId);
 
 /** Builds MongoDB filters from extracted AI shopping intent. */
 const buildProductFilterFromIntent = (intent: TAiIntentResult) => {
@@ -118,7 +76,7 @@ const findSuggestedProducts = async (
 
 /** Extracts shopping intent through the configured AI provider. */
 const extractShoppingIntent = async (traceId: string, message: string) => {
-  const result = await completeWithAiProvider(traceId, buildIntentMessages(message));
+  const result = await completeWithGemini(traceId, buildIntentMessages(message));
   const parsed = parseAiJsonObject<Partial<TAiIntentResult>>(result.content);
 
   return {
@@ -133,7 +91,7 @@ export const sendAiSocketMessage = async (
   requester: TAiRequester,
   payload: TAiSendMessagePayload
 ) => {
-  const chat = await resolveAiSocketChat(traceId, requester, payload.chatId);
+  const chat = await resolveAiSocketChat(requester);
   const chatId = String(chat._id);
 
   const userMessage = await Messages.create({
@@ -148,7 +106,7 @@ export const sendAiSocketMessage = async (
     payload.message
   );
   const products = await findSuggestedProducts(requester.userId, intent);
-  const replyResult = await completeWithAiProvider(
+  const replyResult = await completeWithGemini(
     traceId,
     buildAssistantReplyMessages(payload.message, intent, products)
   );
@@ -163,9 +121,9 @@ export const sendAiSocketMessage = async (
       products: products.map((product) => product._id),
       provider: replyResult.provider,
       intentProvider,
-      fallbackUsed: intentProvider !== replyResult.provider,
     },
   });
+  await touchChatUpdatedAt(chatId);
 
   return {
     chatId,
@@ -173,7 +131,6 @@ export const sendAiSocketMessage = async (
     aiMessage,
     provider: replyResult.provider,
     intentProvider,
-    fallbackUsed: intentProvider !== replyResult.provider,
     intent,
     products,
   };

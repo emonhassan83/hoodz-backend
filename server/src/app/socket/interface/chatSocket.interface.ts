@@ -32,6 +32,5 @@ export type TStopTypingPayload = {
 };
 
 export type TAiSendMessagePayload = {
-  chatId?: string;
   message: string;
 };

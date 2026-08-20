@@ -23,8 +23,30 @@ const getMessagesByChatId = asyncHandler(async (req: Request, res: Response) => 
   });
 });
 
+const getAiAssistantMessages = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const result = await MessagesService.getAiAssistantMessages(
+    traceId,
+    req.user,
+    req.query
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'AI assistant messages fetched successfully',
+    meta: result.meta,
+    data: {
+      chat: result.chat,
+      messages: result.data,
+    },
+    traceId,
+  });
+});
+
 export const MessagesController = {
   getMessagesByChatId,
+  getAiAssistantMessages,
 };
 
 

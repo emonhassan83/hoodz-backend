@@ -4,9 +4,9 @@ import ApiError from '@/app/errors/ApiError';
 import { TStopTypingPayload } from '@/app/socket/interface/chatSocket.interface';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
-import { getIO } from '@/app/socket/socket.init';
 import {
   assertSocketChatAccess,
+  emitToChatParticipants,
   getTypingUser,
   sendAck,
 } from '@/app/socket/utils/chatSocket.helpers';
@@ -21,7 +21,11 @@ export const stopTypingHandler = eventHandler<TStopTypingPayload>(
       throw new ApiError(HttpStatusCode.BadRequest, 'chatId is required');
     }
 
-    const { participantIds } = await assertSocketChatAccess(chatId, userId);
+    const { participantIds } = await assertSocketChatAccess(
+      chatId,
+      userId,
+      socket.auth.role
+    );
     const typingUser = await getTypingUser(userId);
     const data = {
       chatId,
@@ -29,14 +33,12 @@ export const stopTypingHandler = eventHandler<TStopTypingPayload>(
       isTyping: false,
       timestamp: new Date().toISOString(),
     };
-    const io = getIO();
 
-    participantIds
-      .filter((participantId) => participantId !== userId)
-      .forEach((participantId) => {
-        io.to(participantId).emit(SOCKET_EMIT.chatStopTyping, data);
-        io.to(participantId).emit('stopTyping', { success: true, data });
-      });
+    emitToChatParticipants(
+      participantIds.filter((participantId) => participantId !== userId),
+      SOCKET_EMIT.chatStopTyping,
+      data
+    );
 
     sendAck(callback, {
       success: true,
@@ -46,6 +48,3 @@ export const stopTypingHandler = eventHandler<TStopTypingPayload>(
     });
   }
 );
-
-
-

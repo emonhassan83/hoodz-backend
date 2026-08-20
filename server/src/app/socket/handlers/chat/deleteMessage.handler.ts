@@ -1,12 +1,15 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
-import { Messages } from '@/app/modules/messages/messages.model';
+import { MessagesService } from '@/app/modules/messages/messages.services';
 import { TDeleteMessagePayload } from '@/app/socket/interface/chatSocket.interface';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
-import { getIO } from '@/app/socket/socket.init';
-import { assertSocketChatAccess, sendAck } from '@/app/socket/utils/chatSocket.helpers';
+import {
+  assertSocketChatAccess,
+  emitToChatParticipants,
+  sendAck,
+} from '@/app/socket/utils/chatSocket.helpers';
 import eventHandler from '@/app/socket/utils/eventHandler';
 
 export const deleteMessageHandler = eventHandler<TDeleteMessagePayload>(
@@ -18,36 +21,18 @@ export const deleteMessageHandler = eventHandler<TDeleteMessagePayload>(
       throw new ApiError(HttpStatusCode.BadRequest, 'messageId is required');
     }
 
-    const message = await Messages.findById(messageId);
-    if (!message) {
-      throw new ApiError(HttpStatusCode.NotFound, 'Message not found');
-    }
-    if (!message.sender || message.sender.toString() !== userId) {
-      throw new ApiError(
-        HttpStatusCode.Forbidden,
-        'You can only delete your own message'
-      );
-    }
+    const data = await MessagesService.deleteMessage(
+      'socket',
+      { userId, role: socket.auth.role || 'user' },
+      messageId
+    );
+    const { participantIds } = await assertSocketChatAccess(
+      data.chatId,
+      userId,
+      socket.auth.role
+    );
 
-    const chatId = message.chat.toString();
-    const { participantIds } = await assertSocketChatAccess(chatId, userId);
-    await Messages.findByIdAndDelete(messageId);
-
-    const data = {
-      messageId,
-      chatId,
-      deletedBy: userId,
-      deletedAt: new Date().toISOString(),
-    };
-    const io = getIO();
-
-    participantIds.forEach((participantId) => {
-      io.to(participantId).emit(SOCKET_EMIT.chatMessageDeleted, data);
-      io.to(participantId).emit('message-deleted', {
-        success: true,
-        data,
-      });
-    });
+    emitToChatParticipants(participantIds, SOCKET_EMIT.chatMessageDeleted, data);
 
     sendAck(callback, {
       success: true,

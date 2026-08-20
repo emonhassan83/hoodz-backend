@@ -1,16 +1,15 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
-import { Messages } from '@/app/modules/messages/messages.model';
+import { MessagesService } from '@/app/modules/messages/messages.services';
 import { TSendMessagePayload } from '@/app/socket/interface/chatSocket.interface';
 import { TSocket } from '@/app/socket/interface/socket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
-import { getIO } from '@/app/socket/socket.init';
 import {
   assertSocketChatAccess,
   emitChatListsToParticipants,
+  emitToChatParticipants,
   emitUnreadCountsToParticipants,
-  getSocketMessageById,
   sendAck,
 } from '@/app/socket/utils/chatSocket.helpers';
 import eventHandler from '@/app/socket/utils/eventHandler';
@@ -29,24 +28,20 @@ export const sendMessageHandler = eventHandler<TSendMessagePayload>(
       throw new ApiError(HttpStatusCode.BadRequest, 'text or files is required');
     }
 
-    const { participantIds } = await assertSocketChatAccess(chatId, userId);
-    const message = await Messages.create({
-      chat: chatId,
-      sender: userId,
-      senderType: 'user',
-      text,
-      files,
-    });
-    const populated = await getSocketMessageById(message._id);
-    const io = getIO();
+    const { participantIds } = await assertSocketChatAccess(
+      chatId,
+      userId,
+      socket.auth.role
+    );
+    const populated = await MessagesService.sendMessage(
+      'socket',
+      { userId, role: socket.auth.role || 'user' },
+      { chatId, text, files }
+    );
 
-    participantIds.forEach((participantId) => {
-      io.to(participantId).emit(SOCKET_EMIT.chatNewMessage, populated);
-      io.to(participantId).emit('new-message', populated);
-    });
-
+    emitToChatParticipants(participantIds, SOCKET_EMIT.chatNewMessage, populated);
     await Promise.all([
-      emitChatListsToParticipants(participantIds, socket.auth.role),
+      emitChatListsToParticipants(participantIds),
       emitUnreadCountsToParticipants(chatId, participantIds),
     ]);
 
@@ -58,6 +53,3 @@ export const sendMessageHandler = eventHandler<TSendMessagePayload>(
     });
   }
 );
-
-
-
