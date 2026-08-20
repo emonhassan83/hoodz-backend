@@ -34,6 +34,22 @@ export const getMyParticipantChatIds = async (userId: string) => {
   return participants.map((participant) => participant.chat);
 };
 
+/** Returns chat ids where both users are active participants. */
+export const getSharedChatIds = async (userId: string, otherUserId: string) => {
+  const myChatIds = await getMyParticipantChatIds(userId);
+  if (myChatIds.length === 0) return [];
+
+  const shared = await Participant.find({
+    user: otherUserId,
+    chat: { $in: myChatIds },
+    status: PARTICIPANT_STATUS.active,
+  })
+    .select('chat -_id')
+    .lean();
+
+  return shared.map((item) => item.chat);
+};
+
 /** Checks whether a user belongs to a chat. */
 export const isChatParticipant = async (chatId: string, userId: string) => {
   const participant = await Participant.exists({

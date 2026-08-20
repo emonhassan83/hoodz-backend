@@ -1,6 +1,6 @@
 # চ্যাট সকেট ধাপ
 
-সকেট সংযোগের সময় লগইন থাকতে হবে। সংযোগ হলে সার্ভার ব্যবহারকারীকে তার নিজের কক্ষে (`userId`) বসায়। চ্যাট খুলতে আগে HTTP দিয়ে চ্যাট তৈরি/নেওয়া যায় (`POST /chats`, `GET /chats`)।
+সকেট সংযোগের সময় লগইন থাকতে হবে। সংযোগ হলে সার্ভার ব্যবহারকারীকে তার নিজের কক্ষে (`userId`) বসায়। চ্যাট খুলতে আগে HTTP দিয়ে চ্যাট তৈরি/নেওয়া যায় (`POST /chat`, `GET /chat`)।
 
 প্রতিটি পাঠানো ঘটনার উত্তর ack (কলব্যাক) দিয়ে আসে:
 
@@ -62,15 +62,100 @@
 }
 ```
 
-কাস্টমার/রাইডারের জন্য `customer_support` ও `staff_support` একটি চ্যাট বা `null`। অর্ডার সাপোর্ট অর্ডার অনুযায়ী একাধিক। এজেন্ট/প্রশাসকের ইনবক্সে সাপোর্ট চ্যাট অ্যারে আসে।
+কাস্টমার/রাইডারের জন্য `customer_support` ও `staff_support` একটি চ্যাট বা `null`। অর্ডার সাপোর্ট অর্ডার অনুযায়ী একাধিক। `single_chat` ইনবক্সে আসে না। এজেন্ট/প্রশাসকের ইনবক্সে সাপোর্ট চ্যাট অ্যারে আসে।
 
-Ack-এ একই অবজেক্ট থাকে। HTTP: `GET /chats`
+Ack-এ একই অবজেক্ট থাকে। HTTP: `GET /chat`
+
+---
+
+## চ্যাট তৈরি — HTTP `POST /chat`
+
+ডুপ্লিকেট হলে নতুন চ্যাট হয় না; আগেরটাই ফেরত আসে।
+
+**কাস্টমার সাপোর্ট** (ইউজারপ্রতি একটি):
+
+```json
+{ "type": "customer_support" }
+```
+
+**স্টাফ সাপোর্ট** (ভেন্ডর/রাইডারপ্রতি একটি):
+
+```json
+{ "type": "staff_support" }
+```
+
+**অর্ডার সাপোর্ট** (একই `order` হলে একই চ্যাট):
+
+```json
+{
+  "type": "order_support",
+  "order": "অর্ডার আইডি"
+}
+```
+
+**সরাসরি চ্যাট** (কাস্টমার ↔ রাইডার, রাইডার ↔ কাস্টমার, শপ/ভেন্ডরের সাথে)। দুইজনের জন্য একটিই চ্যাট; আগে থাকলে সেটাই ফেরত। `participant` মডিউলে দুজনই যোগ হয়।
+
+```json
+{
+  "type": "single_chat",
+  "participant": "অন্যজনের ইউজার আইডি"
+}
+```
+
+`participent` ফিল্ডও একই কাজে চলে।
+
+প্রোফাইলে আগে থেকে চ্যাট আছে কি না: `GET /users/:userId` → `hasCustomerSupport`, `hasStaffSupport`।  
+অর্ডারে আগে থেকে সাপোর্ট চ্যাট আছে কি না: `GET /orders/:orderId` → `hasOrderSupports`।
 
 ---
 
 ## ধাপ ২ — মেসেজ পাঠান
 
 **পাঠান:** `chat:send-message`
+
+কাস্টমার/স্টাফ সাপোর্টে `chatId` লাগে না। অর্ডার সাপোর্টে `order` দিলেই হয়। সরাসরি চ্যাটে অন্যজনের আইডি দিলেই হয়। এজেন্ট অন্যের সাপোর্ট চ্যাটে পাঠাতে `chatId` ব্যবহার করবে।
+
+কাস্টমার সাপোর্ট:
+
+```json
+{
+  "type": "customer_support",
+  "text": "আসসালামু আলাইকুম",
+  "files": []
+}
+```
+
+স্টাফ সাপোর্ট:
+
+```json
+{
+  "type": "staff_support",
+  "text": "আসসালামু আলাইকুম"
+}
+```
+
+অর্ডার সাপোর্ট:
+
+```json
+{
+  "type": "order_support",
+  "order": "অর্ডার আইডি",
+  "text": "অর্ডার নিয়ে কথা"
+}
+```
+
+সরাসরি চ্যাট — দুজন অংশগ্রহণকারী মিলিয়ে চ্যাট খোঁজা হয়; না থাকলে তৈরি হয়:
+
+```json
+{
+  "type": "single_chat",
+  "participant": "অন্যজনের ইউজার আইডি",
+  "text": "",
+  "files": []
+}
+```
+
+চ্যাট আইডি জানা থাকলে:
 
 ```json
 {
@@ -80,7 +165,7 @@ Ack-এ একই অবজেক্ট থাকে। HTTP: `GET /chats`
 }
 ```
 
-`text` বা `files`-এর অন্তত একটি লাগবে। চ্যাটে অংশগ্রহণকারী বা প্রশাসক পাঠাতে পারেন।
+`text` বা `files`-এর অন্তত একটি লাগবে। চ্যাট না থাকলে সার্ভার সিঙ্গলটন/অর্ডার চ্যাট তৈরি করে, থাকলে সেটাই ব্যবহার করে।
 
 **সবাই শুনুন:** `chat:new-message` (মেসেজ অবজেক্ট)  
 তারপর: `chat:list`, `notification:unread-count` `{ chatId, unreadCount }`
@@ -195,7 +280,7 @@ Ack-এ একই অবজেক্ট থাকে। HTTP: `GET /chats`
 
 পুরনো কথা পড়তে HTTP: `GET /messages/ai-assistant`
 
-ইনবক্স (`chat:my-list` / `GET /chats`) এআই চ্যাট দেখায় না। সেখানে থাকে:
+ইনবক্স (`chat:my-list` / `GET /chat`) এআই চ্যাট ও `single_chat` দেখায় না। সেখানে থাকে:
 
 - `customer_support`: একটি চ্যাট বা শূন্য
 - `staff_support`: একটি চ্যাট বা শূন্য
@@ -210,7 +295,7 @@ Ack-এ একই অবজেক্ট থাকে। HTTP: `GET /chats`
 | হ্যান্ডলার | পাঠানোর নাম | পাঠানো তথ্য | সার্ভার যা শোনায় |
 | :--- | :--- | :--- | :--- |
 | `myChatList` | `chat:my-list` | — | `chat:list` |
-| `sendMessage` | `chat:send-message` | `chatId`, `text?`, `files?` | `chat:new-message`, `chat:list`, `notification:unread-count` |
+| `sendMessage` | `chat:send-message` | `type?` + `order?` / `participant?` অথবা `chatId`, `text?`, `files?` | `chat:new-message`, `chat:list`, `notification:unread-count` |
 | `seen` | `chat:seen` | `chatId` | `chat:seen`, `chat:list`, `notification:unread-count` |
 | `editMessage` | `chat:edit-message` | `messageId`, `text?`, `files?` | `chat:message-updated` |
 | `deleteMessage` | `chat:delete-message` | `messageId` | `chat:message-deleted` |
@@ -234,5 +319,7 @@ socket.on('notification:unread-count', (data) => {});
 socket.on('ai:message', (data) => {});
 
 socket.emit('chat:my-list', {}, (ack) => {});
-socket.emit('chat:send-message', { chatId, text }, (ack) => {});
+socket.emit('chat:send-message', { type: 'customer_support', text }, (ack) => {});
+socket.emit('chat:send-message', { type: 'order_support', order, text }, (ack) => {});
+socket.emit('chat:send-message', { type: 'single_chat', participant, text, files }, (ack) => {});
 ```

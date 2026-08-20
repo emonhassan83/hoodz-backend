@@ -10,6 +10,7 @@ import {
   assertChatAccess,
   assertChatUserExists,
   assertOrderSupportAccess,
+  assertSingleChatUsers,
   assertStaffSupportCreateAccess,
   getActiveAgentIds,
   getChatOrderOrThrow,
@@ -19,6 +20,7 @@ import { TChatRequester, TCreateChatPayload } from '@/app/modules/chat/chat.type
 import {
   attachParticipantsToChats,
   getMyParticipantChatIds,
+  getSharedChatIds,
   syncChatParticipants,
 } from '@/app/modules/participant/participant.helpers';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
@@ -120,6 +122,45 @@ const createOrderSupportChat = async (
   return attachParticipantsToChat(chat);
 };
 
+/** Reads participant id from either spelling of the payload field. */
+const getPayloadParticipantId = (payload: {
+  participant?: string;
+  participent?: string;
+}) => payload.participant || payload.participent;
+
+/** Creates or returns a 1:1 chat between requester and the other user. */
+const createSingleChat = async (
+  traceId: string,
+  requester: TChatRequester,
+  participantId: string
+) => {
+  await assertSingleChatUsers(traceId, requester, participantId);
+
+  const sharedChatIds = await getSharedChatIds(requester.userId, participantId);
+  const existingChat =
+    sharedChatIds.length > 0
+      ? await Chat.findOne({
+          _id: { $in: sharedChatIds },
+          type: CHAT_TYPES.single_chat,
+        })
+          .sort({ createdAt: 1 })
+          .populate(chatPopulate)
+          .select('-__v')
+      : null;
+
+  const chat =
+    existingChat ||
+    (await Chat.create({
+      type: CHAT_TYPES.single_chat,
+      order: null,
+      status: CHAT_STATUS.active,
+    }));
+
+  await syncChatParticipants(chat._id, [requester.userId, participantId]);
+  const populatedChat = await getPopulatedChatById(chat._id);
+  return attachParticipantsToChat(populatedChat);
+};
+
 /** Creates or returns a singleton/order-scoped chat. */
 const createChat = async (
   traceId: string,
@@ -141,11 +182,52 @@ const createChat = async (
     return createAgentSupportChat(requester.userId, CHAT_TYPES.staff_support);
   }
 
-  if (!payload.order) {
+  if (payload.type === CHAT_TYPES.single_chat) {
+    const participantId = getPayloadParticipantId(payload);
+    if (!participantId) {
+      throw new ApiError(
+        HttpStatusCode.BadRequest,
+        'Participant is required',
+        traceId
+      );
+    }
+    return createSingleChat(traceId, requester, participantId);
+  }
+
+  if (payload.type !== CHAT_TYPES.order_support || !payload.order) {
     throw new ApiError(HttpStatusCode.BadRequest, 'Order is required', traceId);
   }
 
   return createOrderSupportChat(traceId, requester, payload.order);
+};
+
+/** Resolves chat id for send: existing singleton/order chat, or creates it. */
+const resolveChatIdForSend = async (
+  traceId: string,
+  requester: TChatRequester,
+  payload: {
+    chatId?: string;
+    type?: IChatType;
+    order?: string;
+    participant?: string;
+    participent?: string;
+  }
+) => {
+  if (payload.chatId) return payload.chatId;
+  if (!payload.type || payload.type === CHAT_TYPES.ai_assistant) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'type is required when chatId is missing',
+      traceId
+    );
+  }
+
+  const chat = await createChat(traceId, requester, {
+    type: payload.type,
+    order: payload.order,
+    participant: getPayloadParticipantId(payload),
+  });
+  return String(chat._id);
 };
 
 /** Returns chats where requester participates, excluding the AI assistant. */
@@ -153,7 +235,9 @@ const getMyChatList = async (requester: TChatRequester) => {
   const chatIds = await getMyParticipantChatIds(requester.userId);
   const chats = await Chat.find({
     _id: { $in: chatIds },
-    type: { $ne: CHAT_TYPES.ai_assistant },
+    type: {
+      $nin: [CHAT_TYPES.ai_assistant, CHAT_TYPES.single_chat],
+    },
   })
     .populate(chatPopulate)
     .sort({ updatedAt: -1 })
@@ -236,4 +320,5 @@ export const ChatService = {
   getChatId,
   getChatOrderById,
   getOrCreateAiAssistantChat,
+  resolveChatIdForSend,
 };

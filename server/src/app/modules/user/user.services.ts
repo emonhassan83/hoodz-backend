@@ -15,6 +15,7 @@ import {
 import { JOB_STATUS } from '@/app/modules/job/job.constant';
 import { Job } from '@/app/modules/job/job.model';
 import { Kyc } from '@/app/modules/kyc/kyc.model';
+import { getUserSupportFlags } from '@/app/modules/chat/chat.helpers';
 import { Product } from '@/app/modules/product/product.model';
 import { SettingService } from '@/app/modules/settings/settings.services';
 import {
@@ -88,11 +89,14 @@ const getSingleUser = async (traceId: string, userId: string) => {
   }
 
   if (user.role !== USER_ROLE.rider) {
-    const coinSummary = await CoinService.getSummary(userId);
-    return { ...user, coins: coinSummary.balance };
+    const [coinSummary, supportFlags] = await Promise.all([
+      CoinService.getSummary(userId),
+      getUserSupportFlags(userId),
+    ]);
+    return { ...user, coins: coinSummary.balance, ...supportFlags };
   }
 
-  const [kyc, completedDeliveries, coinSummary] = await Promise.all([
+  const [kyc, completedDeliveries, coinSummary, supportFlags] = await Promise.all([
     Kyc.findOne({ user: user._id })
       .select('-user -rejectedReason -updatedAt -__v')
       .lean(),
@@ -101,8 +105,15 @@ const getSingleUser = async (traceId: string, userId: string) => {
       status: JOB_STATUS.delivered,
     }),
     CoinService.getSummary(userId),
+    getUserSupportFlags(userId),
   ]);
-  return { ...user, kyc, completedDeliveries, coins: coinSummary.balance };
+  return {
+    ...user,
+    kyc,
+    completedDeliveries,
+    coins: coinSummary.balance,
+    ...supportFlags,
+  };
 };
 
 /** Lists nearby vendor shops with distance and optional Google duration data. */

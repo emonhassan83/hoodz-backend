@@ -9,6 +9,8 @@ const createChatValidationSchema = z.object({
     .object({
       type: z.enum(Object.values(CHAT_TYPES) as [string, ...string[]]),
       order: objectIdSchema.optional(),
+      participant: objectIdSchema.optional(),
+      participent: objectIdSchema.optional(),
     })
     .superRefine((data, ctx) => {
       if (data.type === CHAT_TYPES.order_support && !data.order) {
@@ -16,6 +18,18 @@ const createChatValidationSchema = z.object({
           code: z.ZodIssueCode.custom,
           path: ['order'],
           message: 'Order is required for this chat type',
+        });
+      }
+
+      if (
+        data.type === CHAT_TYPES.single_chat &&
+        !data.participant &&
+        !data.participent
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['participant'],
+          message: 'Participant is required for this chat type',
         });
       }
     }),

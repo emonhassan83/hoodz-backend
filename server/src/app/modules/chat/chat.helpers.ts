@@ -1,9 +1,14 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
+import { CHAT_TYPES } from '@/app/modules/chat/chat.constant';
+import { Chat } from '@/app/modules/chat/chat.model';
 import { IOrders } from '@/app/modules/orders/orders.interface';
 import { Orders } from '@/app/modules/orders/orders.model';
-import { isChatParticipant } from '@/app/modules/participant/participant.helpers';
+import {
+  getMyParticipantChatIds,
+  isChatParticipant,
+} from '@/app/modules/participant/participant.helpers';
 import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 
@@ -79,6 +84,91 @@ export const assertStaffSupportCreateAccess = (
     );
   }
 };
+
+const DIRECT_CHAT_ROLES = [
+  USER_ROLE.user,
+  USER_ROLE.rider,
+  USER_ROLE.vendor,
+] as const;
+
+/** Throws when a 1:1 chat cannot be opened with the other user. */
+export const assertSingleChatUsers = async (
+  traceId: string,
+  requester: TChatRequester,
+  participantId: string
+) => {
+  if (requester.userId === participantId) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Cannot create a chat with yourself',
+      traceId
+    );
+  }
+
+  const canOpen = DIRECT_CHAT_ROLES.includes(
+    requester.role as (typeof DIRECT_CHAT_ROLES)[number]
+  );
+  if (!canOpen) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'Only customer, rider or shop can open a direct chat',
+      traceId
+    );
+  }
+
+  const otherUser = await User.findOne({
+    _id: participantId,
+    isDeleted: false,
+  })
+    .select('_id role')
+    .lean();
+  if (!otherUser) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Participant not found', traceId);
+  }
+
+  const otherCanJoin = DIRECT_CHAT_ROLES.includes(
+    otherUser.role as (typeof DIRECT_CHAT_ROLES)[number]
+  );
+  if (!otherCanJoin) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'Direct chat is only allowed with a customer, rider or shop',
+      traceId
+    );
+  }
+};
+
+/** Returns whether the user already has singleton support chats. */
+export const getUserSupportFlags = async (userId: string) => {
+  const chatIds = await getMyParticipantChatIds(userId);
+  if (chatIds.length === 0) {
+    return { hasCustomerSupport: false, hasStaffSupport: false };
+  }
+
+  const chats = await Chat.find({
+    _id: { $in: chatIds },
+    type: { $in: [CHAT_TYPES.customer_support, CHAT_TYPES.staff_support] },
+    order: null,
+  })
+    .select('type')
+    .lean();
+
+  return {
+    hasCustomerSupport: chats.some(
+      (chat) => chat.type === CHAT_TYPES.customer_support
+    ),
+    hasStaffSupport: chats.some((chat) => chat.type === CHAT_TYPES.staff_support),
+  };
+};
+
+/** Returns whether an order already has an order_support chat. */
+export const hasOrderSupportChat = async (orderId: string) =>
+  Boolean(
+    await Chat.exists({
+      order: orderId,
+      type: CHAT_TYPES.order_support,
+    })
+  );
 
 /** Throws when requester is not inside the chat participants. */
 export const assertChatAccess = async (

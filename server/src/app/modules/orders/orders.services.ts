@@ -8,6 +8,7 @@ import { TEnrichedCartItem } from '@/app/modules/cart/cart.types';
 import { Cart } from '@/app/modules/cart/cart.model';
 import { COIN_REFERENCE_TYPE } from '@/app/modules/coin/coin.constant';
 import { CoinService } from '@/app/modules/coin/coin.services';
+import { hasOrderSupportChat } from '@/app/modules/chat/chat.helpers';
 import { Items } from '@/app/modules/items/items.model';
 import { JobService } from '@/app/modules/job/job.services';
 import { stopJobMatchingForOrder } from '@/app/modules/job/job.helpers';
@@ -420,12 +421,15 @@ const getOrdersById = async (
   }
 
   assertOrderAccess(traceId, order, requester);
-  const items = await Items.find({ order: orderId })
-    .populate([{ path: 'product', select: 'title images price discountPrice' }])
-    .select('-__v')
-    .lean();
+  const [items, hasOrderSupports] = await Promise.all([
+    Items.find({ order: orderId })
+      .populate([{ path: 'product', select: 'title images price discountPrice' }])
+      .select('-__v')
+      .lean(),
+    hasOrderSupportChat(orderId),
+  ]);
 
-  return { ...order, items };
+  return { ...order, items, hasOrderSupports };
 };
 
 /** Updates order status/payment state. */

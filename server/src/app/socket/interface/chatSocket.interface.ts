@@ -4,7 +4,11 @@ export type TSocketRequester = {
 };
 
 export type TSendMessagePayload = {
-  chatId: string;
+  chatId?: string;
+  type?: 'customer_support' | 'staff_support' | 'order_support' | 'single_chat';
+  order?: string;
+  participant?: string;
+  participent?: string;
   text?: string;
   files?: string[];
 };

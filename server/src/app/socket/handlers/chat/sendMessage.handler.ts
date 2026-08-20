@@ -1,6 +1,7 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
+import { ChatService } from '@/app/modules/chat/chat.services';
 import { MessagesService } from '@/app/modules/messages/messages.services';
 import { TSendMessagePayload } from '@/app/socket/interface/chatSocket.interface';
 import { TSocket } from '@/app/socket/interface/socket.interface';
@@ -17,16 +18,21 @@ import eventHandler from '@/app/socket/utils/eventHandler';
 export const sendMessageHandler = eventHandler<TSendMessagePayload>(
   async (socket: TSocket, payload, callback) => {
     const userId = socket.auth._id.toString();
-    const chatId = payload?.chatId;
     const text = payload?.text?.trim();
     const files = payload?.files ?? [];
 
-    if (!chatId) {
-      throw new ApiError(HttpStatusCode.BadRequest, 'chatId is required');
-    }
     if (!text && files.length === 0) {
       throw new ApiError(HttpStatusCode.BadRequest, 'text or files is required');
     }
+
+    const requester = { userId, role: socket.auth.role || 'user' };
+    const chatId = await ChatService.resolveChatIdForSend('socket', requester, {
+      chatId: payload?.chatId,
+      type: payload?.type,
+      order: payload?.order,
+      participant: payload?.participant,
+      participent: payload?.participent,
+    });
 
     const { participantIds } = await assertSocketChatAccess(
       chatId,
@@ -35,7 +41,7 @@ export const sendMessageHandler = eventHandler<TSendMessagePayload>(
     );
     const populated = await MessagesService.sendMessage(
       'socket',
-      { userId, role: socket.auth.role || 'user' },
+      requester,
       { chatId, text, files }
     );
 
