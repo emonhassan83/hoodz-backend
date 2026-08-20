@@ -33,19 +33,23 @@
 
 ## সংযোগের পর শুনুন
 
-| শোনার নাম | কখন আসে | কী কাজে লাগে |
-| :--- | :--- | :--- |
-| `chat:list` | তালিকা চাইলে, বা নতুন/পড়া মেসেজের পর | ইনবক্স হালনাগাদ |
-| `chat:new-message` | কেউ মেসেজ পাঠালে | কথোপকথনে যোগ করুন |
-| `chat:message-updated` | মেসেজ সম্পাদনা | পুরনো লেখা বদলান |
-| `chat:message-deleted` | মেসেজ মুছে গেলে | সেই মেসেজ সরান |
-| `chat:seen` | অন্যজন পড়েছে | পঠিত চিহ্ন |
-| `chat:typing` | অন্যজন লিখছে | «লিখছে» দেখান |
-| `chat:stop-typing` | লেখা থামলে | «লিখছে» সরান |
-| `notification:unread-count` | না-পড়া সংখ্যা বদলালে | ব্যাজ |
-| `ai:message` | এআই উত্তর | পণ্য সাজেশনসহ উত্তর |
+
+| শোনার নাম                   | কখন আসে                               | কী কাজে লাগে        |
+| --------------------------- | ------------------------------------- | ------------------- |
+| `chat:list`                 | তালিকা চাইলে, বা নতুন/পড়া মেসেজের পর | ইনবক্স হালনাগাদ     |
+| `chat:new-message`          | কেউ মেসেজ পাঠালে                      | কথোপকথনে যোগ করুন   |
+| `chat:message-updated`      | মেসেজ সম্পাদনা                        | পুরনো লেখা বদলান    |
+| `chat:message-deleted`      | মেসেজ মুছে গেলে                       | সেই মেসেজ সরান      |
+| `chat:seen`                 | অন্যজন পড়েছে                         | পঠিত চিহ্ন          |
+| `chat:typing`               | অন্যজন লিখছে                          | «লিখছে» দেখান       |
+| `chat:stop-typing`          | লেখা থামলে                            | «লিখছে» সরান        |
+| `notification:unread-count` | না-পড়া সংখ্যা বদলালে                 | ব্যাজ               |
+| `ai:message`                | এআই উত্তর                             | পণ্য সাজেশনসহ উত্তর |
+
 
 ---
+
+
 
 ## ধাপ ১ — ইনবক্স
 
@@ -67,6 +71,8 @@
 Ack-এ একই অবজেক্ট থাকে। HTTP: `GET /chat`
 
 ---
+
+
 
 ## চ্যাট তৈরি — HTTP `POST /chat`
 
@@ -108,6 +114,8 @@ Ack-এ একই অবজেক্ট থাকে। HTTP: `GET /chat`
 অর্ডারে আগে থেকে সাপোর্ট চ্যাট আছে কি না: `GET /orders/:orderId` → `hasOrderSupports`।
 
 ---
+
+
 
 ## ধাপ ২ — মেসেজ পাঠান
 
@@ -172,6 +180,8 @@ Ack-এ একই অবজেক্ট থাকে। HTTP: `GET /chat`
 
 ---
 
+
+
 ## ধাপ ৩ — পড়া হয়েছে
 
 **পাঠান:** `chat:seen`
@@ -196,6 +206,8 @@ Ack-এ একই অবজেক্ট থাকে। HTTP: `GET /chat`
 
 ---
 
+
+
 ## ধাপ ৪ — সম্পাদনা
 
 **পাঠান:** `chat:edit-message`
@@ -213,6 +225,8 @@ Ack-এ একই অবজেক্ট থাকে। HTTP: `GET /chat`
 **সবাই শুনুন:** `chat:message-updated`
 
 ---
+
+
 
 ## ধাপ ৫ — মুছে ফেলা
 
@@ -236,6 +250,8 @@ Ack-এ একই অবজেক্ট থাকে। HTTP: `GET /chat`
 ```
 
 ---
+
+
 
 ## ধাপ ৬ — লিখছেন
 
@@ -262,6 +278,8 @@ Ack-এ একই অবজেক্ট থাকে। HTTP: `GET /chat`
 **অন্যজন শুনুন:** `chat:stop-typing` (`isTyping: false`)
 
 ---
+
+
 
 ## ধাপ ৭ — এআই সহায়ক
 
@@ -290,20 +308,26 @@ Ack-এ একই অবজেক্ট থাকে। HTTP: `GET /chat`
 
 ---
 
+
+
 ## হ্যান্ডলার তালিকা
 
-| হ্যান্ডলার | পাঠানোর নাম | পাঠানো তথ্য | সার্ভার যা শোনায় |
-| :--- | :--- | :--- | :--- |
-| `myChatList` | `chat:my-list` | — | `chat:list` |
-| `sendMessage` | `chat:send-message` | `type?` + `order?` / `participant?` অথবা `chatId`, `text?`, `files?` | `chat:new-message`, `chat:list`, `notification:unread-count` |
-| `seen` | `chat:seen` | `chatId` | `chat:seen`, `chat:list`, `notification:unread-count` |
-| `editMessage` | `chat:edit-message` | `messageId`, `text?`, `files?` | `chat:message-updated` |
-| `deleteMessage` | `chat:delete-message` | `messageId` | `chat:message-deleted` |
-| `typing` | `chat:typing` | `chatId` | `chat:typing` (অন্যজন) |
-| `stopTyping` | `chat:stop-typing` | `chatId` | `chat:stop-typing` (অন্যজন) |
-| `aiSendMessage` | `ai:send-message` | `message` | `ai:message`, `chat:new-message` |
+
+| হ্যান্ডলার      | পাঠানোর নাম           | পাঠানো তথ্য                                                          | সার্ভার যা শোনায়                                            |
+| --------------- | --------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `myChatList`    | `chat:my-list`        | —                                                                    | `chat:list`                                                  |
+| `sendMessage`   | `chat:send-message`   | `type?` + `order?` / `participant?` অথবা `chatId`, `text?`, `files?` | `chat:new-message`, `chat:list`, `notification:unread-count` |
+| `seen`          | `chat:seen`           | `chatId`                                                             | `chat:seen`, `chat:list`, `notification:unread-count`        |
+| `editMessage`   | `chat:edit-message`   | `messageId`, `text?`, `files?`                                       | `chat:message-updated`                                       |
+| `deleteMessage` | `chat:delete-message` | `messageId`                                                          | `chat:message-deleted`                                       |
+| `typing`        | `chat:typing`         | `chatId`                                                             | `chat:typing` (অন্যজন)                                       |
+| `stopTyping`    | `chat:stop-typing`    | `chatId`                                                             | `chat:stop-typing` (অন্যজন)                                  |
+| `aiSendMessage` | `ai:send-message`     | `message`                                                            | `ai:message`, `chat:new-message`                             |
+
 
 ---
+
+
 
 ## অ্যাপে শোনা
 
@@ -323,3 +347,4 @@ socket.emit('chat:send-message', { type: 'customer_support', text }, (ack) => {}
 socket.emit('chat:send-message', { type: 'order_support', order, text }, (ack) => {});
 socket.emit('chat:send-message', { type: 'single_chat', participant, text, files }, (ack) => {});
 ```
+

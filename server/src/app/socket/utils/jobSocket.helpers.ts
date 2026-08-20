@@ -87,10 +87,8 @@ export const leaveOrderTrackRooms = (socket: { rooms: Set<string>; leave: (room:
   });
 };
 
-/** Broadcasts job/order status to job audience, customer, and order track room. */
-export const notifyJobOrderStatus = async (job: any, event: string) => {
-  const jobId = resolveJobId(job);
-  const orderId = String((job?.order as any)?._id ?? job?.order ?? '');
+/** Returns the customer user id from a job payload. */
+export const getJobCustomerId = (job: any) => {
   const customerId = String(
     (job?.user as any)?._id ??
       job?.user ??
@@ -98,24 +96,20 @@ export const notifyJobOrderStatus = async (job: any, event: string) => {
       (job?.order as any)?.user ??
       ''
   );
-  const orderStatus = (job?.order as any)?.status ?? job?.status;
-  const orderPayload = {
-    orderId,
-    status: orderStatus,
-    job,
-  };
+  return customerId && customerId !== 'undefined' ? customerId : '';
+};
 
-  await emitJobToAudience(jobId, event, job);
-  await emitJobToAudience(jobId, SOCKET_EMIT.jobUpdated, job);
+/** Broadcasts a delivery-status event to the customer and order track room. */
+export const notifyJobOrderStatus = async (job: any, event: string) => {
+  const orderId = String((job?.order as any)?._id ?? job?.order ?? '');
+  const customerId = getJobCustomerId(job);
+
+  if (customerId) {
+    emitToUserIds([customerId], event, job);
+  }
 
   if (orderId) {
     getIO().to(orderTrackRoom(orderId)).emit(event, job);
-    getIO().to(orderTrackRoom(orderId)).emit(SOCKET_EMIT.jobUpdated, job);
-    getIO().to(orderTrackRoom(orderId)).emit(SOCKET_EMIT.orderUpdated, orderPayload);
-  }
-
-  if (customerId) {
-    emitToUserIds([customerId], SOCKET_EMIT.orderUpdated, orderPayload);
   }
 };
 export const emitOrderTrackLocation = (

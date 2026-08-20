@@ -14,10 +14,21 @@ const orderIdParamValidationSchema = z.object({
   }),
 });
 
+const riderIdParamValidationSchema = z.object({
+  params: z.object({
+    riderId: objectIdSchema,
+  }),
+});
+
+const getMyJobsQueryValidationSchema = z.object({
+  query: z.object({
+    filter: z.enum(['active', 'completed']).optional(),
+  }),
+});
+
 export const JobValidation = {
   jobIdParamValidationSchema,
   orderIdParamValidationSchema,
+  riderIdParamValidationSchema,
+  getMyJobsQueryValidationSchema,
 };
-
-
-

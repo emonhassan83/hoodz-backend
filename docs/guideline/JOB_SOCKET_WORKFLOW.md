@@ -4,7 +4,7 @@
 
 সকেট সংযোগের সময় `Authorization` দিয়ে লগইন করতে হবে। সংযোগ হলে সার্ভার ব্যবহারকারীকে তার নিজের কক্ষে (`userId`) বসায়। তাই নিচের ঘটনাগুলো শুনতে অতিরিক্ত কক্ষে যোগ দিতে হয় না, শুধু **অর্ডার ট্র্যাক** করার সময় `track_order` পাঠাতে হয়।
 
-প্রতিটি পাঠানো ঘটনার উত্তর **ack** (কলব্যাক) দিয়ে আসে:
+প্রতিটি পাঠানো ঘটনার উত্তর **ack** (কলব্যাক) দিয়ে আসে। যে কাজ নিজে পাঠান, তার ফল ack থেকে নিন — সেগুলো আবার `job:updated` / `order:updated` দিয়ে শোনার দরকার নেই।
 
 ```json
 {
@@ -44,13 +44,12 @@
 | শোনার নাম | কখন আসে | কী কাজে লাগে |
 | :--- | :--- | :--- |
 | `job:rider-assigned` | রাইডার নির্ধারিত হলে | রাইডারের নাম, ছবি দেখান |
-| `order:updated` | পণ্য তোলা, পথে যাওয়া, ডেলিভারি | অর্ডারের অবস্থা বদলান |
-| `job:updated` | জবের যেকোনো পরিবর্তন | স্ক্রিন রিফ্রেশ |
 | `job:picked-up` | রাইডার দোকান থেকে তুলেছে | «তুলে নিয়েছে» দেখান |
 | `job:on-the-way` | রাইডার গ্রাহকের দিকে যাচ্ছে | «পথে আছে» দেখান |
 | `job:delivered` | ডেলিভারি শেষ | সফল পর্দা |
 | `ride:request-rating` | ডেলিভারির পর | রেটিং পাতা খুলুন |
 | `job:otp-sent` | ওটিপি পাঠানো হয়েছে | ওটিপি অপেক্ষা |
+| `job:otp-verified` | ওটিপি মিললে | ডেলিভারির আগে |
 
 ### ট্র্যাক পাতায় ঢুকলে
 
@@ -103,11 +102,7 @@ Ack-এ `room`, `listen: "order:location"` এবং শেষ জানা অ�
 | `job:request-cancelled` | অফার আর নেই | অফার সরিয়ে ফেলুন |
 | `job:accepted` | অন্য কেউ নিয়ে নিলে | নিজের অফার বন্ধ |
 | `job:assigned` | এজেন্ট/দোকান সরাসরি নিয়োগ | নতুন জব খুলুন |
-| `job:updated` | জব পরিবর্তন | স্ক্রিন আপডেট |
-| `job:rejected` | নিজে প্রত্যাখ্যান করলে | নিশ্চিতকরণ |
 | `ride:rating-submitted` | গ্রাহক রেটিং দিলে | নতুন গড় রেটিং দেখান |
-| `rider:online` / `rider:offline` | নিজে অনলাইন/অফলাইন হলে | নিজের অবস্থা |
-| `rider:availability-updated` | উপলব্ধতা বদলালে | ম্যাপে আপডেট |
 
 ---
 
@@ -128,9 +123,7 @@ Ack-এ `room`, `listen: "order:location"` এবং শেষ জানা অ�
 
 `latitude` / `longitude` দিলেও চলবে।
 
-**সার্ভার কী করে:** এই স্থান `lastAvailable`-এ সংরক্ষণ করে, রাইডারকে অনলাইন করে।
-
-**শুনুন:** `rider:online`, `rider:availability-updated`
+**সার্ভার কী করে:** এই স্থান `lastAvailable`-এ সংরক্ষণ করে, রাইডারকে অনলাইন করে। ফল **ack**-এ আসে।
 
 ---
 
@@ -161,8 +154,9 @@ Ack-এ `room`, `listen: "order:location"` এবং শেষ জানা অ�
 - অর্ডারের অবস্থা `rider_assigned`
 - রাইডার সেট হয়, `requestedRider` খালি হয়
 
-**গ্রাহক শুনুন:** `job:accepted`, `job:updated`, `job:rider-assigned`, `order:updated`  
-**অন্য অফার পাওয়া রাইডার শুনুন:** `job:accepted`, `job:updated`, `job:request-cancelled`
+**গ্রাহক শুনুন:** `job:rider-assigned`  
+**অন্য অফার পাওয়া রাইডার শুনুন:** `job:accepted`, `job:request-cancelled`  
+গ্রহণকারী রাইডারের ফল **ack**-এ।
 
 ---
 
@@ -179,7 +173,7 @@ Ack-এ `room`, `listen: "order:location"` এবং শেষ জানা অ�
 
 **সার্ভার কী করে:** শুধু সেই রাইডারকে `requestedRider` থেকে সরায়। জব `rejected` হয় না। অন্যরা এখনও নিতে পারে।
 
-**যে রাইডার ফিরিয়ে দিয়েছেন তিনি শুনুন:** `job:rejected`, `job:updated`
+**যে রাইডার ফিরিয়ে দিয়েছেন:** ফল **ack**-এ; আলাদা ইভেন্ট নেই।
 
 ---
 
@@ -213,7 +207,8 @@ Ack-এ `room`, `listen: "order:location"` এবং শেষ জানা অ�
 **সার্ভার কী করে:** জব `assigned`, অর্ডার `rider_assigned`, `requestedRider` খালি।
 
 **নিয়োগ পাওয়া রাইডার শুনুন:** `job:assigned`  
-**গ্রাহক শুনুন:** `job:updated`, `job:rider-assigned`, `order:updated`
+**গ্রাহক শুনুন:** `job:rider-assigned`  
+এজেন্টের ফল **ack**-এ।
 
 এরপর রাইডার আবার `job:accept` দিয়ে গ্রহণ করবে; তখন জব `accepted` হয়।
 
@@ -253,12 +248,12 @@ Ack-এ একই আকারের তথ্য ফেরে। গ্রা�
 { "jobId": "জব আইডি" }
 ```
 
-জব আগে `accepted` (বা পুরনো `go_pickup`) থাকতে হবে।
+জব আগে `accepted` থাকতে হবে।
 
 **সার্ভার কী করে:** জব `picked_up`, অর্ডার `picked_up`
 
-**গ্রাহক শুনুন:** `job:picked-up`, `job:updated`, `order:updated`  
-ট্র্যাক পাতায় থাকলে একই ঘটনা সেই কক্ষেও যায়।
+**গ্রাহক শুনুন:** `job:picked-up`  
+রাইডারের ফল **ack**-এ। ট্র্যাক পাতায় থাকলে একই ঘটনা সেই কক্ষেও যায়।
 
 ---
 
@@ -274,7 +269,8 @@ Ack-এ একই আকারের তথ্য ফেরে। গ্রা�
 
 **সার্ভার কী করে:** জব `on_the_way`, অর্ডার `on_the_way`
 
-**গ্রাহক শুনুন:** `job:on-the-way`, `job:updated`, `order:updated`
+**গ্রাহক শুনুন:** `job:on-the-way`  
+রাইডারের ফল **ack**-এ।
 
 ---
 
@@ -309,7 +305,8 @@ Ack (উৎপাদন পরিবেশ):
 }
 ```
 
-**গ্রাহক শুনুন:** `job:otp-sent`, `job:updated`
+**গ্রাহক শুনুন:** `job:otp-sent`  
+রাইডারের ফল **ack**-এ।
 
 ---
 
@@ -327,7 +324,8 @@ Ack (উৎপাদন পরিবেশ):
 
 সার্ভার রেডিস থেকে ওটিপি মিলায়। সফল হলে জবে `hasDeliveryOtpVerified: true`।
 
-**গ্রাহক/রাইডার শুনুন:** `job:otp-verified`, `job:updated`
+**গ্রাহক শুনুন:** `job:otp-verified`  
+রাইডারের ফল **ack**-এ।
 
 ---
 
@@ -343,8 +341,9 @@ Ack (উৎপাদন পরিবেশ):
 
 **সার্ভার কী করে:** জব `delivered`, অর্ডার `delivered`। নগদ হলে জমা মুলতবি হতে পারে।
 
-**গ্রাহক শুনুন:** `job:delivered`, `job:updated`, `order:updated`, `ride:request-rating`  
-নগদ হলে সংশ্লিষ্টরা **শুনুন:** `deposit:pending`
+**গ্রাহক শুনুন:** `job:delivered`, `ride:request-rating`  
+নগদ হলে দোকান/এজেন্ট **শুনুন:** `deposit:pending` (রাইডার ack থেকে পায়)  
+রাইডারের ফল **ack**-এ।
 
 `ride:request-rating`-এর উদাহরণ:
 
@@ -381,9 +380,7 @@ Ack (উৎপাদন পরিবেশ):
 ```
 
 শর্ত: সক্রিয় অ্যাকাউন্ট, অনুমোদিত কেওয়াইসি।  
-**সার্ভার কী করে:** এই স্থান `lastAvailable`-এ রাখে, `hasRiderActivateMode` বন্ধ করে।
-
-**শুনুন:** `rider:offline`, `rider:availability-updated`
+**সার্ভার কী করে:** এই স্থান `lastAvailable`-এ রাখে, `hasRiderActivateMode` বন্ধ করে। ফল **ack**-এ।
 
 সকেট কেটে গেলেও `hasRiderActivateMode` বন্ধ হয়। তখন স্থান বাধ্যতামূলক নয়।
 
@@ -393,19 +390,19 @@ Ack (উৎপাদন পরিবেশ):
 
 | হ্যান্ডলার | কে পাঠাবে | পাঠানোর নাম | পাঠানো তথ্য | সার্ভার যা শোনায় |
 | :--- | :--- | :--- | :--- | :--- |
-| `riderGoOnline` | রাইডার | `rider:go-online` | `lat`, `lng` | `rider:online`, `rider:availability-updated` |
-| `riderGoOffline` | রাইডার | `rider:go-offline` | `lat`, `lng` | `rider:offline`, `rider:availability-updated` |
+| `riderGoOnline` | রাইডার | `rider:go-online` | `lat`, `lng` | শুধু ack |
+| `riderGoOffline` | রাইডার | `rider:go-offline` | `lat`, `lng` | শুধু ack |
 | `riderLocationUpdate` | রাইডার | `rider:location-update` | `lat`, `lng`, `speed`, `heading`, `encodedRoute` | গ্রাহক: `order:location` |
 | `findOnlineRider` | দোকান/এজেন্ট | `rider:find-online` | `orderId`, `radiusKm?` | শুধু ack |
-| `jobAssign` | দোকান/এজেন্ট | `job:assign` | `orderId`, `riderId` | রাইডার: `job:assigned` · সবাই: `job:updated` |
-| `jobAccept` | রাইডার | `job:accept` | `jobId` | `job:accepted`, `job:updated`, `job:rider-assigned` |
-| `jobReject` | রাইডার | `job:reject` | `jobId`, `reason?` | নিজে: `job:rejected`, `job:updated` |
+| `jobAssign` | দোকান/এজেন্ট | `job:assign` | `orderId`, `riderId` | রাইডার: `job:assigned` · গ্রাহক: `job:rider-assigned` |
+| `jobAccept` | রাইডার | `job:accept` | `jobId` | গ্রাহক: `job:rider-assigned` · অন্য রাইডার: `job:accepted`, `job:request-cancelled` |
+| `jobReject` | রাইডার | `job:reject` | `jobId`, `reason?` | শুধু ack |
 | `trackOrder` | গ্রাহক | `track_order` | `orderId` | পরে `order:location` |
-| `jobPickUp` | রাইডার | `job:pickup` | `jobId` | `job:picked-up`, `job:updated`, `order:updated` |
-| `jobOnTheWay` | রাইডার | `job:on-the-way` | `jobId` | `job:on-the-way`, `job:updated`, `order:updated` |
-| `sendDeliveryOtp` | রাইডার | `job:send-delivery-otp` | `jobId` | `job:otp-sent`, `job:updated` · otp ack-এ |
-| `verifyDeliveryOtp` | রাইডার | `job:verify-delivery-otp` | `jobId`, `otp`, `verificationToken?` | `job:otp-verified`, `job:updated` |
-| `markAsDelivered` | রাইডার | `job:delivered` | `jobId` | `job:delivered`, `job:updated`, `order:updated`, `ride:request-rating` |
+| `jobPickUp` | রাইডার | `job:pickup` | `jobId` | গ্রাহক: `job:picked-up` |
+| `jobOnTheWay` | রাইডার | `job:on-the-way` | `jobId` | গ্রাহক: `job:on-the-way` |
+| `sendDeliveryOtp` | রাইডার | `job:send-delivery-otp` | `jobId` | গ্রাহক: `job:otp-sent` · otp ack-এ |
+| `verifyDeliveryOtp` | রাইডার | `job:verify-delivery-otp` | `jobId`, `otp`, `verificationToken?` | গ্রাহক: `job:otp-verified` |
+| `markAsDelivered` | রাইডার | `job:delivered` | `jobId` | গ্রাহক: `job:delivered`, `ride:request-rating` |
 | `ratingSubmit` | গ্রাহক | `ride:submit-rating` | `jobId`, `rating`, `review`, `files?` | রাইডার: `ride:rating-submitted` |
 
 ---
@@ -431,10 +428,12 @@ Ack (উৎপাদন পরিবেশ):
 গ্রাহক:
 
 ```js
-socket.on('order:updated', (data) => {});
+socket.on('job:rider-assigned', (job) => {});
 socket.on('order:location', (data) => {});
 socket.on('job:picked-up', (data) => {});
 socket.on('job:on-the-way', (data) => {});
+socket.on('job:otp-sent', (data) => {});
+socket.on('job:otp-verified', (data) => {});
 socket.on('job:delivered', (data) => {});
 socket.on('ride:request-rating', (data) => {});
 socket.emit('track_order', { orderId }, (ack) => {});

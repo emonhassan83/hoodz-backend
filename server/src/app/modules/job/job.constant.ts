@@ -2,13 +2,19 @@ export const JOB_STATUS = {
   matching: 'matching',
   assigned: 'assigned',
   accepted: 'accepted',
-  go_pickup: 'go_pickup',
   picked_up: 'picked_up',
   on_the_way: 'on_the_way',
   otp_sent: 'otp_sent',
   delivered: 'delivered',
   cancelled: 'cancelled',
 } as const;
+
+export const JOB_ACTIVE_STATUSES = [
+  JOB_STATUS.accepted,
+  JOB_STATUS.picked_up,
+  JOB_STATUS.on_the_way,
+  JOB_STATUS.otp_sent,
+] as const;
 
 export const JOB_ASSIGNMENT_TYPE = {
   vendor: 'vendor',

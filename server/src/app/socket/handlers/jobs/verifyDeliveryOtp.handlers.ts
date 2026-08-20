@@ -5,8 +5,8 @@ import eventHandler from '@/app/socket/utils/eventHandler';
 import { JobSocketActions } from '@/app/socket/utils/jobSocket.actions';
 import {
   assertSocketRole,
-  emitJobToAudience,
-  resolveJobId,
+  emitToUserIds,
+  getJobCustomerId,
   sendJobAck,
   socketRiderRoles,
 } from '@/app/socket/utils/jobSocket.helpers';
@@ -20,10 +20,10 @@ export const verifyDeliveryOtpHandler =
         socket.auth._id,
         payload!
       );
-      const jobId = resolveJobId(data);
-
-      await emitJobToAudience(jobId, SOCKET_EMIT.jobOtpVerified, data);
-      await emitJobToAudience(jobId, SOCKET_EMIT.jobUpdated, data);
+      const customerId = getJobCustomerId(data);
+      if (customerId) {
+        emitToUserIds([customerId], SOCKET_EMIT.jobOtpVerified, data);
+      }
       sendJobAck(callback, {
         success: true,
         status: 200,

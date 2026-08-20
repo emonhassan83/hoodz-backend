@@ -1,9 +1,8 @@
 import { TSocket } from '@/app/socket/interface/socket.interface';
-import { SOCKET_EMIT } from '@/app/socket/socket.constant';
-import { getIO } from '@/app/socket/socket.init';
 import eventHandler from '@/app/socket/utils/eventHandler';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import onlineUsers from '@/app/socket/utils/onlineUsers';
+import { getIO } from '@/app/socket/socket.init';
 
 const disconnectHandler = eventHandler<any>(
   async (socket: TSocket, payload?: any, _ack?: any) => {
@@ -15,9 +14,7 @@ const disconnectHandler = eventHandler<any>(
 
         if (socket.auth.role === USER_ROLE.rider) {
           const { RiderAvailabilitySocketHelper } = require('../utils/riderAvailability.helpers');
-          const data = await RiderAvailabilitySocketHelper.deactivateOnDisconnect(userId);
-          getIO().emit(SOCKET_EMIT.riderOffline, data);
-          getIO().emit(SOCKET_EMIT.riderAvailabilityUpdated, data);
+          await RiderAvailabilitySocketHelper.deactivateOnDisconnect(userId);
         }
 
         const io = getIO();
@@ -32,3 +29,4 @@ const disconnectHandler = eventHandler<any>(
 );
 
 export default disconnectHandler;
+

@@ -121,18 +121,6 @@ const acceptJob = (traceId: string, riderId: string, payload: TJobIdPayload) =>
 const rejectJob = (traceId: string, riderId: string, payload: TRejectJobPayload) =>
   getJobService().rejectJob(traceId, riderId, payload);
 
-/** Moves accepted socket job into go-pickup state. */
-const goPickup = async (traceId: string, riderId: string, payload: TJobIdPayload) => {
-  const job = await Job.findById(payload.jobId);
-  if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  assertAssignedRider(traceId, job, riderId);
-  assertJobStatusIn(traceId, job, [JOB_STATUS.accepted], 'Only accepted jobs can go pickup');
-
-  job.status = JOB_STATUS.go_pickup;
-  await job.save();
-  return Job.findById(job._id).populate(jobPopulate);
-};
-
 /** Marks socket job package pickup complete. */
 const pickupJob = (traceId: string, riderId: string, payload: TJobIdPayload) =>
   getJobService().pickupJob(traceId, riderId, payload);
@@ -173,7 +161,6 @@ export const JobSocketActions = {
   assignJob,
   acceptJob,
   rejectJob,
-  goPickup,
   pickupJob,
   onTheWay,
   sendDeliveryOtp,

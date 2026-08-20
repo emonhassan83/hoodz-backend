@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import {
+  JOB_ACTIVE_STATUSES,
   JOB_ASSIGNMENT_TYPE,
   JOB_PAYMENT_METHOD,
   JOB_STATUS,
@@ -325,18 +326,6 @@ const rejectJob = async (
   return remaining;
 };
 
-/** Moves accepted job to pickup travel state. */
-const goPickup = async (traceId: string, riderId: string, payload: TJobIdPayload) => {
-  const job = await Job.findById(payload.jobId);
-  if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  assertAssignedRider(traceId, job, riderId);
-  assertJobStatusIn(traceId, job, [JOB_STATUS.accepted], 'Only accepted jobs can go pickup');
-
-  job.status = JOB_STATUS.go_pickup;
-  await job.save();
-  return Job.findById(job._id).populate(jobPopulate);
-};
-
 /** Marks package pickup complete and updates order. */
 const pickupJob = async (traceId: string, riderId: string, payload: TJobIdPayload) => {
   const job = await Job.findById(payload.jobId);
@@ -345,7 +334,7 @@ const pickupJob = async (traceId: string, riderId: string, payload: TJobIdPayloa
   assertJobStatusIn(
     traceId,
     job,
-    [JOB_STATUS.go_pickup, JOB_STATUS.accepted],
+    [JOB_STATUS.accepted],
     'Job cannot be picked up now'
   );
 
@@ -552,12 +541,12 @@ const riderLocationUpdate = async (
   };
 };
 
-/** Returns rider current active jobs. */
-const getCurrentRiderJobs = async (riderId: string, query: Record<string, unknown>) => {
+/** Returns matching jobs where this rider is in requestedRider. */
+const myRequestJobs = async (riderId: string, query: Record<string, unknown>) => {
   const jobQuery = new QueryBuilder(
     Job.find({
-      status: { $nin: [JOB_STATUS.delivered, JOB_STATUS.cancelled] },
-      $or: [{ rider: riderId }, { rider: null, requestedRider: riderId }],
+      status: JOB_STATUS.matching,
+      requestedRider: riderId,
     })
       .populate(jobPopulate)
       .select('-__v')
@@ -572,37 +561,40 @@ const getCurrentRiderJobs = async (riderId: string, query: Record<string, unknow
   return { meta, data };
 };
 
-/** Returns rider past jobs. */
-const getRiderHistory = async (riderId: string, query: Record<string, unknown>) => {
-  const jobQuery = new QueryBuilder(
-    Job.find({
-      rider: riderId,
-      status: { $in: [JOB_STATUS.delivered, JOB_STATUS.cancelled] },
-    })
-      .populate(jobPopulate)
-      .select('-__v')
-      .lean(),
-    query
-  )
-    .sort()
-    .paginate()
-    .fields();
-
-  const [data, meta] = await Promise.all([jobQuery.modelQuery, jobQuery.countTotal()]);
-  return { meta, data };
-};
-
-/** Returns jobs visible to admin or vendor. */
-const getAllJobs = async (
-  requester: TJobRequester,
-  query: Record<string, unknown>
-) => {
+/** Returns the rider's assigned jobs, filtered as active or completed. */
+const getMyJobs = async (riderId: string, query: Record<string, unknown>) => {
   const filter =
-    requester.role === USER_ROLE.vendor
-      ? { order: { $in: await Orders.distinct('_id', { author: requester.userId }) } }
-      : {};
+    query.filter === 'completed'
+      ? { rider: riderId, status: JOB_STATUS.delivered }
+      : {
+          rider: riderId,
+          status: { $in: [...JOB_ACTIVE_STATUSES] },
+        };
+
+  const restQuery = { ...query };
+  delete restQuery.filter;
+
   const jobQuery = new QueryBuilder(
     Job.find(filter).populate(jobPopulate).select('-__v').lean(),
+    restQuery
+  )
+    .sort()
+    .paginate()
+    .fields();
+
+  const [data, meta] = await Promise.all([jobQuery.modelQuery, jobQuery.countTotal()]);
+  return { meta, data };
+};
+
+/** Returns every job for a rider. Used by agents. */
+const getRiderJobs = async (riderId: string, query: Record<string, unknown>) => {
+  const jobQuery = new QueryBuilder(
+    Job.find({
+      $or: [{ rider: riderId }, { requestedRider: riderId }],
+    })
+      .populate(jobPopulate)
+      .select('-__v')
+      .lean(),
     query
   )
     .filter()
@@ -615,7 +607,7 @@ const getAllJobs = async (
 };
 
 /** Returns one job after role-based access check. */
-const getJobById = async (
+const getAJobDetails = async (
   traceId: string,
   requester: TJobRequester,
   jobId: string
@@ -847,17 +839,16 @@ export const JobService = {
   assignJob,
   acceptJob,
   rejectJob,
-  goPickup,
   pickupJob,
   onTheWay,
   sendDeliveryOtp,
   verifyDeliveryOtp,
   deliveredJob,
   riderLocationUpdate,
-  getCurrentRiderJobs,
-  getRiderHistory,
-  getAllJobs,
-  getJobById,
+  myRequestJobs,
+  getMyJobs,
+  getRiderJobs,
+  getAJobDetails,
   getJobByOrderId,
   startJobMatching,
   rematchDueJobs,

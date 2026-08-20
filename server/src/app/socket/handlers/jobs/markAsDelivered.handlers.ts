@@ -6,8 +6,9 @@ import eventHandler from '@/app/socket/utils/eventHandler';
 import { JobSocketActions } from '@/app/socket/utils/jobSocket.actions';
 import {
   assertSocketRole,
-  emitJobToAudience,
   emitToUserIds,
+  getJobAudienceIds,
+  getJobCustomerId,
   notifyJobOrderStatus,
   resolveJobId,
   sendJobAck,
@@ -35,16 +36,14 @@ export const markAsDeliveredHandler = eventHandler<TJobIdSocketPayload>(
 
     await notifyJobOrderStatus(data, SOCKET_EMIT.jobDelivered);
     if ((data as any)?.paymentMethod === JOB_PAYMENT_METHOD.cod) {
-      await emitJobToAudience(jobId, SOCKET_EMIT.depositPending, data);
+      const riderId = socket.auth._id.toString();
+      const audienceIds = (await getJobAudienceIds(jobId)).filter(
+        (id) => id !== riderId
+      );
+      emitToUserIds(audienceIds, SOCKET_EMIT.depositPending, data);
     }
 
-    const customerId = String(
-      (data as any)?.user?._id ??
-        (data as any)?.user ??
-        (data as any)?.order?.user?._id ??
-        (data as any)?.order?.user ??
-        ''
-    );
+    const customerId = getJobCustomerId(data);
     if (customerId && customerId !== 'undefined') {
       emitToUserIds([customerId], SOCKET_EMIT.rideRequestRating, {
         jobId,

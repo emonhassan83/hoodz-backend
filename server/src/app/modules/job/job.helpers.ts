@@ -147,7 +147,7 @@ export const assertCanAssignOrder = (
 /** Throws unless requester can access a job. */
 export const assertJobAccess = async (
   traceId: string,
-  job: Pick<IJob, 'rider' | 'assignedBy' | 'order' | 'requestedRider'>,
+  job: Pick<IJob, 'rider' | 'assignedBy' | 'order' | 'requestedRider' | 'user'>,
   requester: { userId: string; role: string }
 ) => {
   const userId = requester.userId;
@@ -158,9 +158,11 @@ export const assertJobAccess = async (
   const isRequestedRider = (job.requestedRider ?? []).some(
     (rider) => String((rider as any)?._id ?? rider) === userId
   );
+  const isCustomer = String((job.user as any)?._id ?? job.user) === userId;
   const canAccess =
     requester.role === USER_ROLE.admin ||
     requester.role === USER_ROLE.agent ||
+    isCustomer ||
     isRequestedRider ||
     String((job.rider as any)?._id ?? job.rider) === userId ||
     String((job.assignedBy as any)?._id ?? job.assignedBy) === userId ||
@@ -395,27 +397,17 @@ export const notifyOtherRidersJobTaken = async (job: any, riderIds: string[]) =>
   const io = getSocketIO();
   riderIds.forEach((riderId) => {
     io.to(riderId).emit(SOCKET_EMIT.jobAccepted, job);
-    io.to(riderId).emit(SOCKET_EMIT.jobUpdated, job);
     io.to(riderId).emit(SOCKET_EMIT.jobRequestCancelled, job);
   });
 };
 
-/** Emits job:rider-assigned and notifies the customer. */
-export const notifyJobRiderAssigned = async (job: any, extraRiderIds: string[] = []) => {
+/** Emits job:rider-assigned to the customer only. */
+export const notifyJobRiderAssigned = async (job: any, _extraRiderIds: string[] = []) => {
   const io = getSocketIO();
   const userId = toIdString(job.user || job.order?.user);
-  const authorId = toIdString(job.order?.author);
-  const assignedBy = toIdString(job.assignedBy);
-  const riderId = toIdString(job.rider);
-  const audience = [
-    ...extraRiderIds,
-    userId,
-    authorId,
-    assignedBy,
-    riderId,
-  ].filter((id) => id && id !== 'undefined' && id !== 'null');
+  if (!userId || userId === 'undefined' || userId === 'null') return;
 
-  [...new Set(audience)].forEach((id) => io.to(id).emit(SOCKET_EMIT.jobRiderAssigned, job));
+  io.to(userId).emit(SOCKET_EMIT.jobRiderAssigned, job);
 };
 
 /** Notifies agents that auto-matching stopped and they should assign manually. */
