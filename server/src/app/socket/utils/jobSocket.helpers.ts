@@ -77,5 +77,59 @@ export const socketVendorAdminRoles = [USER_ROLE.vendor, USER_ROLE.admin];
 export const socketAssignRoles = [USER_ROLE.vendor, USER_ROLE.admin, USER_ROLE.agent];
 export const socketRiderRoles = [USER_ROLE.rider];
 
+/** Private socket room for live order tracking. */
+export const orderTrackRoom = (orderId: string) => `room_order_${orderId}`;
+
+/** Leaves any previous order-tracking rooms on this socket. */
+export const leaveOrderTrackRooms = (socket: { rooms: Set<string>; leave: (room: string) => void }) => {
+  [...socket.rooms].forEach((room) => {
+    if (room.startsWith('room_order_')) socket.leave(room);
+  });
+};
+
+/** Broadcasts job/order status to job audience, customer, and order track room. */
+export const notifyJobOrderStatus = async (job: any, event: string) => {
+  const jobId = resolveJobId(job);
+  const orderId = String((job?.order as any)?._id ?? job?.order ?? '');
+  const customerId = String(
+    (job?.user as any)?._id ??
+      job?.user ??
+      (job?.order as any)?.user?._id ??
+      (job?.order as any)?.user ??
+      ''
+  );
+  const orderStatus = (job?.order as any)?.status ?? job?.status;
+  const orderPayload = {
+    orderId,
+    status: orderStatus,
+    job,
+  };
+
+  await emitJobToAudience(jobId, event, job);
+  await emitJobToAudience(jobId, SOCKET_EMIT.jobUpdated, job);
+
+  if (orderId) {
+    getIO().to(orderTrackRoom(orderId)).emit(event, job);
+    getIO().to(orderTrackRoom(orderId)).emit(SOCKET_EMIT.jobUpdated, job);
+    getIO().to(orderTrackRoom(orderId)).emit(SOCKET_EMIT.orderUpdated, orderPayload);
+  }
+
+  if (customerId) {
+    emitToUserIds([customerId], SOCKET_EMIT.orderUpdated, orderPayload);
+  }
+};
+export const emitOrderTrackLocation = (
+  orderId: string,
+  payload: {
+    lat: number;
+    lng: number;
+    speed: number;
+    heading: number;
+    encodedRoute: string;
+  }
+) => {
+  getIO().to(orderTrackRoom(orderId)).emit(SOCKET_EMIT.orderLocation, payload);
+};
+
 
 

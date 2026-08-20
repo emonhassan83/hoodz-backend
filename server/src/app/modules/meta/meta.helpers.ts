@@ -282,7 +282,7 @@ export const getRiderAssignJobs = async (
   const jobs = await Job.find({
     rider: riderId,
     status: {
-      $nin: [JOB_STATUS.delivered, JOB_STATUS.rejected, JOB_STATUS.cancelled],
+      $nin: [JOB_STATUS.delivered, JOB_STATUS.cancelled],
     },
   })
     .populate([{ path: 'order', select: 'totalAmount' }])

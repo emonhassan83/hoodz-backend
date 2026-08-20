@@ -4,13 +4,17 @@ import { Types } from 'mongoose';
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import { CoinService } from '@/app/modules/coin/coin.services';
+import { Orders } from '@/app/modules/orders/orders.model';
 import { REVIEW_MODEL_TYPE } from '@/app/modules/review/review.constant';
+import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
 import {
+  getDeliveredJobForReviewOrThrow,
   resolveReviewAuthorOrThrow,
   resolveReviewSort,
 } from '@/app/modules/review/review.helpers';
 import { Review } from '@/app/modules/review/review.model';
 import { TCreateReviewPayload } from '@/app/modules/review/review.types';
+import { sendNotificationViaQueue } from '@/app/utils/notification-queue.service';
 
 const reviewPopulate = [
   { path: 'user', select: 'name email phone profileAvatar' },
@@ -78,7 +82,53 @@ const create = async (
     );
   }
 
+  if (payload.modelType === REVIEW_MODEL_TYPE.Job) {
+    await sendNotificationViaQueue({
+      userId: author.toString(),
+      channel: 'both',
+      title: 'New ride rating',
+      message: `A customer rated your delivery ${payload.rating} stars.`,
+      data: {
+        modelType: NOTIFICATION_MODEL_TYPE.Job,
+        reference: payload.reference,
+        reviewId: review._id.toString(),
+        notice: 'ride-rating',
+      },
+    }).catch((error) => {
+      console.warn('[Review] Failed to queue rider rating notification', error);
+    });
+  }
+
   return Review.findById(review._id).populate(reviewPopulate).select('-__v');
+};
+
+/** Creates a job review from a delivered ride using jobId. */
+const createFromJob = async (
+  traceId: string,
+  userId: string,
+  payload: { jobId: string; rating: number; review: string; files?: string[] }
+) => {
+  const job = await getDeliveredJobForReviewOrThrow(traceId, payload.jobId);
+  let customerId = job.user?.toString();
+  if (!customerId && job.order) {
+    const order = await Orders.findById(job.order).select('user');
+    customerId = order?.user?.toString();
+  }
+  if (customerId !== userId) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'Only the customer can rate this ride',
+      traceId
+    );
+  }
+
+  return create(traceId, userId, {
+    modelType: REVIEW_MODEL_TYPE.Job,
+    reference: job._id.toString(),
+    rating: payload.rating,
+    review: payload.review,
+    files: payload.files ?? [],
+  });
 };
 
 /** Returns paginated reviews written for one author. */
@@ -199,6 +249,7 @@ const getReviewByProduct = async (
 
 export const ReviewService = {
   create,
+  createFromJob,
   getReviewByAuthor,
   getReviewByProduct,
 };

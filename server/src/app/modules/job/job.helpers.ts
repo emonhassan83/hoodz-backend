@@ -1,11 +1,18 @@
 import { compare, hash } from 'bcrypt';
 import { HttpStatusCode } from 'axios';
+import { Secret, sign, verify } from 'jsonwebtoken';
 import twilio from 'twilio';
 
 import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
 import { getRedisClient } from '@/app/configs/redis.config';
-import { JOB_MATCH_RADIUS_KM, JOB_PAYMENT_METHOD, JOB_STATUS, RIDER_MATCH_DEFAULTS } from '@/app/modules/job/job.constant';
+import {
+  DELIVERY_OTP_TTL_SECONDS,
+  JOB_MATCH_RADIUS_KM,
+  JOB_PAYMENT_METHOD,
+  JOB_STATUS,
+  RIDER_MATCH_DEFAULTS,
+} from '@/app/modules/job/job.constant';
 import { IJob } from '@/app/modules/job/job.interface';
 import { Job } from '@/app/modules/job/job.model';
 import { Orders } from '@/app/modules/orders/orders.model';
@@ -32,14 +39,50 @@ export const hashDeliveryOtp = async (otp: string) => hash(otp, 10);
 export const compareDeliveryOtp = async (otp: string, hashedOtp: string) =>
   compare(otp, hashedOtp);
 
-/** Stores delivery OTP hash in Redis for a short handoff window. */
+/** Stores delivery OTP hash in Redis for 6 minutes. */
 export const saveDeliveryOtpToRedis = async (
   jobId: string,
   hashedOtp: string,
-  ttlSeconds = env.DELIVERY_OTP_TTL_SECONDS ?? 300
+  ttlSeconds = DELIVERY_OTP_TTL_SECONDS
 ) => {
   await getRedisClient().set(REDIS_KEYS.DELIVERY_OTP(jobId), hashedOtp, 'EX', ttlSeconds);
 };
+
+/** Short-lived token returned with send-delivery-otp. */
+export const createDeliveryOtpToken = (jobId: string) =>
+  sign(
+    { jobId, type: 'delivery_otp' },
+    env.JWT_VERIFY_OTP_SECRET_KEY as Secret,
+    { expiresIn: `${DELIVERY_OTP_TTL_SECONDS}s` }
+  );
+
+/** Decodes a delivery OTP verification token. */
+export const verifyDeliveryOtpToken = (token: string | undefined, traceId: string) => {
+  if (!token?.trim()) {
+    throw new ApiError(
+      HttpStatusCode.Unauthorized,
+      'OTP verification token is required',
+      traceId
+    );
+  }
+
+  try {
+    return verify(token.trim(), env.JWT_VERIFY_OTP_SECRET_KEY as Secret) as {
+      jobId: string;
+      type?: string;
+    };
+  } catch {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'OTP verification token has expired. Please request a new OTP.',
+      traceId
+    );
+  }
+};
+
+/** Resolves the customer phone used for delivery OTP SMS. */
+export const getCustomerDeliveryPhone = (order: any) =>
+  order?.billingDetails?.phoneNumber || order?.user?.phone || null;
 
 /** Reads delivery OTP hash from Redis. */
 export const getDeliveryOtpFromRedis = async (jobId: string) =>
@@ -70,7 +113,7 @@ export const sendDeliveryOtpSms = async (
   const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
   try {
     await client.messages.create({
-      body: `Your Hoodz delivery OTP is ${otp}. It expires in 5 minutes. Please do not share it.`,
+      body: `Your Hoodz delivery OTP is ${otp}. It expires in 6 minutes. Please do not share it.`,
       from: env.TWILIO_PHONE_NUMBER,
       to: phoneNumber,
     });
@@ -265,7 +308,7 @@ export const buildJobLocations = (order: any) => {
 
 /** Returns true when a job can be replaced by a new assignment. */
 export const isReassignableJob = (status: string) =>
-  [JOB_STATUS.assigned, JOB_STATUS.rejected, JOB_STATUS.cancelled].includes(
+  [JOB_STATUS.matching, JOB_STATUS.assigned, JOB_STATUS.cancelled].includes(
     status as any
   );
 
@@ -344,6 +387,17 @@ export const notifyJobRequestCancelled = async (job: any, riderIds: string[]) =>
   riderIds.forEach((riderId) =>
     io.to(riderId).emit(SOCKET_EMIT.jobRequestCancelled, job)
   );
+};
+
+/** Notifies leftover riders that another rider took the job. */
+export const notifyOtherRidersJobTaken = async (job: any, riderIds: string[]) => {
+  if (!riderIds.length) return;
+  const io = getSocketIO();
+  riderIds.forEach((riderId) => {
+    io.to(riderId).emit(SOCKET_EMIT.jobAccepted, job);
+    io.to(riderId).emit(SOCKET_EMIT.jobUpdated, job);
+    io.to(riderId).emit(SOCKET_EMIT.jobRequestCancelled, job);
+  });
 };
 
 /** Emits job:rider-assigned and notifies the customer. */

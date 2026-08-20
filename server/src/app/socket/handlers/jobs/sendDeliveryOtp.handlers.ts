@@ -32,8 +32,8 @@ export const sendDeliveryOtpHandler = eventHandler<TJobIdSocketPayload>(
       status: 200,
       message: 'Delivery OTP sent or resent',
       data: {
-        jobId: data.jobId,
-        otp: data.otp,
+        verificationToken: data.verificationToken,
+        otp: data.mock ? data.otp : null,
         mock: data.mock,
       },
     });

@@ -431,7 +431,14 @@ export const assertOrderAccess = (
   }
 };
 
-export type TOrderUserNotice = 'paid' | 'confirmed' | 'processing' | 'rider_assigned';
+export type TOrderUserNotice =
+  | 'paid'
+  | 'confirmed'
+  | 'processing'
+  | 'rider_assigned'
+  | 'picked_up'
+  | 'on_the_way'
+  | 'delivered';
 
 const orderNoticeCopy: Record<
   TOrderUserNotice,
@@ -455,6 +462,18 @@ const orderNoticeCopy: Record<
   rider_assigned: {
     title: 'Rider assigned',
     body: (orderId) => `A rider has been assigned to your order ${orderId}.`,
+  },
+  picked_up: {
+    title: 'Order picked up',
+    body: (orderId) => `Your order ${orderId} has been picked up from the shop.`,
+  },
+  on_the_way: {
+    title: 'Order on the way',
+    body: (orderId) => `Your order ${orderId} is on the way to you.`,
+  },
+  delivered: {
+    title: 'Order delivered',
+    body: (orderId) => `Your order ${orderId} has been delivered. Please rate your rider.`,
   },
 };
 

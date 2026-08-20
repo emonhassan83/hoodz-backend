@@ -259,30 +259,28 @@ const goOnline = async (
   return { ...availability, rider };
 };
 
-/** Marks a rider offline and removes them from Redis geo index. */
-const goOffline = async (riderId: string, payload?: TRiderAvailabilityPayload | null) => {
-  const redis = getRedisClient();
-  const current = parseAvailability(
-    riderId,
-    await redis.hgetall(REDIS_KEYS.RIDER_AVAILABILITY(riderId))
-  );
-  const latitude = payload?.latitude ?? current?.latitude ?? 0;
-  const longitude = payload?.longitude ?? current?.longitude ?? 0;
+/** Marks a rider offline after an explicit location ping. */
+const goOffline = async (
+  traceId: string,
+  riderId: string,
+  payload: TRiderAvailabilityPayload
+) => {
+  await assertRiderReadyForJobs(traceId, riderId);
 
   const availability = await setAvailability(riderId, {
-    latitude,
-    longitude,
-    heading: payload?.heading ?? current?.heading ?? undefined,
+    ...payload,
     isOnline: false,
     activeJob: null,
   });
-  await persistUserLastAvailable(riderId, latitude, longitude);
   const rider = await User.findByIdAndUpdate(
     riderId,
     {
       isOnline: false,
       hasRiderActivateMode: false,
-      lastAvailable: { type: 'Point', coordinates: [longitude, latitude] },
+      lastAvailable: {
+        type: 'Point',
+        coordinates: [payload.longitude, payload.latitude],
+      },
       lastAvailableAt: new Date(),
     },
     { returnDocument: 'after' }
@@ -293,6 +291,41 @@ const goOffline = async (riderId: string, payload?: TRiderAvailabilityPayload | 
     .lean();
 
   return { ...availability, rider };
+};
+
+/** Clears rider mode on socket disconnect without requiring a location payload. */
+const deactivateOnDisconnect = async (riderId: string) => {
+  const redis = getRedisClient();
+  const current = parseAvailability(
+    riderId,
+    await redis.hgetall(REDIS_KEYS.RIDER_AVAILABILITY(riderId))
+  );
+
+  if (current) {
+    await setAvailability(riderId, {
+      latitude: current.latitude,
+      longitude: current.longitude,
+      heading: current.heading ?? undefined,
+      isOnline: false,
+      activeJob: null,
+    });
+    await persistUserLastAvailable(riderId, current.latitude, current.longitude);
+  } else {
+    await redis.zrem(REDIS_KEYS.RIDER_ONLINE_GEO, riderId);
+    await redis.del(REDIS_KEYS.RIDER_AVAILABILITY(riderId));
+  }
+
+  const rider = await User.findByIdAndUpdate(
+    riderId,
+    { isOnline: false, hasRiderActivateMode: false },
+    { returnDocument: 'after' }
+  )
+    .select(
+      'name email phone profileAvatar avgRating ratingCount isOnline hasRiderActivateMode lastAvailable lastAvailableAt'
+    )
+    .lean();
+
+  return { rider, isOnline: false, hasRiderActivateMode: false };
 };
 
 /** Finds nearby online riders from Redis GEO and hydrates user details from MongoDB. */
@@ -504,12 +537,23 @@ const setActiveJob = async (riderId: string, activeJob: string | null) => {
   else await redis.hdel(key, 'activeJob');
 };
 
+/** Reads the rider's last Redis availability snapshot. */
+const getAvailability = async (riderId: string) => {
+  const redis = getRedisClient();
+  return parseAvailability(
+    riderId,
+    await redis.hgetall(REDIS_KEYS.RIDER_AVAILABILITY(riderId))
+  );
+};
+
 export const RiderAvailabilitySocketHelper = {
   goOnline,
   goOffline,
+  deactivateOnDisconnect,
   findOnlineRiders,
   findOnlineRidersNearShop,
   updateLocation,
+  getAvailability,
   setActiveJob,
   persistOnlineRiderLocations,
   hydrateOnlineRiderGeo,

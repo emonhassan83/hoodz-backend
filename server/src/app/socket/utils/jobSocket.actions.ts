@@ -71,8 +71,11 @@ const riderGoOnline = async (
 };
 
 /** Marks rider offline from socket delivery flow. */
-const riderGoOffline = async (riderId: string, payload?: TGeoPayload) =>
-  RiderAvailabilitySocketHelper.goOffline(riderId, normalizeRiderGeo(payload));
+const riderGoOffline = (
+  traceId: string,
+  riderId: string,
+  payload?: TGeoPayload
+) => getJobService().riderGoOffline(traceId, riderId, payload);
 
 /** Finds nearby online riders for a socket assignment request. */
 const findOnlineRider = async (
@@ -131,141 +134,30 @@ const goPickup = async (traceId: string, riderId: string, payload: TJobIdPayload
 };
 
 /** Marks socket job package pickup complete. */
-const pickupJob = async (traceId: string, riderId: string, payload: TJobIdPayload) => {
-  const job = await Job.findById(payload.jobId);
-  if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  assertAssignedRider(traceId, job, riderId);
-  assertJobStatusIn(
-    traceId,
-    job,
-    [JOB_STATUS.go_pickup, JOB_STATUS.accepted],
-    'Job cannot be picked up now'
-  );
-
-  job.status = JOB_STATUS.picked_up;
-  job.pickedUpAt = new Date();
-  await job.save();
-  await Orders.findByIdAndUpdate(job.order, { status: ORDER_STATUS.picked_up });
-  return Job.findById(job._id).populate(jobPopulate);
-};
+const pickupJob = (traceId: string, riderId: string, payload: TJobIdPayload) =>
+  getJobService().pickupJob(traceId, riderId, payload);
 
 /** Starts socket job delivery toward customer. */
-const onTheWay = async (traceId: string, riderId: string, payload: TJobIdPayload) => {
-  const job = await Job.findById(payload.jobId);
-  if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  assertAssignedRider(traceId, job, riderId);
-  assertJobStatusIn(traceId, job, [JOB_STATUS.picked_up], 'Pickup is required first');
-
-  job.status = JOB_STATUS.on_the_way;
-  job.onTheWayAt = new Date();
-  await job.save();
-  await Orders.findByIdAndUpdate(job.order, { status: ORDER_STATUS.on_the_way });
-  return Job.findById(job._id).populate(jobPopulate);
-};
+const onTheWay = (traceId: string, riderId: string, payload: TJobIdPayload) =>
+  getJobService().onTheWay(traceId, riderId, payload);
 
 /** Creates or resends a Redis-backed delivery OTP. */
-const sendDeliveryOtp = async (
+const sendDeliveryOtp = (
   traceId: string,
   requester: TJobRequester,
   payload: TJobIdPayload
-) => {
-  const job = await Job.findById(payload.jobId);
-  if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  await assertJobAccess(traceId, job, requester);
-  assertJobStatusIn(
-    traceId,
-    job,
-    [JOB_STATUS.on_the_way, JOB_STATUS.otp_sent],
-    'Delivery must be on the way before sending OTP'
-  );
-
-  const otp = generateDeliveryOtp();
-  await saveDeliveryOtpToRedis(job._id.toString(), await hashDeliveryOtp(otp));
-  job.hasDeliveryOtpVerified = false;
-  job.status = JOB_STATUS.otp_sent;
-  await job.save();
-  const populatedJob = await Job.findById(job._id).populate(jobPopulate);
-  const sms = await sendDeliveryOtpSms(
-    traceId,
-    (populatedJob?.order as any)?.billingDetails?.phoneNumber,
-    otp
-  );
-
-  return {
-    job: populatedJob,
-    jobId: job._id,
-    otp,
-    mock: sms.mock,
-  };
-};
+) => getJobService().sendDeliveryOtp(traceId, requester, payload);
 
 /** Verifies customer delivery OTP from Redis. */
-const verifyDeliveryOtp = async (
+const verifyDeliveryOtp = (
   traceId: string,
   riderId: string,
   payload: TVerifyDeliveryOtpPayload
-) => {
-  const job = await Job.findById(payload.jobId);
-  if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-  assertAssignedRider(traceId, job, riderId);
-  assertJobStatusIn(traceId, job, [JOB_STATUS.otp_sent], 'OTP is not ready for verification');
-
-  const storedOtp = await getDeliveryOtpFromRedis(job._id.toString());
-  if (!storedOtp) {
-    throw new ApiError(HttpStatusCode.BadRequest, 'Delivery OTP has expired', traceId);
-  }
-  if (!(await compareDeliveryOtp(payload.otp, storedOtp))) {
-    throw new ApiError(HttpStatusCode.BadRequest, 'Invalid delivery OTP', traceId);
-  }
-
-  job.hasDeliveryOtpVerified = true;
-  await Promise.all([
-    job.save(),
-    Orders.findByIdAndUpdate(job.order, { isOtpVerified: true }),
-    deleteDeliveryOtpFromRedis(job._id.toString()),
-  ]);
-
-  return Job.findById(job._id).populate(jobPopulate);
-};
+) => getJobService().verifyDeliveryOtp(traceId, riderId, payload);
 
 /** Marks socket job delivered after OTP verification. */
-const deliveredJob = async (
-  traceId: string,
-  riderId: string,
-  payload: TJobIdPayload
-) => {
-  const session = await mongoose.startSession();
-
-  try {
-    session.startTransaction();
-    const job = await Job.findById(payload.jobId).session(session);
-    if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-    assertAssignedRider(traceId, job, riderId);
-    assertJobStatusIn(traceId, job, [JOB_STATUS.otp_sent], 'OTP verification is required before delivery');
-
-    const order = await Orders.findById(job.order).session(session);
-    if (!order?.isOtpVerified || !job.hasDeliveryOtpVerified) {
-      throw new ApiError(HttpStatusCode.BadRequest, 'Delivery OTP is not verified', traceId);
-    }
-
-    job.status = JOB_STATUS.delivered;
-    job.completedAt = new Date();
-    await job.save({ session });
-
-    order.status = ORDER_STATUS.delivered;
-    await order.save({ session });
-
-    await session.commitTransaction();
-    await RiderAvailabilitySocketHelper.setActiveJob(riderId, null);
-
-    return Job.findById(job._id).populate(jobPopulate);
-  } catch (error) {
-    await session.abortTransaction();
-    throw error;
-  } finally {
-    await session.endSession();
-  }
-};
+const deliveredJob = (traceId: string, riderId: string, payload: TJobIdPayload) =>
+  getJobService().deliveredJob(traceId, riderId, payload);
 
 /** Updates live rider location for a socket job or idle online rider. */
 const riderLocationUpdate = (

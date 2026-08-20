@@ -11,6 +11,8 @@ export type TGeoPayload = {
   lat?: number;
   lng?: number;
   heading?: number;
+  speed?: number;
+  encodedRoute?: string;
 };
 
 export type TFindOnlineRiderPayload = TGeoPayload & {
@@ -39,6 +41,7 @@ export type TRejectJobPayload = TJobIdPayload & {
 
 export type TVerifyDeliveryOtpPayload = TJobIdPayload & {
   otp: string;
+  verificationToken?: string;
 };
 
 

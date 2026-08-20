@@ -21,12 +21,13 @@ export const jobRejectHandler = eventHandler<TJobRejectSocketPayload>(
     );
     const jobId = resolveJobId(data);
 
-    await emitJobToAudience(jobId, SOCKET_EMIT.jobRejected, data);
+    socket.emit(SOCKET_EMIT.jobRejected, data);
+    socket.emit(SOCKET_EMIT.jobUpdated, data);
     await emitJobToAudience(jobId, SOCKET_EMIT.jobUpdated, data);
     sendJobAck(callback, {
       success: true,
       status: 200,
-      message: 'Job rejected',
+      message: 'Job offer declined',
       data,
     });
   }

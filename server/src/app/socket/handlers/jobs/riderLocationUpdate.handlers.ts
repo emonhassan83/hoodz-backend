@@ -1,11 +1,10 @@
 import { TRiderLocationUpdateSocketPayload } from '@/app/socket/interface/jobSocket.interface';
 import { TSocket } from '@/app/socket/interface/socket.interface';
-import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import eventHandler from '@/app/socket/utils/eventHandler';
 import { JobSocketActions } from '@/app/socket/utils/jobSocket.actions';
 import {
   assertSocketRole,
-  emitJobToAudience,
+  emitOrderTrackLocation,
   sendJobAck,
   socketRiderRoles,
 } from '@/app/socket/utils/jobSocket.helpers';
@@ -20,15 +19,23 @@ export const riderLocationUpdateHandler =
         payload!
       );
 
-      const jobId = data.jobId || payload?.jobId;
-      if (jobId) {
-        await emitJobToAudience(jobId, SOCKET_EMIT.riderLocationUpdated, data);
+      const location = {
+        lat: data.lat,
+        lng: data.lng,
+        speed: data.speed,
+        heading: data.heading,
+        encodedRoute: data.encodedRoute,
+      };
+
+      if (data.orderId) {
+        emitOrderTrackLocation(data.orderId, location);
       }
+
       sendJobAck(callback, {
         success: true,
         status: 200,
         message: 'Rider location updated',
-        data,
+        data: location,
       });
     }
   );

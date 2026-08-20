@@ -41,8 +41,23 @@ export type TRiderLocationUpdateSocketPayload = {
   lat?: number;
   lng?: number;
   heading?: number;
+  speed?: number;
+  encodedRoute?: string;
 };
 
-export type TVerifyDeliveryOtpSocketPayload = TJobIdSocketPayload & {
+export type TVerifyDeliveryOtpSocketPayload = {
+  jobId: string;
   otp: string;
+  verificationToken?: string;
+};
+
+export type TTrackOrderSocketPayload = {
+  orderId: string;
+};
+
+export type TRideRatingSubmitSocketPayload = {
+  jobId: string;
+  rating: number;
+  review: string;
+  files?: string[];
 };

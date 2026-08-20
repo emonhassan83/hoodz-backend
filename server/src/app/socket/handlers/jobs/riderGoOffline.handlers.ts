@@ -13,7 +13,11 @@ import {
 export const riderGoOfflineHandler = eventHandler<TRiderGoOfflineSocketPayload>(
   async (socket: TSocket, payload, callback) => {
     assertSocketRole(socket.auth.role, socketRiderRoles);
-    const data = await JobSocketActions.riderGoOffline(socket.auth._id, payload);
+    const data = await JobSocketActions.riderGoOffline(
+      'socket',
+      socket.auth._id,
+      payload
+    );
 
     socket.emit(SOCKET_EMIT.riderOffline, data);
     getIO().emit(SOCKET_EMIT.riderAvailabilityUpdated, data);

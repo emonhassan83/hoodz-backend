@@ -14,8 +14,8 @@ const disconnectHandler = eventHandler<any>(
         delete onlineUsers[userId];
 
         if (socket.auth.role === USER_ROLE.rider) {
-          const { JobSocketActions } = require('../utils/jobSocket.actions');
-          const data = await JobSocketActions.riderGoOffline(userId, payload);
+          const { RiderAvailabilitySocketHelper } = require('../utils/riderAvailability.helpers');
+          const data = await RiderAvailabilitySocketHelper.deactivateOnDisconnect(userId);
           getIO().emit(SOCKET_EMIT.riderOffline, data);
           getIO().emit(SOCKET_EMIT.riderAvailabilityUpdated, data);
         }

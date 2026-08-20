@@ -1,7 +1,7 @@
 export const JOB_STATUS = {
+  matching: 'matching',
   assigned: 'assigned',
   accepted: 'accepted',
-  rejected: 'rejected',
   go_pickup: 'go_pickup',
   picked_up: 'picked_up',
   on_the_way: 'on_the_way',
@@ -39,6 +39,9 @@ export const DELIVERY_TYPE = {
 } as const;
 
 export const JOB_MATCH_RADIUS_KM = [5, 10, 20, 50] as const;
+
+/** Delivery OTP lives in Redis for 6 minutes. */
+export const DELIVERY_OTP_TTL_SECONDS = 360;
 
 export const JOB_DEPOSIT_STATUS = {
   not_required: 'not_required',

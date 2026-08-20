@@ -53,7 +53,7 @@ export const env: TEnv = {
   GROQ_MODEL: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
   GEMINI_API_KEY: process.env.GEMINI_API_KEY,
   GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
-  DELIVERY_OTP_TTL_SECONDS: Number(process.env.DELIVERY_OTP_TTL_SECONDS || 300),
+  DELIVERY_OTP_TTL_SECONDS: Number(process.env.DELIVERY_OTP_TTL_SECONDS || 360),
   SMS_PROVIDER: process.env.SMS_PROVIDER || 'twilio',
   VODAFONE_SMS_TOKEN_URL: process.env.VODAFONE_SMS_TOKEN_URL,
   VODAFONE_SMS_SEND_URL: process.env.VODAFONE_SMS_SEND_URL,

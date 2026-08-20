@@ -14,12 +14,13 @@ export const SOCKET_LISTENER = {
   jobAssign: 'job:assign',
   jobAccept: 'job:accept',
   jobReject: 'job:reject',
-  jobGoPickup: 'job:go-pickup',
   jobPickup: 'job:pickup',
   jobOnTheWay: 'job:on-the-way',
   jobSendDeliveryOtp: 'job:send-delivery-otp',
   jobVerifyDeliveryOtp: 'job:verify-delivery-otp',
   jobDelivered: 'job:delivered',
+  rideSubmitRating: 'ride:submit-rating',
+  trackOrder: 'track_order',
 } as const;
 
 export const SOCKET_EMIT = {
@@ -37,6 +38,8 @@ export const SOCKET_EMIT = {
   riderOffline: 'rider:offline',
   riderAvailabilityUpdated: 'rider:availability-updated',
   riderLocationUpdated: 'rider:location-updated',
+  orderLocation: 'order:location',
+  orderUpdated: 'order:updated',
   jobAssigned: 'job:assigned',
   jobNewRequest: 'job:new-request',
   jobRiderAssigned: 'job:rider-assigned',
@@ -50,6 +53,8 @@ export const SOCKET_EMIT = {
   jobOtpSent: 'job:otp-sent',
   jobOtpVerified: 'job:otp-verified',
   jobDelivered: 'job:delivered',
+  rideRequestRating: 'ride:request-rating',
+  rideRatingSubmitted: 'ride:rating-submitted',
   depositPending: 'deposit:pending',
   depositSubmitted: 'deposit:submitted',
   depositVerified: 'deposit:verified',

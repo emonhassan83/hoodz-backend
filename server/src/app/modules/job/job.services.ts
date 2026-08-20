@@ -18,10 +18,12 @@ import {
   buildJobMoneyFields,
   collectNearbyRequestedRiders,
   compareDeliveryOtp,
+  createDeliveryOtpToken,
   deleteDeliveryOtpFromRedis,
   generateDeliveryOtp,
   getAssignableOrderOrThrow,
   getAssignableRiderOrThrow,
+  getCustomerDeliveryPhone,
   getDeliveryOtpFromRedis,
   getRiderMatchSettings,
   hashDeliveryOtp,
@@ -30,8 +32,10 @@ import {
   notifyJobRequestCancelled,
   notifyJobRiderAssigned,
   notifyMatchingExhausted,
+  notifyOtherRidersJobTaken,
   saveDeliveryOtpToRedis,
   sendDeliveryOtpSms,
+  verifyDeliveryOtpToken,
 } from '@/app/modules/job/job.helpers';
 import { Job } from '@/app/modules/job/job.model';
 import {
@@ -84,8 +88,21 @@ const riderGoOnline = async (
 };
 
 /** Marks rider offline for delivery jobs. */
-const riderGoOffline = async (riderId: string, payload?: TGeoPayload) =>
-  RiderAvailabilitySocketHelper.goOffline(riderId, normalizeRiderGeo(payload));
+const riderGoOffline = async (
+  traceId: string,
+  riderId: string,
+  payload?: TGeoPayload
+) => {
+  const geo = normalizeRiderGeo(payload);
+  if (!geo) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Rider latitude and longitude are required',
+      traceId
+    );
+  }
+  return RiderAvailabilitySocketHelper.goOffline(traceId, riderId, geo);
+};
 
 /** Finds nearby online riders for a vendor/admin order assignment. */
 const findOnlineRider = async (
@@ -162,7 +179,7 @@ const assignJob = async (
       order: payload.orderId,
       user: orderUserId,
       rider: payload.riderId,
-      requestedRider: [payload.riderId],
+      requestedRider: [],
       assignedBy:
         assignmentType === JOB_ASSIGNMENT_TYPE.auto ? null : requester.userId,
       assignmentType,
@@ -189,15 +206,16 @@ const assignJob = async (
     RiderAvailabilitySocketHelper.setActiveJob(payload.riderId, job!._id.toString()),
   ]);
 
+  const assignedJob = await Job.findById(job!._id).populate(jobPopulate);
   const leftoverRiders = previousRiderIds.filter((id) => id !== payload.riderId);
-  await notifyJobRequestCancelled(job, leftoverRiders);
-  await notifyJobRiderAssigned(job, leftoverRiders);
-  await notifyOrderUser(job?.order as any, 'rider_assigned');
+  await notifyJobRequestCancelled(assignedJob, leftoverRiders);
+  await notifyJobRiderAssigned(assignedJob, leftoverRiders);
+  await notifyOrderUser(assignedJob?.order as any, 'rider_assigned');
 
-  return job;
+  return assignedJob;
 };
 
-/** Rider accepts their assigned job. */
+/** Rider accepts a matching or assigned job. */
 const acceptJob = async (
   traceId: string,
   riderId: string,
@@ -206,7 +224,12 @@ const acceptJob = async (
   const job = await Job.findById(payload.jobId);
   if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
   assertRequestedOrAssignedRider(traceId, job, riderId);
-  assertJobStatusIn(traceId, job, [JOB_STATUS.assigned], 'Only assigned jobs can be accepted');
+  assertJobStatusIn(
+    traceId,
+    job,
+    [JOB_STATUS.matching, JOB_STATUS.assigned],
+    'Only matching or assigned jobs can be accepted'
+  );
 
   if (job.rider && job.rider.toString() !== riderId) {
     throw new ApiError(HttpStatusCode.BadRequest, 'Job already accepted', traceId);
@@ -219,11 +242,12 @@ const acceptJob = async (
       : {
           _id: job._id,
           rider: null,
-          status: JOB_STATUS.assigned,
+          status: { $in: [JOB_STATUS.matching, JOB_STATUS.assigned] },
           requestedRider: riderId,
         },
     {
       rider: riderId,
+      requestedRider: [],
       status: JOB_STATUS.accepted,
       acceptedAt: new Date(),
       matchingEnabled: false,
@@ -241,15 +265,16 @@ const acceptJob = async (
     Orders.findByIdAndUpdate(claimed.order, { status: ORDER_STATUS.rider_assigned }),
   ]);
 
+  const acceptedJob = await Job.findById(claimed._id).populate(jobPopulate);
   const leftoverRiders = previousRiderIds.filter((id) => id !== riderId);
-  await notifyJobRequestCancelled(claimed, leftoverRiders);
-  await notifyJobRiderAssigned(claimed, leftoverRiders);
-  await notifyOrderUser(claimed.order as any, 'rider_assigned');
+  await notifyOtherRidersJobTaken(acceptedJob, leftoverRiders);
+  await notifyJobRiderAssigned(acceptedJob, leftoverRiders);
+  await notifyOrderUser(acceptedJob?.order as any, 'rider_assigned');
 
-  return claimed;
+  return acceptedJob;
 };
 
-/** Rider rejects their assigned job and releases availability. */
+/** Rider declines an offer; only removes them from requestedRider. */
 const rejectJob = async (
   traceId: string,
   riderId: string,
@@ -258,29 +283,46 @@ const rejectJob = async (
   const job = await Job.findById(payload.jobId);
   if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
   assertRequestedOrAssignedRider(traceId, job, riderId);
-  assertJobStatusIn(traceId, job, [JOB_STATUS.assigned], 'Only assigned jobs can be rejected');
+  assertJobStatusIn(
+    traceId,
+    job,
+    [JOB_STATUS.matching, JOB_STATUS.assigned],
+    'This job cannot be rejected now'
+  );
 
-  if (!job.rider) {
-    job.requestedRider = (job.requestedRider ?? []).filter(
-      (rider) => rider.toString() !== riderId
-    );
-    await job.save();
-    const remaining = await Job.findById(job._id).populate(jobPopulate);
-    if (job.matchingEnabled && !(job.requestedRider ?? []).length) {
-      await rematchJob(traceId, job._id.toString());
-      return Job.findById(job._id).populate(jobPopulate);
-    }
-    return remaining;
+  const wasAssignedRider = job.rider?.toString() === riderId;
+  await Job.findByIdAndUpdate(
+    job._id,
+    wasAssignedRider
+      ? {
+          $pull: { requestedRider: riderId },
+          rider: null,
+          status: JOB_STATUS.matching,
+          matchingEnabled: true,
+          rejectionReason: payload.reason ?? null,
+        }
+      : { $pull: { requestedRider: riderId } }
+  );
+
+  if (wasAssignedRider) {
+    await RiderAvailabilitySocketHelper.setActiveJob(riderId, null);
   }
 
-  job.status = JOB_STATUS.rejected;
-  job.matchingEnabled = false;
-  job.nextMatchAt = null;
-  job.rejectionReason = payload.reason ?? null;
-  await job.save();
-  await RiderAvailabilitySocketHelper.setActiveJob(riderId, null);
+  const remaining = await Job.findById(job._id).populate(jobPopulate);
+  const remainingIds = (remaining?.requestedRider ?? []).map((rider: any) =>
+    String(rider?._id ?? rider)
+  );
+  if (
+    remaining?.matchingEnabled &&
+    remaining.status === JOB_STATUS.matching &&
+    !remaining.rider &&
+    !remainingIds.length
+  ) {
+    await rematchJob(traceId, job._id.toString());
+    return Job.findById(job._id).populate(jobPopulate);
+  }
 
-  return Job.findById(job._id).populate(jobPopulate);
+  return remaining;
 };
 
 /** Moves accepted job to pickup travel state. */
@@ -311,7 +353,9 @@ const pickupJob = async (traceId: string, riderId: string, payload: TJobIdPayloa
   job.pickedUpAt = new Date();
   await job.save();
   await Orders.findByIdAndUpdate(job.order, { status: ORDER_STATUS.picked_up });
-  return Job.findById(job._id).populate(jobPopulate);
+  const pickedUpJob = await Job.findById(job._id).populate(jobPopulate);
+  await notifyOrderUser(pickedUpJob?.order as any, 'picked_up');
+  return pickedUpJob;
 };
 
 /** Starts delivery toward the customer. */
@@ -325,7 +369,9 @@ const onTheWay = async (traceId: string, riderId: string, payload: TJobIdPayload
   job.onTheWayAt = new Date();
   await job.save();
   await Orders.findByIdAndUpdate(job.order, { status: ORDER_STATUS.on_the_way });
-  return Job.findById(job._id).populate(jobPopulate);
+  const onTheWayJob = await Job.findById(job._id).populate(jobPopulate);
+  await notifyOrderUser(onTheWayJob?.order as any, 'on_the_way');
+  return onTheWayJob;
 };
 
 /** Creates and stores a delivery OTP for the customer handoff. */
@@ -349,18 +395,28 @@ const sendDeliveryOtp = async (
   job.hasDeliveryOtpVerified = false;
   job.status = JOB_STATUS.otp_sent;
   await job.save();
-  const populatedJob = await Job.findById(job._id).populate(jobPopulate);
+  const populatedJob = await Job.findById(job._id).populate([
+    ...jobPopulate,
+    {
+      path: 'order',
+      select:
+        'id user author totalAmount deliveryCharge status paymentStatus billingDetails deliveryType isOtpVerified',
+      populate: [{ path: 'user', select: 'phone' }],
+    },
+  ]);
   const sms = await sendDeliveryOtpSms(
     traceId,
-    (populatedJob?.order as any)?.billingDetails?.phoneNumber,
+    getCustomerDeliveryPhone(populatedJob?.order),
     otp
   );
+  const isMock = sms.mock;
 
   return {
     job: populatedJob,
     jobId: job._id,
-    otp,
-    mock: sms.mock,
+    verificationToken: createDeliveryOtpToken(job._id.toString()),
+    otp: isMock ? otp : null,
+    mock: isMock,
   };
 };
 
@@ -374,6 +430,12 @@ const verifyDeliveryOtp = async (
   if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
   assertAssignedRider(traceId, job, riderId);
   assertJobStatusIn(traceId, job, [JOB_STATUS.otp_sent], 'OTP is not ready for verification');
+  if (payload.verificationToken) {
+    const decoded = verifyDeliveryOtpToken(payload.verificationToken, traceId);
+    if (decoded.jobId !== job._id.toString()) {
+      throw new ApiError(HttpStatusCode.BadRequest, 'Invalid OTP verification token', traceId);
+    }
+  }
   const storedOtp = await getDeliveryOtpFromRedis(job._id.toString());
   if (!storedOtp) {
     throw new ApiError(HttpStatusCode.BadRequest, 'Delivery OTP has expired', traceId);
@@ -421,7 +483,9 @@ const deliveredJob = async (
     await session.commitTransaction();
     await RiderAvailabilitySocketHelper.setActiveJob(riderId, null);
 
-    return Job.findById(job._id).populate(jobPopulate);
+    const delivered = await Job.findById(job._id).populate(jobPopulate);
+    await notifyOrderUser(delivered?.order as any, 'delivered');
+    return delivered;
   } catch (error) {
     await session.abortTransaction();
     throw error;
@@ -436,14 +500,6 @@ const riderLocationUpdate = async (
   riderId: string,
   payload: TRiderLocationUpdatePayload
 ) => {
-  let activeJob = payload.jobId ?? null;
-  if (payload.jobId) {
-    const job = await Job.findById(payload.jobId);
-    if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
-    assertAssignedRider(traceId, job, riderId);
-    activeJob = payload.jobId;
-  }
-
   const geo = normalizeRiderGeo(payload);
   if (!geo) {
     throw new ApiError(
@@ -453,17 +509,46 @@ const riderLocationUpdate = async (
     );
   }
 
+  let job = payload.jobId
+    ? await Job.findById(payload.jobId).select('order rider status').lean()
+    : null;
+  if (payload.jobId) {
+    if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
+    assertAssignedRider(traceId, job, riderId);
+  }
+
   const availability = await RiderAvailabilitySocketHelper.updateLocation(riderId, {
     latitude: geo.latitude,
     longitude: geo.longitude,
     heading: geo.heading,
-    activeJob: activeJob ?? undefined,
+    activeJob: job?._id.toString() ?? undefined,
   });
 
+  if (!job) {
+    const jobId = availability?.activeJob || null;
+    job = jobId
+      ? await Job.findById(jobId).select('order rider status').lean()
+      : await Job.findOne({
+          rider: riderId,
+          status: { $nin: [JOB_STATUS.delivered, JOB_STATUS.cancelled] },
+        })
+          .select('order rider status')
+          .lean();
+  }
+
+  const heading = Number.isFinite(Number(geo.heading)) ? Number(geo.heading) : 0;
+  const speed = Number.isFinite(Number(payload.speed)) ? Number(payload.speed) : 0;
+
   return {
-    jobId: activeJob || availability?.activeJob || null,
+    jobId: job?._id.toString() ?? null,
+    orderId: job?.order?.toString() ?? null,
     riderId,
     availability,
+    lat: geo.latitude,
+    lng: geo.longitude,
+    speed,
+    heading,
+    encodedRoute: typeof payload.encodedRoute === 'string' ? payload.encodedRoute : '',
   };
 };
 
@@ -471,7 +556,7 @@ const riderLocationUpdate = async (
 const getCurrentRiderJobs = async (riderId: string, query: Record<string, unknown>) => {
   const jobQuery = new QueryBuilder(
     Job.find({
-      status: { $nin: [JOB_STATUS.delivered, JOB_STATUS.rejected, JOB_STATUS.cancelled] },
+      status: { $nin: [JOB_STATUS.delivered, JOB_STATUS.cancelled] },
       $or: [{ rider: riderId }, { rider: null, requestedRider: riderId }],
     })
       .populate(jobPopulate)
@@ -492,7 +577,7 @@ const getRiderHistory = async (riderId: string, query: Record<string, unknown>) 
   const jobQuery = new QueryBuilder(
     Job.find({
       rider: riderId,
-      status: { $in: [JOB_STATUS.delivered, JOB_STATUS.rejected, JOB_STATUS.cancelled] },
+      status: { $in: [JOB_STATUS.delivered, JOB_STATUS.cancelled] },
     })
       .populate(jobPopulate)
       .select('-__v')
@@ -610,7 +695,7 @@ const startJobMatching = async (traceId: string, orderId: string) => {
       ...locationFields,
       ...moneyFields,
       hasDeliveryOtpVerified: false,
-      status: JOB_STATUS.assigned,
+      status: JOB_STATUS.matching,
       acceptedAt: null,
       pickedUpAt: null,
       onTheWayAt: null,
@@ -664,7 +749,12 @@ async function exhaustMatching(jobId: string) {
 
 async function applyMatchRound(traceId: string, jobId: string) {
   const job = await Job.findById(jobId);
-  if (!job || job.rider || !job.matchingEnabled || job.status !== JOB_STATUS.assigned) {
+  if (
+    !job ||
+    job.rider ||
+    !job.matchingEnabled ||
+    ![JOB_STATUS.matching, JOB_STATUS.assigned].includes(job.status as any)
+  ) {
     return Job.findById(jobId).populate(jobPopulate);
   }
 
@@ -689,7 +779,7 @@ async function applyMatchRound(traceId: string, jobId: string) {
       _id: jobId,
       rider: null,
       matchingEnabled: true,
-      status: JOB_STATUS.assigned,
+      status: { $in: [JOB_STATUS.matching, JOB_STATUS.assigned] },
     },
     {
       requestedRider,
@@ -697,6 +787,7 @@ async function applyMatchRound(traceId: string, jobId: string) {
       matchAttemptCount: (job.matchAttemptCount ?? 0) + 1,
       lastMatchedAt: now,
       nextMatchAt,
+      status: JOB_STATUS.matching,
     },
     { new: true }
   ).populate(jobPopulate);
@@ -720,7 +811,7 @@ const rematchDueJobs = async (traceId = 'cron') => {
   const dueJobs = await Job.find({
     matchingEnabled: true,
     rider: null,
-    status: JOB_STATUS.assigned,
+    status: { $in: [JOB_STATUS.matching, JOB_STATUS.assigned] },
     nextMatchAt: { $lte: new Date() },
   }).select('_id matchAttemptCount order');
 

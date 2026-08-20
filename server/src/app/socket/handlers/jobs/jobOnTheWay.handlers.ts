@@ -5,8 +5,7 @@ import eventHandler from '@/app/socket/utils/eventHandler';
 import { JobSocketActions } from '@/app/socket/utils/jobSocket.actions';
 import {
   assertSocketRole,
-  emitJobToAudience,
-  resolveJobId,
+  notifyJobOrderStatus,
   sendJobAck,
   socketRiderRoles,
 } from '@/app/socket/utils/jobSocket.helpers';
@@ -19,10 +18,8 @@ export const jobOnTheWayHandler = eventHandler<TJobIdSocketPayload>(
       socket.auth._id,
       payload!
     );
-    const jobId = resolveJobId(data);
 
-    await emitJobToAudience(jobId, SOCKET_EMIT.jobOnTheWay, data);
-    await emitJobToAudience(jobId, SOCKET_EMIT.jobUpdated, data);
+    await notifyJobOrderStatus(data, SOCKET_EMIT.jobOnTheWay);
     sendJobAck(callback, {
       success: true,
       status: 200,

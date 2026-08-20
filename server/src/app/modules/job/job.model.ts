@@ -83,7 +83,7 @@ const jobSchema = new Schema<IJob, IJobModel>(
     status: {
       type: String,
       enum: Object.values(JOB_STATUS),
-      default: JOB_STATUS.assigned,
+      default: JOB_STATUS.matching,
       index: true,
     },
     matchAttemptCount: { type: Number, default: 0, min: 0 },
