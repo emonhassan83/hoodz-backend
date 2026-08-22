@@ -35,12 +35,20 @@ export const toNumber = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
-export const toStringArray = (value: unknown) =>
-  Array.isArray(value)
-    ? value.map(String).filter(Boolean)
-    : typeof value === 'string' && value.trim()
-      ? value.split(',').map((item) => item.trim()).filter(Boolean)
-      : [];
+export const toStringArray = (value: unknown): string[] => {
+  if (value == null) return [];
+  const items = Array.isArray(value) ? value : [value];
+  return [
+    ...new Set(
+      items.flatMap((item) =>
+        String(item)
+          .split(',')
+          .map((part) => part.trim())
+          .filter(Boolean)
+      )
+    ),
+  ];
+};
 
 export const isObjectIdString = (value: string) =>
   /^[0-9a-fA-F]{24}$/.test(value);
@@ -62,8 +70,18 @@ export const buildProductListFilter = async (
   const minPrice = toNumber(productQuery.minPrice ?? productQuery.minimumPrice);
   const maxPrice = toNumber(productQuery.maxPrice ?? productQuery.maximumPrice);
   const brandTypes = toStringArray(productQuery.brandType);
-  const colors = toStringArray(productQuery.color);
-  const sizes = toStringArray(productQuery.size);
+  const colors = [
+    ...new Set([
+      ...toStringArray(productQuery.colors),
+      ...toStringArray(productQuery.color),
+    ]),
+  ];
+  const sizes = [
+    ...new Set([
+      ...toStringArray(productQuery.sizes),
+      ...toStringArray(productQuery.size),
+    ]),
+  ];
   const collectionTypes = toStringArray(
     productQuery.gender ?? productQuery.collectionType
   ).filter((value) => value.toLowerCase() !== 'all');

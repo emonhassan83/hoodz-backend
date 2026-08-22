@@ -244,14 +244,15 @@ const getTrendingProducts = async (
   userId?: string
 ) => {
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `trending:${userId ?? 'anonymous'}:cards:v3:${JSON.stringify(query)}`
+    `trending:${userId ?? 'anonymous'}:cards:v4:${JSON.stringify(query)}`
   );
   const cached = await getCache<TProductListResponse>(cacheKey);
   if (cached) return cached;
 
+  const listFilter = await buildProductListFilter(query as TProductFilterQuery);
   const trendingQuery = new QueryBuilder(
     Product.find({
-      isDeleted: false,
+      ...listFilter,
       $or: [
         { avgRating: { $gt: 0 } },
         { ratingCount: { $gt: 0 } },
@@ -335,12 +336,13 @@ const getAiRecommendedProducts = async (
 ) => {
   const actorKey = getProductActorKey(actor);
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `ai-recommended:${actorKey}:cards:v2:${JSON.stringify(query)}`
+    `ai-recommended:${actorKey}:cards:v3:${JSON.stringify(query)}`
   );
   const cached = await getCache<TProductListResponse>(cacheKey);
   if (cached) return cached;
 
   const { page, limit, skip } = getPagination(query);
+  const listFilter = await buildProductListFilter(query as TProductFilterQuery);
   const [
     wishlistSignals,
     cartProductIds,
@@ -382,7 +384,7 @@ const getAiRecommendedProducts = async (
       .filter(Boolean)
   );
 
-  const recommendationFilter: Record<string, unknown> = { isDeleted: false };
+  const recommendationFilter: Record<string, unknown> = { ...listFilter };
   const orFilters: Record<string, unknown>[] = [];
   if (categoryIds.size > 0) orFilters.push({ category: { $in: [...categoryIds] } });
   if (followedVendorIds.size > 0) {

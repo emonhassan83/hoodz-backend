@@ -96,23 +96,26 @@ const getSingleUser = async (traceId: string, userId: string) => {
     return { ...user, coins: coinSummary.balance, ...supportFlags };
   }
 
-  const [kyc, completedDeliveries, coinSummary, supportFlags] = await Promise.all([
-    Kyc.findOne({ user: user._id })
-      .select('-user -rejectedReason -updatedAt -__v')
-      .lean(),
-    Job.countDocuments({
-      rider: user._id,
-      status: JOB_STATUS.delivered,
-    }),
-    CoinService.getSummary(userId),
-    getUserSupportFlags(userId),
-  ]);
+  const [kyc, completedDeliveries, coinSummary, supportFlags, riderSecurity] =
+    await Promise.all([
+      Kyc.findOne({ user: user._id })
+        .select('-user -rejectedReason -updatedAt -__v')
+        .lean(),
+      Job.countDocuments({
+        rider: user._id,
+        status: JOB_STATUS.delivered,
+      }),
+      CoinService.getSummary(userId),
+      getUserSupportFlags(userId),
+      User.findById(userId).select('+securityCode').lean(),
+    ]);
   return {
     ...user,
-    kyc,
+    hasSetSecurityCode: Boolean(riderSecurity?.securityCode),
+    ...supportFlags,
     completedDeliveries,
     coins: coinSummary.balance,
-    ...supportFlags,
+    kyc,
   };
 };
 

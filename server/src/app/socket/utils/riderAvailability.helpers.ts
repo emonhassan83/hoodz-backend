@@ -428,6 +428,7 @@ const findOnlineRidersNearShop = async (
         name: 1,
         email: 1,
         phone: 1,
+        profileAvatar: 1,
         avgRating: 1,
         ratingCount: 1,
         distance: {

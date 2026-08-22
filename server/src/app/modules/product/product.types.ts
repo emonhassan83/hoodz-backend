@@ -75,7 +75,9 @@ export type TProductFilterQuery = {
   vendor?: string | string[];
   vendorId?: string | string[];
   color?: string | string[];
+  colors?: string | string[];
   size?: string | string[];
+  sizes?: string | string[];
   collectionType?: string | string[];
   gender?: string | string[];
   minPrice?: string | number;
