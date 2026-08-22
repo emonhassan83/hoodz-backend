@@ -64,6 +64,14 @@ export const emitToUserIds = (userIds: string[], event: string, payload: unknown
   [...new Set(userIds.filter(Boolean))].forEach((userId) => io.to(userId).emit(event, payload));
 };
 
+/** Emits to every socket that joined a role room on connect. */
+export const emitToRoles = (roles: string[], event: string, payload: unknown) => {
+  const io = getIO();
+  [...new Set(roles.filter(Boolean))].forEach((role) =>
+    io.to(`role:${role}`).emit(event, payload)
+  );
+};
+
 /** Returns job id from a populated or plain job result. */
 export const resolveJobId = (job: unknown) => String((job as IJob)?._id ?? '');
 

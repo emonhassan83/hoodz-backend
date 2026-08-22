@@ -29,6 +29,7 @@ export interface IOrders {
   confirmedAt?: Date | null;
   processedAt?: Date | null;
   isOtpVerified: boolean;
+  isStockDeducted: boolean;
   isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;

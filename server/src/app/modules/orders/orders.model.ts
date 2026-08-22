@@ -101,6 +101,11 @@ const ordersSchema = new Schema<IOrders, IOrdersModel>(
       type: Boolean,
       default: false,
     },
+    isStockDeducted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     isDeleted: {
       type: Boolean,
       default: false,

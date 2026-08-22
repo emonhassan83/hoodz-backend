@@ -54,7 +54,7 @@ const getAll = asyncHandler(async (req: Request, res: Response) => {
 
 const getMy = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const result = await DepositService.getMy(req.user.userId, req.query);
+  const result = await DepositService.getMyDeposits(req.user.userId, req.query);
 
   sendResponse(res, {
     success: true,

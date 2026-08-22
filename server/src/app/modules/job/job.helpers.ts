@@ -26,7 +26,6 @@ import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import { RiderAvailabilitySocketHelper } from '@/app/socket/utils/riderAvailability.helpers';
 import { sendBatchNotificationViaQueue } from '@/app/utils/notification-queue.service';
-import mongoose from 'mongoose';
 
 /** Returns a random 6-digit delivery OTP. */
 export const generateDeliveryOtp = () =>
@@ -187,7 +186,7 @@ export const assertAssignedRider = (
 /** Allows assigned rider, or a requested rider while the job is still unmatched. */
 export const assertRequestedOrAssignedRider = (
   traceId: string,
-  job: Pick<IJob, 'rider' | 'requestedRider'>,
+  job: Pick<IJob, 'rider' | 'requestedRider' | 'offeredRider'>,
   riderId: string
 ) => {
   if (job.rider) {
@@ -195,10 +194,10 @@ export const assertRequestedOrAssignedRider = (
     return;
   }
 
-  const isRequested = (job.requestedRider ?? []).some(
+  const isOffered = [...(job.requestedRider ?? []), ...(job.offeredRider ?? [])].some(
     (rider) => rider.toString() === riderId
   );
-  if (!isRequested) {
+  if (!isOffered) {
     throw new ApiError(HttpStatusCode.Forbidden, 'This job is not offered to you', traceId);
   }
 };
@@ -281,6 +280,42 @@ export const buildJobMoneyFields = (
   earning: Number((deliveryCharge || 0).toFixed(2)),
 });
 
+const toLngLat = (point?: { coordinates?: number[] }) => {
+  const [longitude, latitude] = point?.coordinates ?? [];
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    (latitude === 0 && longitude === 0)
+  ) {
+    return null;
+  }
+  return { latitude, longitude };
+};
+
+/** Driving distance in km from pickup to destination via Google Distance Matrix. */
+export const getPickupToDestinationDistanceKm = async (
+  pickup?: { coordinates?: number[] },
+  destination?: { coordinates?: number[] }
+) => {
+  const origin = toLngLat(pickup);
+  const target = toLngLat(destination);
+  if (!origin || !target) return null;
+
+  try {
+    const { getGoogleDistanceMatrix } = await import(
+      '@/app/modules/user/user.helpers'
+    );
+    const [element] = await getGoogleDistanceMatrix(origin, [target]);
+    if (element?.status === 'OK' && element.distance?.value !== undefined) {
+      return Number((element.distance.value / 1000).toFixed(2));
+    }
+  } catch (error) {
+    console.warn('[Job] Google pickup-destination distance failed:', error);
+  }
+
+  return null;
+};
+
 /** Builds pickup/destination snapshots from shop location and order delivery point. */
 export const buildJobLocations = (order: any) => {
   const vendor = order.author;
@@ -308,6 +343,51 @@ export const buildJobLocations = (order: any) => {
   };
 };
 
+export const buildJobLocationFields = async (order: any) => {
+  const locations = buildJobLocations(order);
+  return {
+    ...locations,
+    distance: await getPickupToDestinationDistanceKm(
+      locations.pickup,
+      locations.destination
+    ),
+  };
+};
+
+const JOB_LIST_CARD_FIELDS =
+  '_id id deliveryType destination earning pickup status createdAt distance';
+
+/** Maps jobs into rider list-card payloads and backfills missing Google distances. */
+export const mapJobsToListCards = async (jobs: Array<Record<string, any>>) => {
+  const jobsWithDistance = await Promise.all(
+    jobs.map(async (job) => {
+      if (job.distance != null) return job;
+      const distance = await getPickupToDestinationDistanceKm(
+        job.pickup,
+        job.destination
+      );
+      if (distance != null) {
+        await Job.updateOne({ _id: job._id }, { distance }).catch(() => undefined);
+      }
+      return { ...job, distance };
+    })
+  );
+
+  return jobsWithDistance.map((job) => ({
+    _id: job._id,
+    deliveryType: job.deliveryType,
+    destination: job.destination,
+    earning: job.earning,
+    distance: job.distance ?? null,
+    id: job.id,
+    pickup: job.pickup,
+    status: job.status,
+    createdAt: job.createdAt,
+  }));
+};
+
+export const jobListCardSelect = JOB_LIST_CARD_FIELDS;
+
 /** Returns true when a job can be replaced by a new assignment. */
 export const isReassignableJob = (status: string) =>
   [JOB_STATUS.matching, JOB_STATUS.assigned, JOB_STATUS.cancelled].includes(
@@ -331,51 +411,67 @@ export const getRiderMatchSettings = async () => {
   return { intervalSeconds, maxAttempts };
 };
 
-/** Collects unique nearby online riders around shop coordinates. */
-export const collectNearbyRequestedRiders = async (
+/** Expanding search radius for this match attempt (phase 1 = closest). */
+export const getMatchPhaseRadiusKm = (attempt: number) => {
+  const phaseIndex = Math.min(
+    Math.max(attempt, 1) - 1,
+    JOB_MATCH_RADIUS_KM.length - 1
+  );
+  return JOB_MATCH_RADIUS_KM[phaseIndex];
+};
+
+/** Collects only new nearby riders for the current match phase. */
+export const collectPhaseRequestedRiders = async (
   latitude: number,
-  longitude: number
+  longitude: number,
+  attempt: number,
+  excludeRiderIds: string[] = []
 ) => {
-  const seenRiderIds = new Set<string>();
-  const requestedRider: mongoose.Types.ObjectId[] = [];
+  const exclude = new Set(excludeRiderIds);
+  const nearbyRiders = await RiderAvailabilitySocketHelper.findOnlineRiders(
+    latitude,
+    longitude,
+    getMatchPhaseRadiusKm(attempt),
+    200
+  );
 
-  for (const radiusKm of JOB_MATCH_RADIUS_KM) {
-    const nearbyRiders = await RiderAvailabilitySocketHelper.findOnlineRiders(
-      latitude,
-      longitude,
-      radiusKm,
-      200
-    );
-    nearbyRiders.forEach((item) => {
+  return nearbyRiders
+    .filter((item) => {
       const riderId = item.rider?._id?.toString();
-      if (!riderId || seenRiderIds.has(riderId)) return;
-      seenRiderIds.add(riderId);
-      requestedRider.push(item.rider!._id);
-    });
-  }
-
-  return requestedRider;
+      return Boolean(riderId && !exclude.has(riderId));
+    })
+    .map((item) => item.rider!._id);
 };
 
 const getSocketIO = () =>
   (require('../../socket/socket.init') as typeof import('@/app/socket/socket.init')).getIO();
 
 /** Emits job:new-request and queues rider push notifications. */
-export const notifyJobOffer = async (job: any, riderIds: string[]) => {
+export const notifyJobOffer = async (
+  job: any,
+  riderIds: string[],
+  options?: { attempt?: number; maxAttempts?: number }
+) => {
   if (!riderIds.length) return;
+  const attempt = options?.attempt ?? job.matchAttemptCount ?? 1;
+  const maxAttempts = options?.maxAttempts;
+  const isRematch = attempt > 1;
   const io = getSocketIO();
   riderIds.forEach((riderId) => io.to(riderId).emit(SOCKET_EMIT.jobNewRequest, job));
   await sendBatchNotificationViaQueue({
     userIds: riderIds,
     channel: 'both',
-    title: 'New delivery nearby',
-    message: 'A nearby order is waiting for a rider. Open the app to accept.',
+    title: isRematch ? 'Delivery still waiting' : 'New delivery nearby',
+    message: isRematch
+      ? `Still unassigned. Offer ${attempt}${maxAttempts ? ` of ${maxAttempts}` : ''} — accept if available.`
+      : 'A nearby order is waiting for a rider. Open the app to accept.',
     data: {
       modelType: NOTIFICATION_MODEL_TYPE.Job,
       reference: job._id?.toString?.(),
       jobId: job._id?.toString?.(),
       orderId: toIdString(job.order),
-      notice: 'new-request',
+      notice: isRematch ? 'rematch' : 'new-request',
+      matchAttempt: String(attempt),
     },
   }).catch((error) => {
     console.warn('[Job] Failed to queue rider offer notifications', error);
@@ -401,6 +497,13 @@ export const notifyOtherRidersJobTaken = async (job: any, riderIds: string[]) =>
   });
 };
 
+/** Emits job:assigned to the rider who received a manual assignment. */
+export const notifyJobAssignedToRider = async (job: any, riderId: string) => {
+  if (!riderId) return;
+  const io = getSocketIO();
+  io.to(riderId).emit(SOCKET_EMIT.jobAssigned, job);
+};
+
 /** Emits job:rider-assigned to the customer only. */
 export const notifyJobRiderAssigned = async (job: any, _extraRiderIds: string[] = []) => {
   const io = getSocketIO();
@@ -410,35 +513,46 @@ export const notifyJobRiderAssigned = async (job: any, _extraRiderIds: string[] 
   io.to(userId).emit(SOCKET_EMIT.jobRiderAssigned, job);
 };
 
-/** Notifies agents that auto-matching stopped and they should assign manually. */
+/** Notifies connected agents/admins that auto-matching stopped. */
 export const notifyMatchingExhausted = async (job: any) => {
-  const agents = await User.find({
-    role: USER_ROLE.agent,
-    status: USER_STATUS.active,
-    isDeleted: false,
-  })
-    .select('_id')
-    .lean();
-  const agentIds = agents.map((agent) => agent._id.toString());
-  if (!agentIds.length) return;
+  const payload = JSON.parse(JSON.stringify(job));
+  try {
+    const { emitToRoles, emitToUserIds } = require('../../socket/utils/jobSocket.helpers') as typeof import('@/app/socket/utils/jobSocket.helpers');
+    emitToRoles(
+      [USER_ROLE.agent, USER_ROLE.admin],
+      SOCKET_EMIT.jobMatchingExhausted,
+      payload
+    );
 
-  const io = getSocketIO();
-  agentIds.forEach((agentId) => io.to(agentId).emit(SOCKET_EMIT.jobMatchingExhausted, job));
-  await sendBatchNotificationViaQueue({
-    userIds: agentIds,
-    channel: 'both',
-    title: 'Rider matching failed',
-    message: 'No rider accepted this job. Assign a rider manually.',
-    data: {
-      modelType: NOTIFICATION_MODEL_TYPE.Job,
-      reference: job._id?.toString?.(),
-      jobId: job._id?.toString?.(),
-      orderId: toIdString(job.order),
-      notice: 'matching-exhausted',
-    },
-  }).catch((error) => {
-    console.warn('[Job] Failed to queue matching-exhausted notifications', error);
-  });
+    const staff = await User.find({
+      role: { $in: [USER_ROLE.agent, USER_ROLE.admin] },
+      isDeleted: { $ne: true },
+    })
+      .select('_id')
+      .lean();
+    const staffIds = staff.map((user) => user._id.toString());
+    emitToUserIds(staffIds, SOCKET_EMIT.jobMatchingExhausted, payload);
+
+    if (staffIds.length) {
+      await sendBatchNotificationViaQueue({
+        userIds: staffIds,
+        channel: 'both',
+        title: 'Rider matching failed',
+        message: 'No rider accepted this job. Assign a rider manually.',
+        data: {
+          modelType: NOTIFICATION_MODEL_TYPE.Job,
+          reference: job._id?.toString?.(),
+          jobId: job._id?.toString?.(),
+          orderId: toIdString(job.order),
+          notice: 'matching-exhausted',
+        },
+      }).catch((error) => {
+        console.warn('[Job] Failed to queue matching-exhausted notifications', error);
+      });
+    }
+  } catch (error) {
+    console.warn('[Job] Failed to emit matching-exhausted', error);
+  }
 };
 
 /** Stops auto matching for an order job. */

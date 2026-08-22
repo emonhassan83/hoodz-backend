@@ -3,6 +3,7 @@ import { Schema, model } from 'mongoose';
 import {
   DELIVERY_TYPE,
   JOB_ASSIGNMENT_TYPE,
+  JOB_DEPOSIT_STATUS,
   JOB_PAYMENT_METHOD,
   JOB_STATUS,
 } from '@/app/modules/job/job.constant';
@@ -53,6 +54,24 @@ const jobSchema = new Schema<IJob, IJobModel>(
       default: [],
       index: true,
     },
+    declinedRider: {
+      type: [
+        {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+        },
+      ],
+      default: [],
+    },
+    offeredRider: {
+      type: [
+        {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+        },
+      ],
+      default: [],
+    },
     assignedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -77,8 +96,15 @@ const jobSchema = new Schema<IJob, IJobModel>(
     },
     pickup: { type: jobPointSchema, required: true },
     destination: { type: jobPointSchema, required: true },
+    distance: { type: Number, default: null, min: 0 },
     collectedMoney: { type: Number, default: 0, min: 0 },
     earning: { type: Number, default: 0, min: 0 },
+    depositStatus: {
+      type: String,
+      enum: Object.values(JOB_DEPOSIT_STATUS),
+      default: JOB_DEPOSIT_STATUS.not_required,
+      index: true,
+    },
     hasDeliveryOtpVerified: { type: Boolean, default: false },
     status: {
       type: String,

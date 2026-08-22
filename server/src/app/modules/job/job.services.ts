@@ -6,6 +6,7 @@ import ApiError from '@/app/errors/ApiError';
 import {
   JOB_ACTIVE_STATUSES,
   JOB_ASSIGNMENT_TYPE,
+  JOB_DEPOSIT_STATUS,
   JOB_PAYMENT_METHOD,
   JOB_STATUS,
 } from '@/app/modules/job/job.constant';
@@ -15,9 +16,9 @@ import {
   assertJobAccess,
   assertJobStatusIn,
   assertRequestedOrAssignedRider,
-  buildJobLocations,
+  buildJobLocationFields,
   buildJobMoneyFields,
-  collectNearbyRequestedRiders,
+  collectPhaseRequestedRiders,
   compareDeliveryOtp,
   createDeliveryOtpToken,
   deleteDeliveryOtpFromRedis,
@@ -29,6 +30,9 @@ import {
   getRiderMatchSettings,
   hashDeliveryOtp,
   isReassignableJob,
+  jobListCardSelect,
+  mapJobsToListCards,
+  notifyJobAssignedToRider,
   notifyJobOffer,
   notifyJobRequestCancelled,
   notifyJobRiderAssigned,
@@ -54,10 +58,31 @@ import { notifyOrderUser } from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { Payment } from '@/app/modules/payment/payment.model';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
+import { User } from '@/app/modules/user/user.model';
 import {
   RiderAvailabilitySocketHelper,
   normalizeRiderGeo,
 } from '@/app/socket/utils/riderAvailability.helpers';
+
+const toRiderObjectId = (riderId: string) => new mongoose.Types.ObjectId(riderId);
+
+const toObjectIdList = (ids: string[]) =>
+  ids.filter(Boolean).map((id) => new mongoose.Types.ObjectId(id));
+
+/** Pending unmatched offers for a rider. Assigned jobs belong in my-jobs. */
+const riderRequestJobFilter = (riderId: string) => {
+  const riderObjectId = toRiderObjectId(riderId);
+  return {
+    status: JOB_STATUS.matching,
+    rider: null,
+    $or: [
+      { requestedRider: riderObjectId },
+      { requestedRider: riderId },
+      { offeredRider: riderObjectId },
+      { offeredRider: riderId },
+    ],
+  };
+};
 
 const jobPopulate = [
   {
@@ -160,7 +185,7 @@ const assignJob = async (
     order.totalAmount,
     order.deliveryCharge
   );
-  const locationFields = buildJobLocations(order);
+  const locationFields = await buildJobLocationFields(order);
   const assignmentType =
     payload.assignmentType ??
     (requester.role === USER_ROLE.admin
@@ -169,9 +194,12 @@ const assignJob = async (
         ? JOB_ASSIGNMENT_TYPE.agent
         : JOB_ASSIGNMENT_TYPE.vendor);
 
-  const previousRiderIds = (existingJob?.requestedRider ?? []).map((rider) =>
-    rider.toString()
-  );
+  const previousRiderIds = [
+    ...new Set([
+      ...(existingJob?.requestedRider ?? []).map((rider) => rider.toString()),
+      ...(existingJob?.offeredRider ?? []).map((rider) => rider.toString()),
+    ]),
+  ];
   const orderUserId = (order.user as any)?._id ?? order.user ?? null;
 
   const job = await Job.findOneAndUpdate(
@@ -181,6 +209,8 @@ const assignJob = async (
       user: orderUserId,
       rider: payload.riderId,
       requestedRider: [],
+      offeredRider: [],
+      declinedRider: [],
       assignedBy:
         assignmentType === JOB_ASSIGNMENT_TYPE.auto ? null : requester.userId,
       assignmentType,
@@ -209,8 +239,9 @@ const assignJob = async (
 
   const assignedJob = await Job.findById(job!._id).populate(jobPopulate);
   const leftoverRiders = previousRiderIds.filter((id) => id !== payload.riderId);
-  await notifyJobRequestCancelled(assignedJob, leftoverRiders);
-  await notifyJobRiderAssigned(assignedJob, leftoverRiders);
+  await notifyOtherRidersJobTaken(assignedJob, leftoverRiders);
+  await notifyJobAssignedToRider(assignedJob, payload.riderId);
+  await notifyJobRiderAssigned(assignedJob);
   await notifyOrderUser(assignedJob?.order as any, 'rider_assigned');
 
   return assignedJob;
@@ -244,11 +275,13 @@ const acceptJob = async (
           _id: job._id,
           rider: null,
           status: { $in: [JOB_STATUS.matching, JOB_STATUS.assigned] },
-          requestedRider: riderId,
+          $or: [{ requestedRider: riderId }, { offeredRider: riderId }],
         },
     {
       rider: riderId,
       requestedRider: [],
+      offeredRider: [],
+      declinedRider: [],
       status: JOB_STATUS.accepted,
       acceptedAt: new Date(),
       matchingEnabled: false,
@@ -297,12 +330,16 @@ const rejectJob = async (
     wasAssignedRider
       ? {
           $pull: { requestedRider: riderId },
+          $addToSet: { declinedRider: riderId },
           rider: null,
           status: JOB_STATUS.matching,
           matchingEnabled: true,
           rejectionReason: payload.reason ?? null,
         }
-      : { $pull: { requestedRider: riderId } }
+      : {
+          $pull: { requestedRider: riderId },
+          $addToSet: { declinedRider: riderId },
+        }
   );
 
   if (wasAssignedRider) {
@@ -334,10 +371,11 @@ const pickupJob = async (traceId: string, riderId: string, payload: TJobIdPayloa
   assertJobStatusIn(
     traceId,
     job,
-    [JOB_STATUS.accepted],
+    [JOB_STATUS.assigned, JOB_STATUS.accepted],
     'Job cannot be picked up now'
   );
 
+  if (!job.acceptedAt) job.acceptedAt = new Date();
   job.status = JOB_STATUS.picked_up;
   job.pickedUpAt = new Date();
   await job.save();
@@ -464,6 +502,19 @@ const deliveredJob = async (
 
     job.status = JOB_STATUS.delivered;
     job.completedAt = new Date();
+    if (job.paymentMethod === JOB_PAYMENT_METHOD.cod) {
+      job.collectedMoney = Number((order.totalAmount ?? 0).toFixed(2));
+      job.depositStatus = JOB_DEPOSIT_STATUS.pending;
+    } else {
+      const earning = Number((job.earning ?? 0).toFixed(2));
+      if (earning > 0) {
+        await User.findByIdAndUpdate(
+          riderId,
+          { $inc: { balance: earning } },
+          { session }
+        );
+      }
+    }
     await job.save({ session });
 
     order.status = ORDER_STATUS.delivered;
@@ -544,21 +595,14 @@ const riderLocationUpdate = async (
 /** Returns matching jobs where this rider is in requestedRider. */
 const myRequestJobs = async (riderId: string, query: Record<string, unknown>) => {
   const jobQuery = new QueryBuilder(
-    Job.find({
-      status: JOB_STATUS.matching,
-      requestedRider: riderId,
-    })
-      .populate(jobPopulate)
-      .select('-__v')
-      .lean(),
+    Job.find(riderRequestJobFilter(riderId)).select(jobListCardSelect).lean(),
     query
   )
     .sort()
-    .paginate()
-    .fields();
+    .paginate();
 
-  const [data, meta] = await Promise.all([jobQuery.modelQuery, jobQuery.countTotal()]);
-  return { meta, data };
+  const [jobs, meta] = await Promise.all([jobQuery.modelQuery, jobQuery.countTotal()]);
+  return { meta, data: await mapJobsToListCards(jobs) };
 };
 
 /** Returns the rider's assigned jobs, filtered as active or completed. */
@@ -568,22 +612,21 @@ const getMyJobs = async (riderId: string, query: Record<string, unknown>) => {
       ? { rider: riderId, status: JOB_STATUS.delivered }
       : {
           rider: riderId,
-          status: { $in: [...JOB_ACTIVE_STATUSES] },
+          status: { $in: [JOB_STATUS.assigned, ...JOB_ACTIVE_STATUSES] },
         };
 
   const restQuery = { ...query };
   delete restQuery.filter;
 
   const jobQuery = new QueryBuilder(
-    Job.find(filter).populate(jobPopulate).select('-__v').lean(),
+    Job.find(filter).select(jobListCardSelect).lean(),
     restQuery
   )
     .sort()
-    .paginate()
-    .fields();
+    .paginate();
 
-  const [data, meta] = await Promise.all([jobQuery.modelQuery, jobQuery.countTotal()]);
-  return { meta, data };
+  const [jobs, meta] = await Promise.all([jobQuery.modelQuery, jobQuery.countTotal()]);
+  return { meta, data: await mapJobsToListCards(jobs) };
 };
 
 /** Returns every job for a rider. Used by agents. */
@@ -592,8 +635,7 @@ const getRiderJobs = async (riderId: string, query: Record<string, unknown>) => 
     Job.find({
       $or: [{ rider: riderId }, { requestedRider: riderId }],
     })
-      .populate(jobPopulate)
-      .select('-__v')
+      .select(jobListCardSelect)
       .lean(),
     query
   )
@@ -602,8 +644,8 @@ const getRiderJobs = async (riderId: string, query: Record<string, unknown>) => 
     .paginate()
     .fields();
 
-  const [data, meta] = await Promise.all([jobQuery.modelQuery, jobQuery.countTotal()]);
-  return { meta, data };
+  const [jobs, meta] = await Promise.all([jobQuery.modelQuery, jobQuery.countTotal()]);
+  return { meta, data: await mapJobsToListCards(jobs) };
 };
 
 /** Returns one job after role-based access check. */
@@ -668,7 +710,7 @@ const startJobMatching = async (traceId: string, orderId: string) => {
     order.totalAmount,
     order.deliveryCharge
   );
-  const locationFields = buildJobLocations(order);
+  const locationFields = await buildJobLocationFields(order);
   const orderUserId = (order.user as any)?._id ?? order.user ?? null;
 
   const job = await Job.findOneAndUpdate(
@@ -678,6 +720,8 @@ const startJobMatching = async (traceId: string, orderId: string) => {
       user: orderUserId,
       rider: null,
       requestedRider: existingJob?.requestedRider ?? [],
+      declinedRider: existingJob?.declinedRider ?? [],
+      offeredRider: existingJob?.offeredRider ?? [],
       assignedBy: null,
       assignmentType: JOB_ASSIGNMENT_TYPE.auto,
       paymentMethod,
@@ -761,8 +805,27 @@ async function applyMatchRound(traceId: string, jobId: string) {
   }
 
   const { latitude, longitude } = assertShopAndDeliveryLocations(traceId, order);
-  const previousRiderIds = (job.requestedRider ?? []).map((rider) => rider.toString());
-  const requestedRider = await collectNearbyRequestedRiders(latitude, longitude);
+  const pendingRiderIds = (job.requestedRider ?? []).map((rider) => rider.toString());
+  const declinedRiderIds = (job.declinedRider ?? []).map((rider) => rider.toString());
+  const offeredRiderIds = (job.offeredRider ?? []).map((rider) => rider.toString());
+  const nextAttempt = (job.matchAttemptCount ?? 0) + 1;
+  const phaseRiders = await collectPhaseRequestedRiders(
+    latitude,
+    longitude,
+    nextAttempt,
+    [...new Set([...offeredRiderIds, ...declinedRiderIds])]
+  );
+  const newRiderIds = phaseRiders.map((rider) => rider.toString());
+  const requestedRiderIds = [
+    ...new Set([
+      ...offeredRiderIds.filter((id) => !declinedRiderIds.includes(id)),
+      ...pendingRiderIds.filter((id) => !declinedRiderIds.includes(id)),
+      ...newRiderIds,
+    ]),
+  ];
+  const offeredRiderIdsNext = [
+    ...new Set([...offeredRiderIds, ...newRiderIds]),
+  ];
   const now = new Date();
   const nextMatchAt = new Date(now.getTime() + settings.intervalSeconds * 1000);
 
@@ -771,12 +834,14 @@ async function applyMatchRound(traceId: string, jobId: string) {
       _id: jobId,
       rider: null,
       matchingEnabled: true,
+      matchAttemptCount: job.matchAttemptCount ?? 0,
       status: { $in: [JOB_STATUS.matching, JOB_STATUS.assigned] },
     },
     {
-      requestedRider,
+      requestedRider: toObjectIdList(requestedRiderIds),
+      offeredRider: toObjectIdList(offeredRiderIdsNext),
       user: (order.user as any)?._id ?? order.user ?? job.user,
-      matchAttemptCount: (job.matchAttemptCount ?? 0) + 1,
+      matchAttemptCount: nextAttempt,
       lastMatchedAt: now,
       nextMatchAt,
       status: JOB_STATUS.matching,
@@ -786,10 +851,10 @@ async function applyMatchRound(traceId: string, jobId: string) {
 
   if (!updated) return Job.findById(jobId).populate(jobPopulate);
 
-  const newRiderIds = requestedRider.map((rider) => rider.toString());
-  const droppedRiderIds = previousRiderIds.filter((id) => !newRiderIds.includes(id));
-  await notifyJobRequestCancelled(updated, droppedRiderIds);
-  await notifyJobOffer(updated, newRiderIds);
+  await notifyJobOffer(updated, newRiderIds, {
+    attempt: nextAttempt,
+    maxAttempts: settings.maxAttempts,
+  });
   return updated;
 }
 

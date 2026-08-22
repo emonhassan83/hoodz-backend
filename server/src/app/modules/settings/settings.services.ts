@@ -4,9 +4,13 @@ import ApiError from '@/app/errors/ApiError';
 import {
   ADMIN_SETTING_KEYS,
   GENERAL_KEYS,
+  PLATFORM_GENERAL_KEYS,
 } from '@/app/modules/settings/settings.constant';
 import { Setting } from '@/app/modules/settings/settings.model';
-import { TGeneralSettings } from '@/app/modules/settings/settings.types';
+import {
+  TGeneralSettings,
+  TPlatformGeneralSettings,
+} from '@/app/modules/settings/settings.types';
 import {
   deleteCache,
   deleteCachePattern,
@@ -17,9 +21,53 @@ import { REDIS_KEYS } from '@/app/redis/keys';
 
 // ─── Read ──────────────────────────────────────────────────────────────────
 
+const getAdminSettings = async () => {
+  const cacheKey = REDIS_KEYS.SETTINGS_ADMIN;
+  const cached = await getCache<TPlatformGeneralSettings>(cacheKey);
+  const hasCurrentGeneralKeys =
+    cached &&
+    !Array.isArray(cached) &&
+    Object.keys(cached).length === PLATFORM_GENERAL_KEYS.length &&
+    PLATFORM_GENERAL_KEYS.every((key) => Object.hasOwn(cached, key));
+  if (hasCurrentGeneralKeys) return cached;
+
+  const settings = await Setting.find({
+    key: { $in: PLATFORM_GENERAL_KEYS },
+    vendor: null,
+  })
+    .select('key value -_id')
+    .lean();
+
+  const settingsByKey = new Map(
+    settings.map((setting) => [setting.key, setting.value])
+  );
+  const adminSettings = Object.fromEntries(
+    PLATFORM_GENERAL_KEYS.map((key) => [key, settingsByKey.get(key) ?? null])
+  ) as TPlatformGeneralSettings;
+
+  await setCache(cacheKey, adminSettings);
+  return adminSettings;
+};
+
 const getSetting = async (traceId: string, key: string) => {
   if (!key)
     throw new ApiError(HttpStatusCode.BadRequest, 'Key is required', traceId);
+
+  if (key === 'generals') {
+    const cacheKey = REDIS_KEYS.SETTINGS_SINGLE('generals');
+    const cached = await getCache<{
+      key: string;
+      value: TPlatformGeneralSettings;
+    }>(cacheKey);
+    if (cached && Object.keys(cached.value ?? {}).length === PLATFORM_GENERAL_KEYS.length) {
+      return cached;
+    }
+
+    const value = await getAdminSettings();
+    const setting = { key: 'generals', value };
+    await setCache(cacheKey, setting);
+    return setting;
+  }
 
   const cacheKey = REDIS_KEYS.SETTINGS_SINGLE(key);
   const cached = await getCache<any>(cacheKey);
@@ -107,7 +155,18 @@ const createOrUpdate = async (traceId: string, key: string, payload: any) => {
     );
   }
 
-  const settingValue = payload.value ?? payload[key] ?? payload;
+  const settingValue =
+    key === 'fawryAccount'
+      ? payload.value ??
+        payload[key] ??
+        {
+          fawryRefCode: payload.fawryRefCode,
+          fawryMerchantCode: payload.fawryMerchantCode,
+          fawryAccountNumber: payload.fawryAccountNumber,
+          fawryAccountName: payload.fawryAccountName,
+          fawryInstructions: payload.fawryInstructions,
+        }
+      : payload.value ?? payload[key] ?? payload;
   const setting = await Setting.findOneAndUpdate(
     { key, vendor: null },
     { key, value: settingValue, vendor: null },
@@ -117,10 +176,48 @@ const createOrUpdate = async (traceId: string, key: string, payload: any) => {
   // Invalidate single + generals + pattern in parallel
   await Promise.all([
     deleteCache(REDIS_KEYS.SETTINGS_SINGLE(key)),
+    deleteCache(REDIS_KEYS.SETTINGS_SINGLE('generals')),
+    deleteCache(REDIS_KEYS.SETTINGS_ADMIN),
     deleteCachePattern('setting:*'),
   ]);
 
   return setting;
+};
+
+const updateAdminSettings = async (
+  traceId: string,
+  payload: Record<string, unknown>
+) => {
+  const validKeys = PLATFORM_GENERAL_KEYS.filter(
+    (key) => payload[key] !== undefined
+  );
+
+  if (validKeys.length === 0) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'No valid admin setting keys provided',
+      traceId
+    );
+  }
+
+  await Promise.all(
+    validKeys.map((key) =>
+      Setting.findOneAndUpdate(
+        { key, vendor: null },
+        { key, value: payload[key], vendor: null },
+        { upsert: true, returnDocument: 'after' }
+      ).select('key value -_id')
+    )
+  );
+
+  await Promise.all([
+    deleteCache(REDIS_KEYS.SETTINGS_ADMIN),
+    deleteCache(REDIS_KEYS.SETTINGS_SINGLE('generals')),
+    deleteCachePattern('setting:*'),
+    ...validKeys.map((key) => deleteCache(REDIS_KEYS.SETTINGS_SINGLE(key))),
+  ]);
+
+  return getSetting(traceId, 'generals');
 };
 
 const updateGenerals = async (
@@ -173,8 +270,10 @@ export const SettingService = {
   getSetting,
   getNumericSetting,
   getSettingGenerals,
+  getAdminSettings,
   createOrUpdate,
   updateGenerals,
+  updateAdminSettings,
 };
 
 

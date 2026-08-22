@@ -7,7 +7,10 @@ import {
   PAYMENT_STATUS as ORDER_PAYMENT_STATUS,
 } from '@/app/modules/orders/orders.constant';
 import { CoinService } from '@/app/modules/coin/coin.services';
-import { notifyOrdersPaid } from '@/app/modules/orders/orders.helpers';
+import {
+  applyOrderInventoryOrThrow,
+  notifyOrdersPaid,
+} from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { PAYMENT_METHOD, PAYMENT_STATUS } from '@/app/modules/payment/payment.constant';
 import {
@@ -268,6 +271,11 @@ const initiateWalletPayment = async (
       },
       { session }
     );
+    await applyOrderInventoryOrThrow(
+      traceId,
+      orders.map((order) => order._id),
+      session
+    );
 
     await session.commitTransaction();
   } catch (error) {
@@ -303,6 +311,7 @@ const initiateWalletPayment = async (
 
 /** Creates COD payment records and confirms orders without marking them paid. */
 const initiateCodPayment = async (
+  traceId: string,
   userId: string,
   payload: TInitiatePaymentPayload,
   orders: Awaited<ReturnType<typeof getPayableOrdersOrThrow>>['orders']
@@ -324,6 +333,10 @@ const initiateCodPayment = async (
       }
     ),
   ]);
+  await applyOrderInventoryOrThrow(
+    traceId,
+    orders.map((order) => order._id)
+  );
 
   return {
     paymentMethod: PAYMENT_METHOD.cod,
@@ -351,7 +364,7 @@ const initiatePayment = async (
     return initiateWalletPayment(traceId, userId, payload, orders, amount);
   }
 
-  return initiateCodPayment(userId, payload, orders);
+  return initiateCodPayment(traceId, userId, payload, orders);
 };
 
 const confirmPayment = async (

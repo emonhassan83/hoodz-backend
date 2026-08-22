@@ -33,7 +33,8 @@ export const REDIS_KEYS = {
   SETTINGS_SINGLE: (key: string, vendorId = 'platform') =>
     createRedisKey(REDIS_PREFIXES.settings, vendorId, key),
   SETTINGS_GENERALS: (vendorId: string) =>
-    createRedisKey(REDIS_PREFIXES.settings, vendorId, 'generals')
+    createRedisKey(REDIS_PREFIXES.settings, vendorId, 'generals'),
+  SETTINGS_ADMIN: createRedisKey(REDIS_PREFIXES.settings, 'platform', 'admin')
 } as const;
 
 

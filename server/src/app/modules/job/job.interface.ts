@@ -3,6 +3,7 @@ import { Model, Types } from 'mongoose';
 import {
   DELIVERY_TYPE,
   JOB_ASSIGNMENT_TYPE,
+  JOB_DEPOSIT_STATUS,
   JOB_PAYMENT_METHOD,
   JOB_STATUS,
 } from '@/app/modules/job/job.constant';
@@ -14,6 +15,8 @@ export type TJobPaymentMethod =
   (typeof JOB_PAYMENT_METHOD)[keyof typeof JOB_PAYMENT_METHOD];
 export type TJobDeliveryType =
   (typeof DELIVERY_TYPE)[keyof typeof DELIVERY_TYPE];
+export type TJobDepositStatus =
+  (typeof JOB_DEPOSIT_STATUS)[keyof typeof JOB_DEPOSIT_STATUS];
 
 export type TJobPoint = {
   address: string;
@@ -27,14 +30,18 @@ export interface IJob {
   user?: Types.ObjectId | null;
   rider?: Types.ObjectId | null;
   requestedRider: Types.ObjectId[];
+  declinedRider: Types.ObjectId[];
+  offeredRider: Types.ObjectId[];
   assignedBy?: Types.ObjectId | null;
   assignmentType: TJobAssignmentType;
   paymentMethod: TJobPaymentMethod;
   deliveryType: TJobDeliveryType;
   pickup: TJobPoint;
   destination: TJobPoint;
+  distance?: number | null;
   collectedMoney: number;
   earning: number;
+  depositStatus: TJobDepositStatus;
   hasDeliveryOtpVerified: boolean;
   status: TJobStatus;
   matchAttemptCount: number;

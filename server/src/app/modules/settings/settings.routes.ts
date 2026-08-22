@@ -11,7 +11,7 @@ const router = Router();
 router
   .route('/generals')
   .post(
-    auth(USER_ROLE.vendor),
+    auth(USER_ROLE.vendor, USER_ROLE.admin),
     validateRequest(SettingValidation.updateGeneralsZodSchema),
     SettingController.updateGenerals
   )

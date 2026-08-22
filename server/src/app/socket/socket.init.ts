@@ -29,6 +29,9 @@ ioInstance.on('connection', (socket: any) => {
     tSocket.data = { user: socket.auth };   // যদি কোথাও data.user ব্যবহার করেন
 
     tSocket.join(userId);
+    if (socket.auth?.role) {
+      tSocket.join(`role:${socket.auth.role}`);
+    }
     onlineUsers[userId] = tSocket;
 
     console.log(`✅ User connected: ${userId}`);

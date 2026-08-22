@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 
 import { getTraceId } from '@/app/configs/requestContext.configs';
 import { SettingService } from '@/app/modules/settings/settings.services';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
 const getSetting = asyncHandler(async (req: Request, res: Response) => {
@@ -46,11 +47,10 @@ const createOrUpdate = asyncHandler(async (req: Request, res: Response) => {
 
 const updateGenerals = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await SettingService.updateGenerals(
-    traceId,
-    req.user.userId,
-    req.body
-  );
+  const data =
+    req.user.role === USER_ROLE.admin
+      ? await SettingService.updateAdminSettings(traceId, req.body)
+      : await SettingService.updateGenerals(traceId, req.user.userId, req.body);
 
   sendResponse(res, {
     success: true,

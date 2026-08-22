@@ -50,6 +50,14 @@ const deliveryChargeSchema = z
   )
   .min(1, 'At least one delivery charge is required');
 
+const fawryAccountSchema = z.object({
+  fawryRefCode: z.string().trim().min(1),
+  fawryMerchantCode: z.string().trim().min(1).optional(),
+  fawryAccountNumber: z.string().trim().min(1).optional(),
+  fawryAccountName: z.string().trim().min(1).optional(),
+  fawryInstructions: z.string().trim().min(1).optional(),
+});
+
 // Create or Update Single Setting
 export const createOrUpdateSettingZodSchema = z
   .object({
@@ -58,16 +66,35 @@ export const createOrUpdateSettingZodSchema = z
         message: 'Invalid setting key provided',
       }),
     }),
-    body: z.object({
-      value: z.any(),
-    }),
+    body: z
+      .object({
+        value: z.any().optional(),
+      })
+      .passthrough(),
   })
   .superRefine(({ params, body }, context) => {
     const dynamicBody = body as Record<string, unknown>;
-    const value = body.value ?? dynamicBody[params.key];
+    const value =
+      body.value !== undefined
+        ? body.value
+        : dynamicBody[params.key] !== undefined
+          ? dynamicBody[params.key]
+          : params.key === 'fawryAccount'
+            ? dynamicBody
+            : undefined;
 
     if (params.key === 'deliveryCharge') {
       const result = deliveryChargeSchema.safeParse(value);
+      if (!result.success) {
+        result.error.issues.forEach((issue) =>
+          context.addIssue({ ...issue, path: ['body', ...issue.path] })
+        );
+      }
+      return;
+    }
+
+    if (params.key === 'fawryAccount') {
+      const result = fawryAccountSchema.safeParse(value);
       if (!result.success) {
         result.error.issues.forEach((issue) =>
           context.addIssue({ ...issue, path: ['body', ...issue.path] })
@@ -115,6 +142,8 @@ export const updateGeneralsZodSchema = z.object({
       closingTime: clockTimeSchema.optional(),
       weekends: z.array(weekdaySchema).optional(),
       timezone: z.string().trim().min(1).optional(),
+      riderMatchIntervalSeconds: z.coerce.number().int().positive().optional(),
+      riderMatchMaxAttempts: z.coerce.number().int().positive().optional(),
     })
     .refine((data) => Object.keys(data).length > 0, {
       message: 'At least one general setting value must be provided',

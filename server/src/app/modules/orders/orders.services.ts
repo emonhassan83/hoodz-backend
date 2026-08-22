@@ -24,8 +24,10 @@ import {
   distributeDeliveryCharge,
   getDeliveryChargeFromSettingsOrThrow,
   groupCartItemsByAuthor,
+  mapOrdersToListCards,
   normalizeBillingDeliveryLocation,
   notifyOrderUser,
+  orderListCardSelect,
   resolveCheckoutItemsOrThrow,
 } from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
@@ -218,7 +220,9 @@ const getOrderSummary = async (
     ),
     deliveryType: payload.orderData.deliveryType,
     city: payload.orderData.billingDetails.city,
-    billingDetails: payload.orderData.billingDetails,
+    billingDetails: normalizeBillingDeliveryLocation(
+      payload.orderData.billingDetails
+    ),
     orders: checkout.orders,
   };
 };
@@ -332,10 +336,7 @@ const createOrders = async (
 /** Returns paginated orders for admins. */
 const getAllOrders = async (query: Record<string, unknown>) => {
   const ordersQuery = new QueryBuilder(
-    Orders.find({ isDeleted: false })
-      .populate(orderPopulate)
-      .select('-__v')
-      .lean(),
+    Orders.find({ isDeleted: false }).select(orderListCardSelect).lean(),
     query
   )
     .filter()
@@ -348,7 +349,7 @@ const getAllOrders = async (query: Record<string, unknown>) => {
     ordersQuery.countTotal(),
   ]);
 
-  return { meta, orders };
+  return { meta, orders: await mapOrdersToListCards(orders) };
 };
 
 /** Returns paginated orders created by the authenticated user. */
@@ -363,8 +364,7 @@ const getMyOrders = async (userId: string, query: Record<string, unknown>) => {
         { paymentStatus: PAYMENT_STATUS.failed },
       ],
     })
-      .populate(orderPopulate)
-      .select('-__v')
+      .select(orderListCardSelect)
       .lean(),
     query
   )
@@ -378,7 +378,7 @@ const getMyOrders = async (userId: string, query: Record<string, unknown>) => {
     ordersQuery.countTotal(),
   ]);
 
-  return { meta, orders };
+  return { meta, orders: await mapOrdersToListCards(orders) };
 };
 
 /** Returns paginated orders assigned to the authenticated vendor/author. */
@@ -388,8 +388,7 @@ const getAuthorOrders = async (
 ) => {
   const ordersQuery = new QueryBuilder(
     Orders.find({ author: authorId, isDeleted: false })
-      .populate(orderPopulate)
-      .select('-__v')
+      .select(orderListCardSelect)
       .lean(),
     query
   )
@@ -403,7 +402,7 @@ const getAuthorOrders = async (
     ordersQuery.countTotal(),
   ]);
 
-  return { meta, orders };
+  return { meta, orders: await mapOrdersToListCards(orders, authorId) };
 };
 
 /** Returns one order with its item lines. */

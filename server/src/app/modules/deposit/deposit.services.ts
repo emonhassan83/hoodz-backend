@@ -6,7 +6,11 @@ import { DEPOSIT_STATUS } from '@/app/modules/deposit/deposit.constant';
 import {
   getDepositOrThrow,
   getDepositableJobsOrThrow,
+  getRiderMoneySummary,
 } from '@/app/modules/deposit/deposit.helpers';
+import { JOB_DEPOSIT_STATUS } from '@/app/modules/job/job.constant';
+import { Job } from '@/app/modules/job/job.model';
+import { User } from '@/app/modules/user/user.model';
 import { Deposit } from '@/app/modules/deposit/deposit.model';
 import {
   TDepositRequester,
@@ -48,6 +52,11 @@ const submitDeposit = async (
     note: payload.note ?? null,
   });
 
+  await Job.updateMany(
+    { _id: { $in: jobs.map((job) => job._id) } },
+    { depositStatus: JOB_DEPOSIT_STATUS.submitted }
+  );
+
   return Deposit.findById(deposit._id).populate(depositPopulate);
 };
 
@@ -68,6 +77,31 @@ const verifyDeposit = async (
   deposit.status = payload.status;
   deposit.note = payload.note ?? deposit.note ?? null;
   await deposit.save();
+
+  if (payload.status === DEPOSIT_STATUS.rejected) {
+    await Job.updateMany(
+      { _id: { $in: deposit.jobIds } },
+      { depositStatus: JOB_DEPOSIT_STATUS.pending }
+    );
+  }
+
+  if (payload.status === DEPOSIT_STATUS.completed) {
+    const jobs = await Job.find({ _id: { $in: deposit.jobIds } }).select(
+      'earning'
+    );
+    const earningCredit = Number(
+      jobs.reduce((total, job) => total + (job.earning ?? 0), 0).toFixed(2)
+    );
+    await Job.updateMany(
+      { _id: { $in: deposit.jobIds } },
+      { depositStatus: JOB_DEPOSIT_STATUS.verified }
+    );
+    if (earningCredit > 0) {
+      await User.findByIdAndUpdate(deposit.author, {
+        $inc: { balance: earningCredit, walletBalance: earningCredit },
+      });
+    }
+  }
 
   return Deposit.findById(deposit._id).populate(depositPopulate);
 };
@@ -91,8 +125,8 @@ const getAll = async (query: Record<string, unknown>) => {
   return { meta, data };
 };
 
-/** Rider gets own deposits with pagination. */
-const getMy = async (riderId: string, query: Record<string, unknown>) => {
+/** Rider gets own deposits with pagination plus earning/collected summary. */
+const getMyDeposits = async (riderId: string, query: Record<string, unknown>) => {
   const depositQuery = new QueryBuilder(
     Deposit.find({ author: riderId }).populate(depositPopulate).select('-__v').lean(),
     query
@@ -102,12 +136,20 @@ const getMy = async (riderId: string, query: Record<string, unknown>) => {
     .paginate()
     .fields();
 
-  const [data, meta] = await Promise.all([
+  const [deposits, meta, summary] = await Promise.all([
     depositQuery.modelQuery,
     depositQuery.countTotal(),
+    getRiderMoneySummary(riderId),
   ]);
 
-  return { meta, data };
+  return {
+    meta,
+    data: {
+      earning: summary.earning,
+      collectedMoney: summary.collectedMoney,
+      deposits,
+    },
+  };
 };
 
 /** Returns one deposit with role-based access. */
@@ -138,7 +180,8 @@ export const DepositService = {
   submitDeposit,
   verifyDeposit,
   getAll,
-  getMy,
+  getMy: getMyDeposits,
+  getMyDeposits,
   getById,
 };
 

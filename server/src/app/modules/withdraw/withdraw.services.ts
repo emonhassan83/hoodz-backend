@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
+import { getRiderMoneySummary } from '@/app/modules/deposit/deposit.helpers';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import {
@@ -88,12 +89,20 @@ const myWithdraws = async (
     .paginate()
     .fields();
 
-  const [data, meta] = await Promise.all([
+  const [withdraws, meta, summary] = await Promise.all([
     withdrawQuery.modelQuery,
     withdrawQuery.countTotal(),
+    getRiderMoneySummary(riderId),
   ]);
 
-  return { meta, data };
+  return {
+    meta,
+    data: {
+      earning: summary.earning,
+      collectedMoney: summary.collectedMoney,
+      withdraws,
+    },
+  };
 };
 
 /** Returns one withdraw after role-based access check. */

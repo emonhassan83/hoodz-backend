@@ -34,8 +34,10 @@ import { Voucher } from '@/app/modules/voucher/voucher.model';
 export const normalizeBillingDeliveryLocation = (
   billingDetails: TCreateOrderPayload['orderData']['billingDetails']
 ) => {
-  const latitude = billingDetails.deliveryLocation?.latitude;
-  const longitude = billingDetails.deliveryLocation?.longitude;
+  const location =
+    billingDetails.deliveryLocation ?? (billingDetails as { location?: { latitude?: number; longitude?: number } }).location;
+  const latitude = location?.latitude;
+  const longitude = location?.longitude;
   if (latitude === undefined || longitude === undefined) {
     return billingDetails;
   }
@@ -354,10 +356,12 @@ export const resolveCheckoutItemsOrThrow = async (
 /** Decrements stock for a checked-out cart item and increments sold count. */
 export const decrementProductStockOrThrow = async (
   traceId: string,
-  item: TEnrichedCartItem,
-  session: ClientSession
+  item: Pick<TEnrichedCartItem, 'productId' | 'quantity' | 'size' | 'color'>,
+  session?: ClientSession | null
 ) => {
-  const product = await Product.findById(item.productId).session(session);
+  const productQuery = Product.findById(item.productId);
+  if (session) productQuery.session(session);
+  const product = await productQuery;
   if (!product || product.isDeleted) {
     throw new ApiError(HttpStatusCode.NotFound, 'Product not found', traceId);
   }
@@ -389,7 +393,52 @@ export const decrementProductStockOrThrow = async (
   }
 
   product.sold += item.quantity;
-  await product.save({ session });
+  await product.save(session ? { session } : undefined);
+};
+
+/** Deducts sold/stock/variant quantity once after an order is paid or COD-confirmed. */
+export const applyOrderInventoryOrThrow = async (
+  traceId: string,
+  orderIds: Array<string | Types.ObjectId>,
+  session?: ClientSession | null
+) => {
+  const uniqueOrderIds = [...new Set(orderIds.map((id) => id.toString()))];
+  if (!uniqueOrderIds.length) return;
+
+  const orderQuery = Orders.find({
+    _id: { $in: uniqueOrderIds },
+    isDeleted: false,
+    isStockDeducted: { $ne: true },
+  });
+  if (session) orderQuery.session(session);
+  const orders = await orderQuery.select('_id');
+  if (!orders.length) return;
+
+  const itemQuery = Items.find({
+    order: { $in: orders.map((order) => order._id) },
+  });
+  if (session) itemQuery.session(session);
+  const items = await itemQuery;
+
+  for (const item of items) {
+    await decrementProductStockOrThrow(
+      traceId,
+      {
+        productId: item.product,
+        quantity: item.quantity,
+        size: item.size,
+        color: item.color,
+      },
+      session
+    );
+  }
+
+  const updateQuery = Orders.updateMany(
+    { _id: { $in: orders.map((order) => order._id) } },
+    { isStockDeducted: true }
+  );
+  if (session) updateQuery.session(session);
+  await updateQuery;
 };
 
 /** Builds item documents for a newly created order. */
@@ -412,6 +461,73 @@ export const createOrderItems = async (
     })),
     { session }
   );
+
+const ORDER_LIST_CARD_FIELDS =
+  '_id id deliveryCharge totalAmount status paymentStatus transactionId deliveryType isDeleted createdAt';
+
+/** Maps paginated orders into list-card payloads with order-wise items. */
+export const mapOrdersToListCards = async (
+  orders: Array<Record<string, any>>,
+  authorId?: string
+) => {
+  if (!orders.length) return [];
+
+  const itemFilter: Record<string, unknown> = {
+    order: { $in: orders.map((order) => order._id) },
+  };
+  if (authorId) itemFilter.author = authorId;
+
+  const items = await Items.find(itemFilter)
+    .populate({ path: 'product', select: '_id title banner' })
+    .select('_id order product color quantity')
+    .lean();
+
+  const itemsByOrder = new Map<string, typeof items>();
+  for (const item of items) {
+    const orderId = item.order.toString();
+    const orderItems = itemsByOrder.get(orderId) ?? [];
+    orderItems.push(item);
+    itemsByOrder.set(orderId, orderItems);
+  }
+
+  return orders.map((order) => {
+    const orderItems = itemsByOrder.get(order._id.toString()) ?? [];
+    return {
+      _id: order._id,
+      items: orderItems.map((item) => {
+        const product = item.product as
+          | { _id?: unknown; title?: string; banner?: string | null }
+          | null;
+        return {
+          _id: item._id,
+          product: product
+            ? {
+                _id: product._id,
+                title: product.title,
+                banner: product.banner ?? null,
+              }
+            : null,
+          color: item.color ?? null,
+        };
+      }),
+      totalItem: orderItems.reduce(
+        (total, item) => total + (item.quantity ?? 0),
+        0
+      ),
+      deliveryCharge: order.deliveryCharge,
+      totalAmount: order.totalAmount,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      transactionId: order.transactionId ?? null,
+      deliveryType: order.deliveryType,
+      isDeleted: order.isDeleted,
+      id: order.id,
+      createdAt: order.createdAt,
+    };
+  });
+};
+
+export const orderListCardSelect = ORDER_LIST_CARD_FIELDS;
 
 /** Throws when a requester cannot access or mutate an order. */
 export const assertOrderAccess = (
@@ -528,6 +644,8 @@ export const notifyOrderUser = async (
 };
 
 export const notifyOrdersPaid = async (orderIds: Array<string | Types.ObjectId>) => {
+  await applyOrderInventoryOrThrow('payment', orderIds);
+
   const orders = await Orders.find({
     _id: { $in: orderIds },
     isDeleted: false,
