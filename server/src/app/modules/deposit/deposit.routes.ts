@@ -15,20 +15,20 @@ router
     validateRequest(DepositValidation.submitDepositValidationSchema),
     DepositController.submitDeposit
   )
-  .get(auth(USER_ROLE.admin), DepositController.getAll);
+  .get(auth(USER_ROLE.admin, USER_ROLE.agent), DepositController.getAll);
 
 router.get('/my', auth(USER_ROLE.rider), DepositController.getMy);
 
 router.patch(
   '/verify/:depositId',
-  auth(USER_ROLE.admin),
+  auth(USER_ROLE.admin, USER_ROLE.agent),
   validateRequest(DepositValidation.verifyDepositValidationSchema),
   DepositController.verifyDeposit
 );
 
 router.get(
   '/:depositId',
-  auth(USER_ROLE.admin, USER_ROLE.rider),
+  auth(USER_ROLE.admin, USER_ROLE.agent, USER_ROLE.rider),
   validateRequest(DepositValidation.depositIdParamValidationSchema),
   DepositController.getById
 );

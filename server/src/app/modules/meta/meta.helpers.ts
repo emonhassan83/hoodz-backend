@@ -70,11 +70,11 @@ export const resolveUserOrigin = async (
   if (fromQuery) return fromQuery;
 
   const user = await User.findById(userId)
-    .select('deliveryLocation location')
+    .select('deliveryAddress location')
     .lean();
   const coordinates =
-    user?.deliveryLocation?.coordinates?.some((coordinate) => coordinate !== 0)
-      ? user.deliveryLocation.coordinates
+    user?.deliveryAddress?.location?.coordinates?.some((coordinate) => coordinate !== 0)
+      ? user.deliveryAddress.location.coordinates
       : user?.location?.coordinates;
 
   if (!coordinates || coordinates.every((coordinate) => coordinate === 0)) {

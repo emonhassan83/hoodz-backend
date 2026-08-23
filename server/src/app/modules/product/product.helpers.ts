@@ -198,15 +198,15 @@ export const getUserOrigin = async (
   if (!userId) return null;
 
   const user = await User.findById(userId)
-    .select('deliveryLocation location isDeleted')
+    .select('deliveryAddress location isDeleted')
     .lean();
   if (!user || user.isDeleted) {
     throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
   }
 
   const coordinates =
-    user.deliveryLocation?.coordinates?.some((item) => item !== 0)
-      ? user.deliveryLocation.coordinates
+    user.deliveryAddress?.location?.coordinates?.some((item) => item !== 0)
+      ? user.deliveryAddress.location.coordinates
       : user.location?.coordinates;
 
   if (!coordinates || coordinates.every((item) => item === 0)) return null;

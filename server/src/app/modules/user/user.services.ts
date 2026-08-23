@@ -32,6 +32,7 @@ import {
   findActiveUserOrThrow,
   getNearbyShopGoogleElements,
   getShopProductCategories,
+  normalizeDeliveryAddress,
   resolveShopDistance,
   resolveShopViewerOrigin,
   sendUserStatusNotifYToUser,
@@ -340,6 +341,14 @@ const updateUserProfile = async (
   const existingUser = await findActiveUserOrThrow(userId, traceId);
 
   const updateData: Record<string, any> = { ...payload };
+  delete updateData.deliveryLocation;
+
+  if (payload.deliveryAddress) {
+    updateData.deliveryAddress = await normalizeDeliveryAddress(
+      traceId,
+      payload.deliveryAddress as TUpdateDeliveryLocationPayload
+    );
+  }
 
   if (payload.latitude && payload.longitude) {
     updateData.location = buildGeoLocation(payload.longitude, payload.latitude);
@@ -357,7 +366,11 @@ const updateUserProfile = async (
 
   const result = await User.findByIdAndUpdate(
     userId,
-    { ...updateData, isProfileSetUp: true },
+    {
+      ...updateData,
+      isProfileSetUp: true,
+      $unset: { deliveryLocation: 1 },
+    },
     { returnDocument: 'after' }
   )
     .select('-password -expireAt -createdAt -updatedAt')
@@ -454,19 +467,17 @@ const updateDeliveryLocationFromDB = async (
   userId: string,
   payload: TUpdateDeliveryLocationPayload
 ) => {
-  const { longitude, latitude, address, timeZone } = payload;
-
   await findActiveUserOrThrow(userId, traceId);
+  const deliveryAddress = await normalizeDeliveryAddress(traceId, payload);
 
   return User.findByIdAndUpdate(
     userId,
     {
-      deliveryLocation: buildGeoLocation(longitude, latitude),
-      deliveryAddress: address,
-      ...(timeZone ? { timeZone } : {}),
+      deliveryAddress,
+      $unset: { deliveryLocation: 1 },
     },
     { returnDocument: 'after' }
-  );
+  ).select('-password -securityCode -expireAt');
 };
 
 /** Sets or updates rider security code after password verification. */

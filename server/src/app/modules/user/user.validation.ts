@@ -10,6 +10,22 @@ const geoPointSchema = z.object({
   ]),
 });
 
+const optionalNumberSchema = z.preprocess((value) => {
+  if (value === '' || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : value;
+}, z.number().int().nonnegative().nullable().optional());
+
+export const deliveryAddressSchema = z.object({
+  name: z.string().trim().min(1),
+  location: geoPointSchema,
+  buildingNo: optionalNumberSchema,
+  floorNo: optionalNumberSchema,
+  apartment: optionalNumberSchema,
+  city: z.string().trim().min(1),
+  country: z.string().trim().min(1),
+});
+
 const updateUserValidationSchema = z.object({
   body: z.object({
     name: z.string().optional(),
@@ -20,8 +36,7 @@ const updateUserValidationSchema = z.object({
     description: z.string().optional(),
     gender: z.string().optional(),
     dob: z.coerce.date().optional(),
-    deliveryAddress: z.string().optional(),
-    deliveryLocation: geoPointSchema.optional(),
+    deliveryAddress: deliveryAddressSchema.optional(),
     deliveryTime: z.string().optional(),
     deliveryZone: z.array(z.string().min(1)).optional(),
     isProfileSetUp: z.boolean().optional(),
@@ -50,16 +65,7 @@ const updateLocationValidationSchema = z.object({
 });
 
 const updateDeliveryLocationValidationSchema = z.object({
-  body: z.object({
-    longitude: z.number({
-      message: 'longitude is required!',
-    }),
-    latitude: z.number({
-      message: 'latitude is required!',
-    }),
-    address: z.string().min(1, { message: 'Address cannot be empty.' }),
-    timeZone: z.string().optional(),
-  }),
+  body: deliveryAddressSchema,
 });
 
 const securityCodeValidationSchema = z.object({

@@ -6,6 +6,7 @@ import { getOrderStatusEmailTemplate } from '@/app/worker/templates/order-status
 import { getOtpEmailTemplate } from '@/app/worker/templates/otp-email.template';
 import { getRiderSignupVerifiedEmailTemplate } from '@/app/worker/templates/rider-signup-verified-email.template';
 import { getVendorInviteEmailTemplate } from '@/app/worker/templates/vendor-invite-email.template';
+import { getWithdrawStatusEmailTemplate } from '@/app/worker/templates/withdraw-status-email.template';
 
 import { env } from '@/app/configs/env.configs';
 import { sendEmail } from '@/app/configs/nodemailer.config';
@@ -138,6 +139,39 @@ export const initializeEmailWorker = () => {
             console.log(`[Email Worker] Successfully sent KYC status email to ${email}`);
           } catch (error) {
             console.error(`[Email Worker] Error sending KYC status email to ${email}:`, error);
+            throw error;
+          }
+          break;
+        }
+
+        case 'send-withdraw-status-email': {
+          const { email, name, withdrawId, amount, status, note } = job.data;
+          console.log(`[Email Worker] Processing withdraw status email for ${email}`);
+
+          const mailOptions = {
+            from: env.SMTP_USER,
+            to: email,
+            subject:
+              status === 'completed'
+                ? 'Your Hoodz withdraw request has been completed'
+                : 'Your Hoodz withdraw request has been rejected',
+            html: getWithdrawStatusEmailTemplate({
+              name,
+              withdrawId,
+              amount,
+              status,
+              note,
+            }),
+          };
+
+          try {
+            await sendEmail(mailOptions);
+            console.log(`[Email Worker] Successfully sent withdraw status email to ${email}`);
+          } catch (error) {
+            console.error(
+              `[Email Worker] Error sending withdraw status email to ${email}:`,
+              error
+            );
             throw error;
           }
           break;

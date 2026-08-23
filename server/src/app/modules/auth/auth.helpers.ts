@@ -65,8 +65,9 @@ export const buildSignupAddressPayload = <T extends Partial<ISignUpWithEmail>>(
   const {
     latitude,
     longitude,
-    deliveryLatitude,
-    deliveryLongitude,
+    deliveryLatitude: _deliveryLatitude,
+    deliveryLongitude: _deliveryLongitude,
+    deliveryAddress: _deliveryAddress,
     referralCode: _referralCode,
     ...rest
   } = payload;
@@ -75,15 +76,6 @@ export const buildSignupAddressPayload = <T extends Partial<ISignUpWithEmail>>(
     ...rest,
     ...(typeof latitude === 'number' && typeof longitude === 'number'
       ? { location: buildGeoLocation(longitude, latitude) }
-      : {}),
-    ...(typeof deliveryLatitude === 'number' &&
-    typeof deliveryLongitude === 'number'
-      ? {
-          deliveryLocation: buildGeoLocation(
-            deliveryLongitude,
-            deliveryLatitude
-          ),
-        }
       : {}),
   };
 };

@@ -5,10 +5,14 @@ import ApiError from '@/app/errors/ApiError';
 import { DEPOSIT_STATUS } from '@/app/modules/deposit/deposit.constant';
 import {
   assertDepositAccess,
+  depositListPopulate,
   depositPopulate,
   getDepositOrThrow,
   getDepositableJobsOrThrow,
   getRiderMoneySummary,
+  mapDepositsToListCards,
+  notifyAgentsDepositSubmitted,
+  notifyRiderDepositVerified,
 } from '@/app/modules/deposit/deposit.helpers';
 import { JOB_DEPOSIT_STATUS } from '@/app/modules/job/job.constant';
 import { Job } from '@/app/modules/job/job.model';
@@ -52,7 +56,9 @@ const submitDeposit = async (
     { depositStatus: JOB_DEPOSIT_STATUS.submitted }
   );
 
-  return Deposit.findById(deposit._id).populate(depositPopulate);
+  const created = await Deposit.findById(deposit._id).populate(depositPopulate);
+  await notifyAgentsDepositSubmitted(created ?? deposit);
+  return created;
 };
 
 /** Admin completes or rejects submitted COD deposit. */
@@ -93,18 +99,20 @@ const verifyDeposit = async (
     );
     if (earningCredit > 0) {
       await User.findByIdAndUpdate(deposit.author, {
-        $inc: { balance: earningCredit, walletBalance: earningCredit },
+        $inc: { balance: earningCredit },
       });
     }
   }
 
-  return Deposit.findById(deposit._id).populate(depositPopulate);
+  const verified = await Deposit.findById(deposit._id).populate(depositPopulate);
+  await notifyRiderDepositVerified(verified ?? deposit);
+  return verified;
 };
 
 /** Admin gets all deposits with pagination. */
 const getAll = async (query: Record<string, unknown>) => {
   const depositQuery = new QueryBuilder(
-    Deposit.find().populate(depositPopulate).select('-__v').lean(),
+    Deposit.find().populate(depositListPopulate).select('-__v').lean(),
     query
   )
     .filter()
@@ -112,18 +120,18 @@ const getAll = async (query: Record<string, unknown>) => {
     .paginate()
     .fields();
 
-  const [data, meta] = await Promise.all([
+  const [deposits, meta] = await Promise.all([
     depositQuery.modelQuery,
     depositQuery.countTotal(),
   ]);
 
-  return { meta, data };
+  return { meta, data: mapDepositsToListCards(deposits as any) };
 };
 
 /** Rider gets own deposits with pagination plus earning/collected summary. */
 const getMyDeposits = async (riderId: string, query: Record<string, unknown>) => {
   const depositQuery = new QueryBuilder(
-    Deposit.find({ author: riderId }).populate(depositPopulate).select('-__v').lean(),
+    Deposit.find({ author: riderId }).populate(depositListPopulate).select('-__v').lean(),
     query
   )
     .filter()
@@ -141,8 +149,9 @@ const getMyDeposits = async (riderId: string, query: Record<string, unknown>) =>
     meta,
     data: {
       earning: summary.earning,
+      balance: summary.balance,
       collectedMoney: summary.collectedMoney,
-      deposits,
+      deposits: mapDepositsToListCards(deposits as any),
     },
   };
 };

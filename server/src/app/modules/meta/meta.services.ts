@@ -48,7 +48,7 @@ const getUserMeta = async (
     unreadNotification,
   ] = await Promise.all([
     User.findById(userId)
-      .select('name deliveryAddress deliveryLocation')
+      .select('name deliveryAddress')
       .lean(),
     getHomeBanners(),
     getLastPaidActiveOrder(userId),
@@ -67,7 +67,6 @@ const getUserMeta = async (
     profile: {
       name: user.name,
       deliveryAddress: user.deliveryAddress ?? null,
-      deliveryLocation: user.deliveryLocation ?? null,
     },
     unreadNotification,
     firstSectionBanner: banners.firstSectionBanner,

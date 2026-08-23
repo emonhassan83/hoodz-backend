@@ -69,13 +69,6 @@ const riderGoOnline = async (
   return RiderAvailabilitySocketHelper.goOnline(traceId, riderId, geo);
 };
 
-/** Marks rider offline from socket delivery flow. */
-const riderGoOffline = (
-  traceId: string,
-  riderId: string,
-  payload?: TGeoPayload
-) => getJobService().riderGoOffline(traceId, riderId, payload);
-
 /** Finds nearby online riders for a socket assignment request. */
 const findOnlineRider = async (
   traceId: string,
@@ -102,56 +95,63 @@ const findOnlineRider = async (
 };
 
 /** Loads JobService after modules finish initializing to avoid a circular import. */
-const getJobService = () =>
-  require('../../modules/job/job.services').JobService as typeof import('@/app/modules/job/job.services').JobService;
+const getJobService = async () =>
+  (await import('@/app/modules/job/job.services')).JobService;
+
+/** Marks rider offline from socket delivery flow. */
+const riderGoOffline = async (
+  traceId: string,
+  riderId: string,
+  payload?: TGeoPayload
+) => (await getJobService()).riderGoOffline(traceId, riderId, payload);
 
 /** Creates or replaces an assignable rider job from socket flow. */
-const assignJob = (
+const assignJob = async (
   traceId: string,
   requester: TJobRequester,
   payload: TAssignJobPayload
-) => getJobService().assignJob(traceId, requester, payload);
+) => (await getJobService()).assignJob(traceId, requester, payload);
 
 /** Rider accepts their assigned socket job. */
-const acceptJob = (traceId: string, riderId: string, payload: TJobIdPayload) =>
-  getJobService().acceptJob(traceId, riderId, payload);
+const acceptJob = async (traceId: string, riderId: string, payload: TJobIdPayload) =>
+  (await getJobService()).acceptJob(traceId, riderId, payload);
 
 /** Rider rejects their assigned socket job. */
-const rejectJob = (traceId: string, riderId: string, payload: TRejectJobPayload) =>
-  getJobService().rejectJob(traceId, riderId, payload);
+const rejectJob = async (traceId: string, riderId: string, payload: TRejectJobPayload) =>
+  (await getJobService()).rejectJob(traceId, riderId, payload);
 
 /** Marks socket job package pickup complete. */
-const pickupJob = (traceId: string, riderId: string, payload: TJobIdPayload) =>
-  getJobService().pickupJob(traceId, riderId, payload);
+const pickupJob = async (traceId: string, riderId: string, payload: TJobIdPayload) =>
+  (await getJobService()).pickupJob(traceId, riderId, payload);
 
 /** Starts socket job delivery toward customer. */
-const onTheWay = (traceId: string, riderId: string, payload: TJobIdPayload) =>
-  getJobService().onTheWay(traceId, riderId, payload);
+const onTheWay = async (traceId: string, riderId: string, payload: TJobIdPayload) =>
+  (await getJobService()).onTheWay(traceId, riderId, payload);
 
 /** Creates or resends a Redis-backed delivery OTP. */
-const sendDeliveryOtp = (
+const sendDeliveryOtp = async (
   traceId: string,
   requester: TJobRequester,
   payload: TJobIdPayload
-) => getJobService().sendDeliveryOtp(traceId, requester, payload);
+) => (await getJobService()).sendDeliveryOtp(traceId, requester, payload);
 
 /** Verifies customer delivery OTP from Redis. */
-const verifyDeliveryOtp = (
+const verifyDeliveryOtp = async (
   traceId: string,
   riderId: string,
   payload: TVerifyDeliveryOtpPayload
-) => getJobService().verifyDeliveryOtp(traceId, riderId, payload);
+) => (await getJobService()).verifyDeliveryOtp(traceId, riderId, payload);
 
 /** Marks socket job delivered after OTP verification. */
-const deliveredJob = (traceId: string, riderId: string, payload: TJobIdPayload) =>
-  getJobService().deliveredJob(traceId, riderId, payload);
+const deliveredJob = async (traceId: string, riderId: string, payload: TJobIdPayload) =>
+  (await getJobService()).deliveredJob(traceId, riderId, payload);
 
 /** Updates live rider location for a socket job or idle online rider. */
-const riderLocationUpdate = (
+const riderLocationUpdate = async (
   traceId: string,
   riderId: string,
   payload: TRiderLocationUpdatePayload
-) => getJobService().riderLocationUpdate(traceId, riderId, payload);
+) => (await getJobService()).riderLocationUpdate(traceId, riderId, payload);
 
 export const JobSocketActions = {
   riderGoOnline,

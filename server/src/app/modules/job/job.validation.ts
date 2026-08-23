@@ -50,6 +50,10 @@ const getMyJobsQueryValidationSchema = z.object({
   query: jobListQuerySchema,
 });
 
+const myRequestJobsQueryValidationSchema = z.object({
+  query: jobListQuerySchema,
+});
+
 const getRiderJobsQueryValidationSchema = z.object({
   params: z.object({
     riderId: objectIdSchema,
@@ -69,4 +73,5 @@ export const JobValidation = {
   riderIdParamValidationSchema,
   getMyJobsQueryValidationSchema,
   getRiderJobsQueryValidationSchema,
+  myRequestJobsQueryValidationSchema,
 };

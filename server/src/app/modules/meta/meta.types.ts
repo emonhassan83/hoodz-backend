@@ -1,3 +1,5 @@
+import { IUserDeliveryAddress } from '@/app/modules/user/user.interface';
+
 export type TMetaLocationQuery = {
   lat?: unknown;
   lng?: unknown;
@@ -45,8 +47,7 @@ export type TMetaLastOrder = {
 
 export type TUserMetaProfile = {
   name: string;
-  deliveryAddress: string | null;
-  deliveryLocation: unknown;
+  deliveryAddress: IUserDeliveryAddress | null;
 };
 
 export type TUserMetaPayload = {

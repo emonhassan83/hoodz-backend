@@ -31,6 +31,11 @@ import { User } from '@/app/modules/user/user.model';
 import { SettingService } from '@/app/modules/settings/settings.services';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
+import { getIO } from '@/app/socket/socket.init';
+import {
+  emitToRoles,
+  emitToUserIds,
+} from '@/app/socket/utils/jobSocket.helpers';
 import { RiderAvailabilitySocketHelper } from '@/app/socket/utils/riderAvailability.helpers';
 import { sendBatchNotificationViaQueue } from '@/app/utils/notification-queue.service';
 
@@ -231,7 +236,7 @@ export const getAssignableOrderOrThrow = async (
     .populate([
       {
         path: 'user',
-        select: 'name email phone deliveryLocation location deliveryAddress address',
+        select: 'name email phone location deliveryAddress address',
       },
     ]);
   if (!order) {
@@ -419,6 +424,7 @@ export const mapJobsToListCards = async (jobs: Array<Record<string, any>>) => {
     paymentMethod: job.paymentMethod,
     assignmentType: job.assignmentType,
     status: job.status,
+    depositStatus: job.depositStatus ?? JOB_DEPOSIT_STATUS.not_required,
     createdAt: job.createdAt,
     isDepositSubmitted: isJobDepositSubmitted(job.depositStatus),
   }));
@@ -479,8 +485,7 @@ export const collectPhaseRequestedRiders = async (
     .map((item) => item.rider!._id);
 };
 
-const getSocketIO = () =>
-  (require('../../socket/socket.init') as typeof import('@/app/socket/socket.init')).getIO();
+const getSocketIO = () => getIO();
 
 /** Emits job:new-request and queues rider push notifications. */
 export const notifyJobOffer = async (
@@ -553,7 +558,6 @@ export const notifyJobRiderAssigned = async (job: any, _extraRiderIds: string[] 
 export const notifyMatchingExhausted = async (job: any) => {
   const payload = JSON.parse(JSON.stringify(job));
   try {
-    const { emitToRoles, emitToUserIds } = require('../../socket/utils/jobSocket.helpers') as typeof import('@/app/socket/utils/jobSocket.helpers');
     emitToRoles(
       [USER_ROLE.agent, USER_ROLE.admin],
       SOCKET_EMIT.jobMatchingExhausted,

@@ -7,12 +7,14 @@ import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
 import { Product } from '@/app/modules/product/product.model';
+import { Setting } from '@/app/modules/settings/settings.model';
 import { upsertShopToTypesense } from '@/app/modules/search/search.typesense';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import {
   ISignUpWithEmail,
   IGeoLocation,
   IUser,
+  IUserDeliveryAddress,
 } from '@/app/modules/user/user.interface';
 import { User } from '@/app/modules/user/user.model';
 import {
@@ -21,6 +23,7 @@ import {
   TInvitePlatformUserPayload,
   TPlatformInviteEmailJobName,
   TPlatformInviteEmailPayload,
+  TUpdateDeliveryLocationPayload,
 } from '@/app/modules/user/user.types';
 import { sendBothNotificationViaQueue } from '@/app/utils/notification-queue.service';
 import { getEmailQueueInstance } from '@/app/utils/queueHelper';
@@ -154,6 +157,61 @@ export const buildGeoLocation = (
   type: 'Point',
   coordinates: [longitude, latitude],
 });
+
+export const getUserDeliveryCoordinates = (user?: {
+  deliveryAddress?: { location?: IGeoLocation | null } | null;
+  location?: IGeoLocation | null;
+} | null) => {
+  const deliveryCoords = user?.deliveryAddress?.location?.coordinates;
+  if (deliveryCoords?.some((coordinate) => coordinate !== 0)) {
+    return deliveryCoords;
+  }
+  const locationCoords = user?.location?.coordinates;
+  if (locationCoords?.some((coordinate) => coordinate !== 0)) {
+    return locationCoords;
+  }
+  return null;
+};
+
+export const assertDeliveryCityAllowed = async (
+  traceId: string,
+  city: string
+) => {
+  const setting = await Setting.findOne({
+    key: 'deliveryCharge',
+    vendor: null,
+  }).lean();
+  const deliveryCharges = Array.isArray(setting?.value) ? setting.value : [];
+  const matched = deliveryCharges.some(
+    (item: { state?: string }) =>
+      item.state?.toLowerCase() === city.trim().toLowerCase()
+  );
+  if (!matched) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Delivery is not available for this city',
+      traceId
+    );
+  }
+};
+
+export const normalizeDeliveryAddress = async (
+  traceId: string,
+  payload: TUpdateDeliveryLocationPayload
+): Promise<IUserDeliveryAddress> => {
+  const [longitude, latitude] = payload.location.coordinates;
+  await assertDeliveryCityAllowed(traceId, payload.city);
+
+  return {
+    name: payload.name.trim(),
+    location: buildGeoLocation(longitude, latitude),
+    buildingNo: payload.buildingNo ?? null,
+    floorNo: payload.floorNo ?? null,
+    apartment: payload.apartment ?? null,
+    city: payload.city.trim(),
+    country: payload.country.trim(),
+  };
+};
 
 export const calculateDistanceKm = (
   origin: TCoordinate,
@@ -305,7 +363,7 @@ export const getNearbyShopGoogleElements = async (
   destinations: TCoordinate[]
 ) => {
   const googleDestinationLimit = 25;
-  let googleElements: TGoogleDistanceElement[] = [];
+  const googleElements: TGoogleDistanceElement[] = [];
   try {
     for (let i = 0; i < destinations.length; i += googleDestinationLimit) {
       const chunk = destinations.slice(i, i + googleDestinationLimit);
@@ -340,12 +398,9 @@ export const resolveShopViewerOrigin = async (
 
   if (!origin && userId) {
     const user = await User.findById(userId)
-      .select('deliveryLocation location')
+      .select('deliveryAddress location')
       .lean();
-    const coordinates =
-      user?.deliveryLocation?.coordinates?.some((coordinate) => coordinate !== 0)
-        ? user.deliveryLocation.coordinates
-        : user?.location?.coordinates;
+    const coordinates = getUserDeliveryCoordinates(user);
 
     if (coordinates && coordinates.some((coordinate) => coordinate !== 0)) {
       origin = { longitude: coordinates[0], latitude: coordinates[1] };

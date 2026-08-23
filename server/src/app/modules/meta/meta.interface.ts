@@ -1,7 +1,7 @@
 import { Model } from 'mongoose';
 
 export interface IMeta {
-  // define your types here
+  _id?: string;
 }
 
 export type IMetaModel = Model<IMeta, Record<string, unknown>>;

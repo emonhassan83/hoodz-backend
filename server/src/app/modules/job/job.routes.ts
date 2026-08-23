@@ -11,6 +11,7 @@ const router = Router();
 router.get(
   '/my-requests',
   auth(USER_ROLE.rider),
+  validateRequest(JobValidation.myRequestJobsQueryValidationSchema),
   JobController.myRequestJobs
 );
 

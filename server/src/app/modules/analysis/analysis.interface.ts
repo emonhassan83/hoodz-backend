@@ -1,7 +1,7 @@
 import { Model } from 'mongoose';
 
 export interface IAnalysis {
-  // define your types here
+  _id?: string;
 }
 
 export type IAnalysisModel = Model<IAnalysis, Record<string, unknown>>;

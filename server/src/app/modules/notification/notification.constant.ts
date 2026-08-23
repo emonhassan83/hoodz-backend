@@ -6,6 +6,8 @@ export const NOTIFICATION_MODEL_TYPE = {
   Coin: 'Coin',
   Order: 'Order',
   Job: 'Job',
+  Deposit: 'Deposit',
+  Withdraw: 'Withdraw',
 } as const
 
 

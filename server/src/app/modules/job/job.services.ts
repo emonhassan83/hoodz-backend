@@ -272,10 +272,7 @@ const acceptJob = async (
 
   await Promise.all([
     RiderAvailabilitySocketHelper.setActiveJob(riderId, claimed._id.toString()),
-    Orders.findByIdAndUpdate(claimed.order, {
-      status: ORDER_STATUS.rider_assigned,
-      ...getOrderStatusTimestampUpdate(ORDER_STATUS.rider_assigned),
-    }),
+    Orders.findByIdAndUpdate(claimed.order, { status: ORDER_STATUS.rider_assigned }),
   ]);
 
   const acceptedJob = await Job.findById(claimed._id).populate(jobPopulate);
@@ -358,10 +355,7 @@ const pickupJob = async (traceId: string, riderId: string, payload: TJobIdPayloa
   job.status = JOB_STATUS.picked_up;
   job.pickedUpAt = new Date();
   await job.save();
-  await Orders.findByIdAndUpdate(job.order, {
-    status: ORDER_STATUS.picked_up,
-    ...getOrderStatusTimestampUpdate(ORDER_STATUS.picked_up),
-  });
+  await Orders.findByIdAndUpdate(job.order, { status: ORDER_STATUS.picked_up });
   const pickedUpJob = await Job.findById(job._id).populate(jobPopulate);
   await notifyOrderUser(pickedUpJob?.order as any, 'picked_up');
   return pickedUpJob;
@@ -377,10 +371,7 @@ const onTheWay = async (traceId: string, riderId: string, payload: TJobIdPayload
   job.status = JOB_STATUS.on_the_way;
   job.onTheWayAt = new Date();
   await job.save();
-  await Orders.findByIdAndUpdate(job.order, {
-    status: ORDER_STATUS.on_the_way,
-    ...getOrderStatusTimestampUpdate(ORDER_STATUS.on_the_way),
-  });
+  await Orders.findByIdAndUpdate(job.order, { status: ORDER_STATUS.on_the_way });
   const onTheWayJob = await Job.findById(job._id).populate(jobPopulate);
   await notifyOrderUser(onTheWayJob?.order as any, 'on_the_way');
   return onTheWayJob;
@@ -516,7 +507,6 @@ const deliveredJob = async (
     await job.save({ session });
 
     order.status = ORDER_STATUS.delivered;
-    order.deliveredAt = new Date();
     await order.save({ session });
 
     await session.commitTransaction();
@@ -593,9 +583,10 @@ const riderLocationUpdate = async (
 
 /** Returns matching jobs where this rider is in requestedRider. */
 const myRequestJobs = async (riderId: string, query: Record<string, unknown>) => {
+  const filter = applyJobListQueryFilters(riderRequestJobFilter(riderId), query);
   const jobQuery = new QueryBuilder(
-    Job.find(riderRequestJobFilter(riderId)).select(jobListCardSelect).lean(),
-    query
+    Job.find(filter).select(jobListCardSelect).lean(),
+    stripJobListQueryParams(query)
   )
     .sort()
     .paginate();

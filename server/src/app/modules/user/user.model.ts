@@ -61,17 +61,24 @@ const userSchema = new Schema<IUser, IUserModal>(
         default: [0, 0],
       },
     },
-    deliveryAddress: { type: String, default: null },
-    deliveryLocation: {
-      type: {
-        type: String,
-        enum: ['Point'],
-        default: 'Point',
+    deliveryAddress: {
+      name: { type: String, default: null, trim: true },
+      location: {
+        type: {
+          type: String,
+          enum: ['Point'],
+          default: 'Point',
+        },
+        coordinates: {
+          type: [Number],
+          default: [0, 0],
+        },
       },
-      coordinates: {
-        type: [Number],
-        default: [0, 0],
-      },
+      buildingNo: { type: Number, default: null },
+      floorNo: { type: Number, default: null },
+      apartment: { type: Number, default: null },
+      city: { type: String, default: null, trim: true },
+      country: { type: String, default: null, trim: true },
     },
     // deliveryTime: { type: String, default: null },
     // deliveryZone: { type: [String], default: [] },
@@ -189,6 +196,7 @@ userSchema.statics.isSecurityCodeMatched = async function (
 // for location and auto expire inactive users
 userSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 userSchema.index({ location: '2dsphere' });
+userSchema.index({ 'deliveryAddress.location': '2dsphere' });
 userSchema.index({ lastAvailable: '2dsphere' });
 userSchema.index({ role: 1, status: 1, isDeleted: 1 });
 

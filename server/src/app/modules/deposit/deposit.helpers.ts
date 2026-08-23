@@ -2,6 +2,7 @@ import { HttpStatusCode } from 'axios';
 import mongoose from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
+import { DEPOSIT_STATUS } from '@/app/modules/deposit/deposit.constant';
 import { Deposit } from '@/app/modules/deposit/deposit.model';
 import {
   JOB_DEPOSIT_STATUS,
@@ -12,11 +13,112 @@ import { Job } from '@/app/modules/job/job.model';
 import { User } from '@/app/modules/user/user.model';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { TDepositRequester } from '@/app/modules/deposit/deposit.types';
+import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import {
+  sendBatchNotificationViaQueue,
+  sendBothNotificationViaQueue,
+} from '@/app/utils/notification-queue.service';
 
 export const depositPopulate = [
   { path: 'author', select: 'name email phone profileAvatar' },
   { path: 'jobIds', select: 'id status collectedMoney earning order rider paymentMethod' },
 ];
+
+export const depositListPopulate = [
+  { path: 'author', select: 'name profileAvatar' },
+];
+
+const toIdString = (value: unknown) => String((value as any)?._id ?? value ?? '');
+
+export const mapDepositsToListCards = (deposits: Array<Record<string, any>>) =>
+  deposits.map((deposit) => ({
+    _id: deposit._id,
+    author: {
+      _id: deposit.author?._id ?? deposit.author,
+      name: deposit.author?.name ?? null,
+      profileAvatar: deposit.author?.profileAvatar ?? null,
+    },
+    jobIds: (deposit.jobIds ?? []).map((jobId: unknown) => toIdString(jobId)),
+    amount: deposit.amount,
+    fawryRefNo: deposit.fawryRefNo,
+    receiptFiles: deposit.receiptFiles ?? [],
+    status: deposit.status,
+    note: deposit.note ?? null,
+    id: deposit.id,
+    createdAt: deposit.createdAt,
+    updatedAt: deposit.updatedAt,
+  }));
+
+const getUserIdsByRoles = async (roles: string[]) => {
+  const users = await User.find({
+    role: { $in: roles as any },
+    isDeleted: { $ne: true },
+  })
+    .select('_id')
+    .lean();
+  return users.map((user) => user._id.toString());
+};
+
+export const notifyAgentsDepositSubmitted = async (deposit: {
+  _id: unknown;
+  id?: string;
+  amount?: number;
+  author?: unknown;
+}) => {
+  const agentIds = await getUserIdsByRoles([USER_ROLE.agent]);
+  if (!agentIds.length) return;
+
+  await sendBatchNotificationViaQueue({
+    userIds: agentIds,
+    channel: 'both',
+    title: 'New COD deposit submitted',
+    message: `A rider submitted a deposit of ${Number(deposit.amount ?? 0).toFixed(2)}.`,
+    data: {
+      modelType: NOTIFICATION_MODEL_TYPE.Deposit,
+      reference: toIdString(deposit._id),
+      depositId: toIdString(deposit._id),
+      depositPublicId: deposit.id,
+      riderId: toIdString(deposit.author),
+    },
+  }).catch((error) => {
+    console.warn('[Deposit] Failed to notify agents about deposit submit', error);
+  });
+};
+
+export const notifyRiderDepositVerified = async (deposit: {
+  _id: unknown;
+  id?: string;
+  amount?: number;
+  status: string;
+  note?: string | null;
+  author: unknown;
+}) => {
+  const riderId = toIdString(deposit.author);
+  if (!riderId || riderId === 'undefined') return;
+
+  const rider = await User.findById(riderId).select('fcmToken').lean();
+  const isCompleted = deposit.status === DEPOSIT_STATUS.completed;
+  const noteSuffix = deposit.note ? ` Note: ${deposit.note}` : '';
+
+  await sendBothNotificationViaQueue(
+    riderId,
+    rider?.fcmToken ?? '',
+    isCompleted ? 'Deposit verified' : 'Deposit rejected',
+    isCompleted
+      ? `Your deposit of ${Number(deposit.amount ?? 0).toFixed(2)} has been verified.${noteSuffix}`
+      : `Your deposit of ${Number(deposit.amount ?? 0).toFixed(2)} was rejected.${noteSuffix}`,
+    {
+      modelType: NOTIFICATION_MODEL_TYPE.Deposit,
+      reference: toIdString(deposit._id),
+      depositId: toIdString(deposit._id),
+      depositPublicId: deposit.id,
+      status: deposit.status,
+      note: deposit.note ?? null,
+    }
+  ).catch((error) => {
+    console.warn('[Deposit] Failed to notify rider about deposit verify', error);
+  });
+};
 
 export const assertDepositAccess = (
   traceId: string,
@@ -113,8 +215,10 @@ export const getRiderMoneySummary = async (riderId: string) => {
     ]),
   ]);
 
+  const balance = Number((rider?.balance ?? 0).toFixed(2));
   return {
-    earning: Number((rider?.balance ?? 0).toFixed(2)),
+    earning: balance,
+    balance,
     collectedMoney: Number((collected[0]?.total ?? 0).toFixed(2)),
   };
 };

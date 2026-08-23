@@ -7,6 +7,16 @@ export type IGeoLocation = {
   coordinates: [number, number]; // [longitude, latitude]
 };
 
+export type IUserDeliveryAddress = {
+  name: string;
+  location: IGeoLocation;
+  buildingNo?: number | null;
+  floorNo?: number | null;
+  apartment?: number | null;
+  city: string;
+  country: string;
+};
+
 export interface IUser extends Document {
   _id: Types.ObjectId
   id: string
@@ -27,8 +37,7 @@ export interface IUser extends Document {
   phone: string | null;
   address: string;
   location: IGeoLocation | null;
-  deliveryAddress?: string | null;
-  deliveryLocation?: IGeoLocation | null;
+  deliveryAddress?: IUserDeliveryAddress | null;
   isOnline: boolean;
   hasRiderActivateMode: boolean;
   lastAvailable?: IGeoLocation | null;
@@ -81,7 +90,7 @@ export interface ISignUpWithEmail {
   address?: string
   latitude?: number
   longitude?: number
-  deliveryAddress?: string
+  deliveryAddress?: IUserDeliveryAddress
   deliveryLatitude?: number
   deliveryLongitude?: number
   timeZone?: string

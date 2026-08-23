@@ -18,6 +18,10 @@ import {
   assertRiderBalanceEnough,
   assertWithdrawExists,
   getActiveRiderOrThrow,
+  mapWithdrawsToListCards,
+  notifyAdminsWithdrawRequested,
+  notifyRiderWithdrawStatusChanged,
+  withdrawListPopulate,
 } from '@/app/modules/withdraw/withdraw.helpers';
 import { Withdraw } from '@/app/modules/withdraw/withdraw.model';
 import {
@@ -38,7 +42,7 @@ const addWithdrawRequest = async (
   payload: TAddWithdrawPayload
 ) => {
   const rider = await getActiveRiderOrThrow(traceId, riderId);
-  assertRiderBalanceEnough(traceId, rider.walletBalance ?? 0, payload.amount);
+  assertRiderBalanceEnough(traceId, rider.balance ?? 0, payload.amount);
   await assertNoPendingWithdraw(traceId, riderId);
 
   const withdraw = await Withdraw.create({
@@ -47,29 +51,32 @@ const addWithdrawRequest = async (
     note: payload.note ?? null,
   });
 
-  return Withdraw.findById(withdraw._id).populate(withdrawPopulate).select('-__v');
+  const created = await Withdraw.findById(withdraw._id)
+    .populate(withdrawPopulate)
+    .select('-__v');
+  await notifyAdminsWithdrawRequested(created ?? withdraw);
+  return created;
 };
 
 /** Returns paginated withdraw requests for admins. */
 const getAllWithdraws = async (query: Record<string, unknown>) => {
   const withdrawQuery = new QueryBuilder(
     Withdraw.find({ isDeleted: false })
-      .populate(withdrawPopulate)
-      .select('-__v')
+      .populate(withdrawListPopulate)
+      .select('_id author amount status note isDeleted id createdAt')
       .lean(),
     query
   )
     .filter()
     .sort()
-    .paginate()
-    .fields();
+    .paginate();
 
-  const [data, meta] = await Promise.all([
+  const [withdraws, meta] = await Promise.all([
     withdrawQuery.modelQuery,
     withdrawQuery.countTotal(),
   ]);
 
-  return { meta, data };
+  return { meta, data: mapWithdrawsToListCards(withdraws as any) };
 };
 
 /** Returns paginated withdraw requests for logged-in rider. */
@@ -79,15 +86,14 @@ const myWithdraws = async (
 ) => {
   const withdrawQuery = new QueryBuilder(
     Withdraw.find({ author: riderId, isDeleted: false })
-      .populate(withdrawPopulate)
-      .select('-__v')
+      .populate(withdrawListPopulate)
+      .select('_id author amount status note isDeleted id createdAt')
       .lean(),
     query
   )
     .filter()
     .sort()
-    .paginate()
-    .fields();
+    .paginate();
 
   const [withdraws, meta, summary] = await Promise.all([
     withdrawQuery.modelQuery,
@@ -99,8 +105,9 @@ const myWithdraws = async (
     meta,
     data: {
       earning: summary.earning,
+      balance: summary.balance,
       collectedMoney: summary.collectedMoney,
-      withdraws,
+      withdraws: mapWithdrawsToListCards(withdraws as any),
     },
   };
 };
@@ -163,7 +170,11 @@ const changedWithdrawStatus = async (
     withdraw!.rejectedAt = new Date();
     await withdraw!.save();
 
-    return Withdraw.findById(withdraw!._id).populate(withdrawPopulate).select('-__v');
+    const rejected = await Withdraw.findById(withdraw!._id)
+      .populate(withdrawPopulate)
+      .select('-__v');
+    await notifyRiderWithdrawStatusChanged(rejected ?? withdraw);
+    return rejected;
   }
 
   const session = await mongoose.startSession();
@@ -180,11 +191,10 @@ const changedWithdrawStatus = async (
     const updatedRider = await User.findOneAndUpdate(
       {
         _id: currentWithdraw!.author,
-        walletBalance: { $gte: currentWithdraw!.amount },
+        balance: { $gte: currentWithdraw!.amount },
       },
       {
         $inc: {
-          walletBalance: -currentWithdraw!.amount,
           balance: -currentWithdraw!.amount,
         },
       },
@@ -193,7 +203,7 @@ const changedWithdrawStatus = async (
     if (!updatedRider) {
       throw new ApiError(
         HttpStatusCode.BadRequest,
-        'Rider wallet balance is not enough to complete this withdraw',
+        'Rider earning balance is not enough to complete this withdraw',
         traceId
       );
     }
@@ -216,9 +226,11 @@ const changedWithdrawStatus = async (
       note: 'Withdraw completed by admin',
     });
 
-    return Withdraw.findById(currentWithdraw!._id)
+    const completed = await Withdraw.findById(currentWithdraw!._id)
       .populate(withdrawPopulate)
       .select('-__v');
+    await notifyRiderWithdrawStatusChanged(completed ?? currentWithdraw);
+    return completed;
   } catch (error) {
     await session.abortTransaction();
     throw error;
