@@ -77,7 +77,6 @@ const registerWithSocialAuth = async (
     address: payload.address,
     latitude: payload.latitude,
     longitude: payload.longitude,
-    deliveryAddress: payload.deliveryAddress,
     deliveryLatitude: payload.deliveryLatitude,
     deliveryLongitude: payload.deliveryLongitude,
     timeZone: payload.timeZone,

@@ -119,14 +119,18 @@ export const notifyAdminsWithdrawRequested = async (withdraw: {
   });
 };
 
-export const notifyRiderWithdrawStatusChanged = async (withdraw: {
-  _id: unknown;
-  id?: string;
-  amount?: number;
-  status: string;
-  note?: string | null;
-  author: unknown;
-}) => {
+export const notifyRiderWithdrawStatusChanged = async (
+  withdraw: {
+    _id: unknown;
+    id?: string;
+    amount?: number;
+    status: string;
+    note?: string | null;
+    author: unknown;
+  } | null
+) => {
+  if (!withdraw) return;
+
   const riderId = toIdString(withdraw.author);
   if (!riderId || riderId === 'undefined') return;
 

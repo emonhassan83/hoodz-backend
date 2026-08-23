@@ -15,6 +15,7 @@ import {
 } from '@/app/modules/orders/orders.constant';
 import {
   assertOrderAccess,
+  attachHasGrievanceIssued,
   buildCheckoutQuote,
   consumeCheckoutVoucher,
   createOrderItems,
@@ -188,7 +189,13 @@ const getMyOrders = async (userId: string, query: Record<string, unknown>) => {
     ordersQuery.countTotal(),
   ]);
 
-  return { meta, orders: await mapOrdersToListCards(orders) };
+  return {
+    meta,
+    orders: await attachHasGrievanceIssued(
+      userId,
+      await mapOrdersToListCards(orders)
+    ),
+  };
 };
 
 const getAuthorOrders = async (

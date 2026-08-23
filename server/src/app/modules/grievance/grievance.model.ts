@@ -1,20 +1,20 @@
 import { Schema, model } from 'mongoose';
+
 import {
-  GRIEVANCE_ISSUE_TYPE,
   GRIEVANCE_RESOLUTION_TYPE,
   GRIEVANCE_STATUS,
 } from '@/app/modules/grievance/grievance.constant';
-import { IGrievance, IGrievanceModel } from './grievance.interface';
+import { IGrievance, IGrievanceModel } from '@/app/modules/grievance/grievance.interface';
 
 const grievanceSchema = new Schema<IGrievance, IGrievanceModel>(
   {
-    userId: {
+    user: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
       index: true,
     },
-    orderId: {
+    order: {
       type: Schema.Types.ObjectId,
       ref: 'Order',
       required: true,
@@ -22,8 +22,8 @@ const grievanceSchema = new Schema<IGrievance, IGrievanceModel>(
     },
     issueType: {
       type: String,
-      enum: Object.values(GRIEVANCE_ISSUE_TYPE),
       required: true,
+      trim: true,
       index: true,
     },
     description: {
@@ -31,10 +31,14 @@ const grievanceSchema = new Schema<IGrievance, IGrievanceModel>(
       required: true,
       trim: true,
     },
+    files: {
+      type: [String],
+      default: [],
+    },
     status: {
       type: String,
       enum: Object.values(GRIEVANCE_STATUS),
-      default: GRIEVANCE_STATUS.submitted,
+      default: GRIEVANCE_STATUS.under_review,
       index: true,
     },
     resolutionType: {
@@ -43,39 +47,18 @@ const grievanceSchema = new Schema<IGrievance, IGrievanceModel>(
       default: GRIEVANCE_RESOLUTION_TYPE.none,
       index: true,
     },
-    compensationVoucher: {
-      type: Schema.Types.ObjectId,
-      ref: 'Voucher',
-      default: null,
-    },
-    refundAmount: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
     note: {
       type: String,
       default: null,
       trim: true,
     },
-    resolvedBy: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      default: null,
-    },
     resolvedAt: {
       type: Date,
       default: null,
     },
-    isWalletRefundCredited: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
-    isDeleted: {
-      type: Boolean,
-      default: false,
-      index: true,
+    rejectAt: {
+      type: Date,
+      default: null,
     },
   },
   {
@@ -83,8 +66,11 @@ const grievanceSchema = new Schema<IGrievance, IGrievanceModel>(
   }
 );
 
-grievanceSchema.index({ userId: 1, createdAt: -1 });
-grievanceSchema.index({ orderId: 1, isDeleted: 1 });
-grievanceSchema.index({ status: 1, isDeleted: 1 });
+grievanceSchema.index({ user: 1, createdAt: -1 });
+grievanceSchema.index({ order: 1, status: 1 });
+grievanceSchema.index({ status: 1 });
 
-export const Grievance = model<IGrievance, IGrievanceModel>('Grievance', grievanceSchema);
+export const Grievance = model<IGrievance, IGrievanceModel>(
+  'Grievance',
+  grievanceSchema
+);

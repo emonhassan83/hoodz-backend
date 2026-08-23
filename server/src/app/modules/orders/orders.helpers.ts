@@ -6,6 +6,7 @@ import { buildCartItemMatch } from '@/app/modules/cart/cart.helpers';
 import { TEnrichedCartItem } from '@/app/modules/cart/cart.types';
 import { Cart } from '@/app/modules/cart/cart.model';
 import { CoinService } from '@/app/modules/coin/coin.services';
+import { Grievance } from '@/app/modules/grievance/grievance.model';
 import { Items } from '@/app/modules/items/items.model';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
 import { DELIVERY_TYPE, ORDER_STATUS } from '@/app/modules/orders/orders.constant';
@@ -551,6 +552,29 @@ export const mapOrdersToListCards = async (
 };
 
 export const orderListCardSelect = ORDER_LIST_CARD_FIELDS;
+
+/** Adds hasGrievanceIssued for the current user's orders. */
+export const attachHasGrievanceIssued = async <T extends { _id: unknown }>(
+  userId: string,
+  cards: T[]
+) => {
+  if (!cards.length) return [];
+
+  const grievances = await Grievance.find({
+    user: userId,
+    order: { $in: cards.map((card) => card._id) },
+  })
+    .select('order')
+    .lean();
+  const issuedOrderIds = new Set(
+    grievances.map((grievance) => grievance.order.toString())
+  );
+
+  return cards.map((card) => ({
+    ...card,
+    hasGrievanceIssued: issuedOrderIds.has(String(card._id)),
+  }));
+};
 
 /** Throws when a requester cannot access or mutate an order. */
 export const assertOrderAccess = (

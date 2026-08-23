@@ -31,7 +31,7 @@ import {
 } from '@/app/modules/withdraw/withdraw.types';
 
 const withdrawPopulate = [
-  { path: 'author', select: 'name email phone profileAvatar walletBalance balance role status' },
+  { path: 'author', select: 'name email phone profileAvatar balance role status' },
   { path: 'processedBy', select: 'name email role profileAvatar' },
 ];
 

@@ -1,4 +1,5 @@
 import { HttpStatusCode } from 'axios';
+import { PipelineStage } from 'mongoose';
 
 import { getRedisClient } from '@/app/configs/redis.config';
 import ApiError from '@/app/errors/ApiError';
@@ -392,7 +393,7 @@ const findOnlineRidersNearShop = async (
   longitude: number,
   radiusKm?: number
 ) => {
-  const geoNear: Record<string, unknown> = {
+  const geoNear: PipelineStage.GeoNear['$geoNear'] = {
     near: { type: 'Point', coordinates: [longitude, latitude] },
     key: 'lastAvailable',
     distanceField: 'distanceMeters',

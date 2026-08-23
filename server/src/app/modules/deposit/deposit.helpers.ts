@@ -196,14 +196,15 @@ export const getDepositOrThrow = async (
   return deposit;
 };
 
-/** Rider profile earning plus undeposited COD collected cash. */
+/** Total delivered-job earning, remaining user balance, and undeposited COD cash. */
 export const getRiderMoneySummary = async (riderId: string) => {
-  const [rider, collected] = await Promise.all([
+  const riderObjectId = new mongoose.Types.ObjectId(riderId);
+  const [rider, collected, earnings] = await Promise.all([
     User.findById(riderId).select('balance').lean(),
     Job.aggregate<{ total: number }>([
       {
         $match: {
-          rider: new mongoose.Types.ObjectId(riderId),
+          rider: riderObjectId,
           paymentMethod: JOB_PAYMENT_METHOD.cod,
           status: JOB_STATUS.delivered,
           depositStatus: {
@@ -213,12 +214,20 @@ export const getRiderMoneySummary = async (riderId: string) => {
       },
       { $group: { _id: null, total: { $sum: '$collectedMoney' } } },
     ]),
+    Job.aggregate<{ total: number }>([
+      {
+        $match: {
+          rider: riderObjectId,
+          status: JOB_STATUS.delivered,
+        },
+      },
+      { $group: { _id: null, total: { $sum: '$earning' } } },
+    ]),
   ]);
 
-  const balance = Number((rider?.balance ?? 0).toFixed(2));
   return {
-    earning: balance,
-    balance,
+    earning: Number((earnings[0]?.total ?? 0).toFixed(2)),
+    balance: Number((rider?.balance ?? 0).toFixed(2)),
     collectedMoney: Number((collected[0]?.total ?? 0).toFixed(2)),
   };
 };

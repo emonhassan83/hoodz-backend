@@ -159,7 +159,7 @@ const getCart = async (actor: TCartActor) => {
   })
     .populate([{ path: 'category', select: 'title' }])
     .select(
-      'vendor category title images inventoryType collectionType brandType banner price discount discountPrice avgRating ratingCount stock sold variants createdAt'
+      'vendor category title images inventoryType collectionType brandType banner colors sizes price discount discountPrice avgRating ratingCount stock sold variants createdAt'
     )
     .lean();
 
@@ -184,6 +184,9 @@ const getCart = async (actor: TCartActor) => {
           title: product.title,
           banner: product.banner ?? null,
           inventoryType: product.inventoryType,
+          colors: product.colors ?? [],
+          sizes: product.sizes ?? [],
+          variants: product.variants ?? [],
           price: product.price,
           discountPrice: product.discountPrice,
         },

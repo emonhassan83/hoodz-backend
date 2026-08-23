@@ -40,6 +40,14 @@ export type TEnrichedCartItem = TCartItem & {
     title: string;
     banner: string | null;
     inventoryType: string;
+    colors: TCartColor[];
+    sizes: string[];
+    variants: Array<{
+      _id?: Types.ObjectId;
+      size?: string | null;
+      color?: TCartColor | null;
+      quantity: number;
+    }>;
     price: number;
     discount: number;
     discountPrice: number;

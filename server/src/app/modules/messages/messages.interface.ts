@@ -4,7 +4,7 @@ export type TMessageSenderType = 'user' | 'ai' | 'system';
 
 export interface IMessages {
   _id: Types.ObjectId;
-  text?: string;
+  text?: string | null;
   files?: string[];
   seen: boolean;
   isEdited: boolean;
