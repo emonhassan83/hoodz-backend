@@ -95,8 +95,13 @@ const ordersSchema = new Schema<IOrders, IOrdersModel>(
       enum: Object.values(DELIVERY_TYPE),
       required: true,
     },
+    cancelledAt: { type: Date, default: null },
     confirmedAt: { type: Date, default: null },
     processedAt: { type: Date, default: null },
+    riderAssignedAt: { type: Date, default: null },
+    pickedUpAt: { type: Date, default: null },
+    onTheWayAt: { type: Date, default: null },
+    deliveredAt: { type: Date, default: null },
     isOtpVerified: {
       type: Boolean,
       default: false,

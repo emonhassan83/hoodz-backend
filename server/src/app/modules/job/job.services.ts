@@ -2,26 +2,28 @@ import { HttpStatusCode } from 'axios';
 import mongoose from 'mongoose';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
+import { JOB_ASSIGNMENT_TYPE } from '@/app/constant';
 import ApiError from '@/app/errors/ApiError';
 import {
-  JOB_ACTIVE_STATUSES,
-  JOB_ASSIGNMENT_TYPE,
   JOB_DEPOSIT_STATUS,
   JOB_PAYMENT_METHOD,
   JOB_STATUS,
 } from '@/app/modules/job/job.constant';
 import {
+  applyJobListQueryFilters,
+  applyMatchRound,
   assertAssignedRider,
   assertCanAssignOrder,
   assertJobAccess,
   assertJobStatusIn,
   assertRequestedOrAssignedRider,
+  assertShopAndDeliveryLocations,
   buildJobLocationFields,
   buildJobMoneyFields,
-  collectPhaseRequestedRiders,
   compareDeliveryOtp,
   createDeliveryOtpToken,
   deleteDeliveryOtpFromRedis,
+  exhaustMatching,
   generateDeliveryOtp,
   getAssignableOrderOrThrow,
   getAssignableRiderOrThrow,
@@ -31,15 +33,17 @@ import {
   hashDeliveryOtp,
   isReassignableJob,
   jobListCardSelect,
+  jobPopulate,
   mapJobsToListCards,
   notifyJobAssignedToRider,
-  notifyJobOffer,
-  notifyJobRequestCancelled,
   notifyJobRiderAssigned,
-  notifyMatchingExhausted,
   notifyOtherRidersJobTaken,
+  resolveOrderPaymentMethod,
+  riderRequestJobFilter,
   saveDeliveryOtpToRedis,
   sendDeliveryOtpSms,
+  stripJobListQueryParams,
+  toRiderObjectId,
   verifyDeliveryOtpToken,
 } from '@/app/modules/job/job.helpers';
 import { Job } from '@/app/modules/job/job.model';
@@ -53,48 +57,22 @@ import {
   TRiderLocationUpdatePayload,
   TVerifyDeliveryOtpPayload,
 } from '@/app/modules/job/job.types';
-import { ORDER_STATUS } from '@/app/modules/orders/orders.constant';
-import { notifyOrderUser } from '@/app/modules/orders/orders.helpers';
+import {
+  ORDER_STATUS,
+  PAYMENT_STATUS as ORDER_PAYMENT_STATUS,
+} from '@/app/modules/orders/orders.constant';
+import {
+  getOrderStatusTimestampUpdate,
+  notifyOrderUser,
+} from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
+import { PAYMENT_METHOD, PAYMENT_STATUS } from '@/app/modules/payment/payment.constant';
 import { Payment } from '@/app/modules/payment/payment.model';
-import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import {
   RiderAvailabilitySocketHelper,
   normalizeRiderGeo,
 } from '@/app/socket/utils/riderAvailability.helpers';
-
-const toRiderObjectId = (riderId: string) => new mongoose.Types.ObjectId(riderId);
-
-const toObjectIdList = (ids: string[]) =>
-  ids.filter(Boolean).map((id) => new mongoose.Types.ObjectId(id));
-
-/** Pending unmatched offers for a rider. Assigned jobs belong in my-jobs. */
-const riderRequestJobFilter = (riderId: string) => {
-  const riderObjectId = toRiderObjectId(riderId);
-  return {
-    status: JOB_STATUS.matching,
-    rider: null,
-    $or: [
-      { requestedRider: riderObjectId },
-      { requestedRider: riderId },
-      { offeredRider: riderObjectId },
-      { offeredRider: riderId },
-    ],
-  };
-};
-
-const jobPopulate = [
-  {
-    path: 'order',
-    select:
-      'id user author totalAmount deliveryCharge status paymentStatus billingDetails deliveryType isOtpVerified',
-  },
-  { path: 'rider', select: 'name email phone profileAvatar avgRating ratingCount' },
-  { path: 'user', select: 'name email phone profileAvatar' },
-  { path: 'requestedRider', select: 'name email phone profileAvatar' },
-  { path: 'assignedBy', select: 'name email role' },
-];
 
 /** Marks rider online for delivery jobs. */
 const riderGoOnline = async (
@@ -179,20 +157,15 @@ const assignJob = async (
     );
   }
 
-  const paymentMethod = payload.paymentMethod ?? JOB_PAYMENT_METHOD.card;
+  const paymentMethod =
+    payload.paymentMethod ?? (await resolveOrderPaymentMethod(payload.orderId));
   const moneyFields = buildJobMoneyFields(
     paymentMethod,
     order.totalAmount,
     order.deliveryCharge
   );
   const locationFields = await buildJobLocationFields(order);
-  const assignmentType =
-    payload.assignmentType ??
-    (requester.role === USER_ROLE.admin
-      ? JOB_ASSIGNMENT_TYPE.admin
-      : requester.role === USER_ROLE.agent
-        ? JOB_ASSIGNMENT_TYPE.agent
-        : JOB_ASSIGNMENT_TYPE.vendor);
+  const assignmentType = payload.assignmentType ?? JOB_ASSIGNMENT_TYPE.agent;
 
   const previousRiderIds = [
     ...new Set([
@@ -233,7 +206,10 @@ const assignJob = async (
   ).populate(jobPopulate);
 
   await Promise.all([
-    Orders.findByIdAndUpdate(payload.orderId, { status: ORDER_STATUS.rider_assigned }),
+    Orders.findByIdAndUpdate(payload.orderId, {
+      status: ORDER_STATUS.rider_assigned,
+      ...getOrderStatusTimestampUpdate(ORDER_STATUS.rider_assigned),
+    }),
     RiderAvailabilitySocketHelper.setActiveJob(payload.riderId, job!._id.toString()),
   ]);
 
@@ -296,7 +272,10 @@ const acceptJob = async (
 
   await Promise.all([
     RiderAvailabilitySocketHelper.setActiveJob(riderId, claimed._id.toString()),
-    Orders.findByIdAndUpdate(claimed.order, { status: ORDER_STATUS.rider_assigned }),
+    Orders.findByIdAndUpdate(claimed.order, {
+      status: ORDER_STATUS.rider_assigned,
+      ...getOrderStatusTimestampUpdate(ORDER_STATUS.rider_assigned),
+    }),
   ]);
 
   const acceptedJob = await Job.findById(claimed._id).populate(jobPopulate);
@@ -356,7 +335,7 @@ const rejectJob = async (
     !remaining.rider &&
     !remainingIds.length
   ) {
-    await rematchJob(traceId, job._id.toString());
+    await applyMatchRound(traceId, job._id.toString());
     return Job.findById(job._id).populate(jobPopulate);
   }
 
@@ -379,7 +358,10 @@ const pickupJob = async (traceId: string, riderId: string, payload: TJobIdPayloa
   job.status = JOB_STATUS.picked_up;
   job.pickedUpAt = new Date();
   await job.save();
-  await Orders.findByIdAndUpdate(job.order, { status: ORDER_STATUS.picked_up });
+  await Orders.findByIdAndUpdate(job.order, {
+    status: ORDER_STATUS.picked_up,
+    ...getOrderStatusTimestampUpdate(ORDER_STATUS.picked_up),
+  });
   const pickedUpJob = await Job.findById(job._id).populate(jobPopulate);
   await notifyOrderUser(pickedUpJob?.order as any, 'picked_up');
   return pickedUpJob;
@@ -395,7 +377,10 @@ const onTheWay = async (traceId: string, riderId: string, payload: TJobIdPayload
   job.status = JOB_STATUS.on_the_way;
   job.onTheWayAt = new Date();
   await job.save();
-  await Orders.findByIdAndUpdate(job.order, { status: ORDER_STATUS.on_the_way });
+  await Orders.findByIdAndUpdate(job.order, {
+    status: ORDER_STATUS.on_the_way,
+    ...getOrderStatusTimestampUpdate(ORDER_STATUS.on_the_way),
+  });
   const onTheWayJob = await Job.findById(job._id).populate(jobPopulate);
   await notifyOrderUser(onTheWayJob?.order as any, 'on_the_way');
   return onTheWayJob;
@@ -505,6 +490,19 @@ const deliveredJob = async (
     if (job.paymentMethod === JOB_PAYMENT_METHOD.cod) {
       job.collectedMoney = Number((order.totalAmount ?? 0).toFixed(2));
       job.depositStatus = JOB_DEPOSIT_STATUS.pending;
+      order.paymentStatus = ORDER_PAYMENT_STATUS.paid;
+      await Payment.updateMany(
+        {
+          order: order._id,
+          paymentMethod: PAYMENT_METHOD.cod,
+          isDeleted: { $ne: true },
+        },
+        {
+          status: PAYMENT_STATUS.paid,
+          isPaid: true,
+        },
+        { session }
+      );
     } else {
       const earning = Number((job.earning ?? 0).toFixed(2));
       if (earning > 0) {
@@ -518,6 +516,7 @@ const deliveredJob = async (
     await job.save({ session });
 
     order.status = ORDER_STATUS.delivered;
+    order.deliveredAt = new Date();
     await order.save({ session });
 
     await session.commitTransaction();
@@ -570,7 +569,7 @@ const riderLocationUpdate = async (
       ? await Job.findById(jobId).select('order rider status').lean()
       : await Job.findOne({
           rider: riderId,
-          status: { $nin: [JOB_STATUS.delivered, JOB_STATUS.cancelled] },
+          status: { $ne: JOB_STATUS.delivered },
         })
           .select('order rider status')
           .lean();
@@ -607,20 +606,15 @@ const myRequestJobs = async (riderId: string, query: Record<string, unknown>) =>
 
 /** Returns the rider's assigned jobs, filtered as active or completed. */
 const getMyJobs = async (riderId: string, query: Record<string, unknown>) => {
-  const filter =
-    query.filter === 'completed'
-      ? { rider: riderId, status: JOB_STATUS.delivered }
-      : {
-          rider: riderId,
-          status: { $in: [JOB_STATUS.assigned, ...JOB_ACTIVE_STATUSES] },
-        };
-
-  const restQuery = { ...query };
-  delete restQuery.filter;
+  const rider = toRiderObjectId(riderId);
+  const filter = applyJobListQueryFilters(
+    { $or: [{ rider }, { rider: riderId }] },
+    query
+  );
 
   const jobQuery = new QueryBuilder(
     Job.find(filter).select(jobListCardSelect).lean(),
-    restQuery
+    stripJobListQueryParams(query)
   )
     .sort()
     .paginate();
@@ -631,18 +625,17 @@ const getMyJobs = async (riderId: string, query: Record<string, unknown>) => {
 
 /** Returns every job for a rider. Used by agents. */
 const getRiderJobs = async (riderId: string, query: Record<string, unknown>) => {
-  const jobQuery = new QueryBuilder(
-    Job.find({
-      $or: [{ rider: riderId }, { requestedRider: riderId }],
-    })
-      .select(jobListCardSelect)
-      .lean(),
+  const filter = applyJobListQueryFilters(
+    { $or: [{ rider: riderId }, { requestedRider: riderId }] },
     query
+  );
+
+  const jobQuery = new QueryBuilder(
+    Job.find(filter).select(jobListCardSelect).lean(),
+    stripJobListQueryParams(query)
   )
-    .filter()
     .sort()
-    .paginate()
-    .fields();
+    .paginate();
 
   const [jobs, meta] = await Promise.all([jobQuery.modelQuery, jobQuery.countTotal()]);
   return { meta, data: await mapJobsToListCards(jobs) };
@@ -677,7 +670,7 @@ const startJobMatching = async (traceId: string, orderId: string) => {
   const order = await getAssignableOrderOrThrow(traceId, orderId);
   const existingJob = await Job.findOne({
     order: orderId,
-    status: { $nin: [JOB_STATUS.delivered, JOB_STATUS.cancelled] },
+    status: { $ne: JOB_STATUS.delivered },
   });
   if (existingJob && existingJob.rider) {
     throw new ApiError(
@@ -686,25 +679,26 @@ const startJobMatching = async (traceId: string, orderId: string) => {
       traceId
     );
   }
+  const paymentMethod = await resolveOrderPaymentMethod(orderId);
   if (
     existingJob &&
     existingJob.matchingEnabled &&
     (existingJob.matchAttemptCount ?? 0) > 0
   ) {
+    if (existingJob.paymentMethod !== paymentMethod) {
+      await Job.findByIdAndUpdate(existingJob._id, {
+        paymentMethod,
+        ...buildJobMoneyFields(
+          paymentMethod,
+          order.totalAmount,
+          order.deliveryCharge
+        ),
+      });
+    }
     return Job.findById(existingJob._id).populate(jobPopulate);
   }
 
   assertShopAndDeliveryLocations(traceId, order);
-
-  const payment = await Payment.findOne({ order: orderId, isDeleted: false })
-    .select('paymentMethod')
-    .sort({ createdAt: -1 })
-    .lean();
-  const paymentMethod =
-    payment?.paymentMethod &&
-    Object.values(JOB_PAYMENT_METHOD).includes(payment.paymentMethod as any)
-      ? (payment.paymentMethod as (typeof JOB_PAYMENT_METHOD)[keyof typeof JOB_PAYMENT_METHOD])
-      : JOB_PAYMENT_METHOD.card;
   const moneyFields = buildJobMoneyFields(
     paymentMethod,
     order.totalAmount,
@@ -744,123 +738,6 @@ const startJobMatching = async (traceId: string, orderId: string) => {
 
   return applyMatchRound(traceId, job!._id.toString());
 };
-
-const assertShopAndDeliveryLocations = (traceId: string, order: any) => {
-  const pickup = order.author as { location?: { coordinates?: number[] } };
-  const [longitude, latitude] = pickup?.location?.coordinates ?? [0, 0];
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !latitude || !longitude) {
-    throw new ApiError(
-      HttpStatusCode.BadRequest,
-      'Shop location is required to match nearby riders',
-      traceId
-    );
-  }
-
-  const destination = order.billingDetails?.deliveryLocation;
-  const [destinationLng, destinationLat] = destination?.coordinates ?? [];
-  if (
-    !Number.isFinite(destinationLng) ||
-    !Number.isFinite(destinationLat) ||
-    (destinationLng === 0 && destinationLat === 0)
-  ) {
-    throw new ApiError(
-      HttpStatusCode.BadRequest,
-      'Order delivery location is required to create a job',
-      traceId
-    );
-  }
-
-  return { latitude, longitude };
-};
-
-async function exhaustMatching(jobId: string) {
-  const job = await Job.findOneAndUpdate(
-    { _id: jobId, rider: null, matchingEnabled: true },
-    { matchingEnabled: false, nextMatchAt: null },
-    { new: true }
-  ).populate(jobPopulate);
-  if (job) await notifyMatchingExhausted(job);
-  return job;
-}
-
-async function applyMatchRound(traceId: string, jobId: string) {
-  const job = await Job.findById(jobId);
-  if (
-    !job ||
-    job.rider ||
-    !job.matchingEnabled ||
-    ![JOB_STATUS.matching, JOB_STATUS.assigned].includes(job.status as any)
-  ) {
-    return Job.findById(jobId).populate(jobPopulate);
-  }
-
-  const order = await getAssignableOrderOrThrow(traceId, job.order.toString());
-  if (order.status === ORDER_STATUS.cancelled || order.isDeleted) {
-    return exhaustMatching(jobId);
-  }
-
-  const settings = await getRiderMatchSettings();
-  if ((job.matchAttemptCount ?? 0) >= settings.maxAttempts) {
-    return exhaustMatching(jobId);
-  }
-
-  const { latitude, longitude } = assertShopAndDeliveryLocations(traceId, order);
-  const pendingRiderIds = (job.requestedRider ?? []).map((rider) => rider.toString());
-  const declinedRiderIds = (job.declinedRider ?? []).map((rider) => rider.toString());
-  const offeredRiderIds = (job.offeredRider ?? []).map((rider) => rider.toString());
-  const nextAttempt = (job.matchAttemptCount ?? 0) + 1;
-  const phaseRiders = await collectPhaseRequestedRiders(
-    latitude,
-    longitude,
-    nextAttempt,
-    [...new Set([...offeredRiderIds, ...declinedRiderIds])]
-  );
-  const newRiderIds = phaseRiders.map((rider) => rider.toString());
-  const requestedRiderIds = [
-    ...new Set([
-      ...offeredRiderIds.filter((id) => !declinedRiderIds.includes(id)),
-      ...pendingRiderIds.filter((id) => !declinedRiderIds.includes(id)),
-      ...newRiderIds,
-    ]),
-  ];
-  const offeredRiderIdsNext = [
-    ...new Set([...offeredRiderIds, ...newRiderIds]),
-  ];
-  const now = new Date();
-  const nextMatchAt = new Date(now.getTime() + settings.intervalSeconds * 1000);
-
-  const updated = await Job.findOneAndUpdate(
-    {
-      _id: jobId,
-      rider: null,
-      matchingEnabled: true,
-      matchAttemptCount: job.matchAttemptCount ?? 0,
-      status: { $in: [JOB_STATUS.matching, JOB_STATUS.assigned] },
-    },
-    {
-      requestedRider: toObjectIdList(requestedRiderIds),
-      offeredRider: toObjectIdList(offeredRiderIdsNext),
-      user: (order.user as any)?._id ?? order.user ?? job.user,
-      matchAttemptCount: nextAttempt,
-      lastMatchedAt: now,
-      nextMatchAt,
-      status: JOB_STATUS.matching,
-    },
-    { new: true }
-  ).populate(jobPopulate);
-
-  if (!updated) return Job.findById(jobId).populate(jobPopulate);
-
-  await notifyJobOffer(updated, newRiderIds, {
-    attempt: nextAttempt,
-    maxAttempts: settings.maxAttempts,
-  });
-  return updated;
-}
-
-async function rematchJob(traceId: string, jobId: string) {
-  return applyMatchRound(traceId, jobId);
-}
 
 /** Rematches unmatched jobs whose nextMatchAt has elapsed. */
 const rematchDueJobs = async (traceId = 'cron') => {

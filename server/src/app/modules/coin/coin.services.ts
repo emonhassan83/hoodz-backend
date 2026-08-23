@@ -1,9 +1,7 @@
 import { HttpStatusCode } from 'axios';
 import { ClientSession, Types } from 'mongoose';
 
-import ApiError from '@/app/errors/ApiError';
 import {
-  COIN_EARNING_ACTION,
   COIN_EXPIRY_DAYS,
   COIN_EXPIRY_WARNING_DAYS,
   COIN_INACTIVITY_REMINDER_DAYS,
@@ -11,127 +9,36 @@ import {
   COIN_REDEMPTION_MAX_SUBTOTAL_PERCENT,
   COIN_REDEMPTION_MIN_BALANCE,
   COIN_REDEMPTION_MIN_BASKET_SUBTOTAL_EGP,
-  COIN_REFERENCE_TYPE,
   COIN_REVIEW_MONTHLY_CAP,
   COIN_REWARD_AMOUNT,
+} from '@/app/constant';
+import ApiError from '@/app/errors/ApiError';
+import {
+  COIN_EARNING_ACTION,
+  COIN_REFERENCE_TYPE,
   COIN_TRANSACTION_STATUS,
   COIN_TRANSACTION_TYPE,
 } from '@/app/modules/coin/coin.constant';
 import { TCoinEarningAction } from '@/app/modules/coin/coin.interface';
 import {
+  addDays,
+  expireOldCoins,
+  getActiveCoinStats,
+  getMonthlyEarnCount,
+  getOrCreateAccount,
   sendCoinEarnedNotification,
   sendCoinExpiredNotification,
   sendCoinRedeemedNotification,
   sendCoinReminderNotification,
+  syncAccountBalance,
+  toObjectId,
 } from '@/app/modules/coin/coin.helpers';
 import { CoinAccount, CoinTransaction } from '@/app/modules/coin/coin.model';
+import { TCoinReferenceType, TReferenceId } from '@/app/modules/coin/coin.types';
 import { PAYMENT_STATUS } from '@/app/modules/orders/orders.constant';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { User } from '@/app/modules/user/user.model';
 
-type TCoinReferenceType =
-  (typeof COIN_REFERENCE_TYPE)[keyof typeof COIN_REFERENCE_TYPE];
-
-type TReferenceId = string | Types.ObjectId;
-
-const addDays = (date: Date, days: number) => {
-  const nextDate = new Date(date);
-  nextDate.setDate(nextDate.getDate() + days);
-  return nextDate;
-};
-
-const toObjectId = (id: TReferenceId) =>
-  typeof id === 'string' ? new Types.ObjectId(id) : id;
-
-const getMonthWindow = (date = new Date()) => {
-  const start = new Date(date.getFullYear(), date.getMonth(), 1);
-  const end = new Date(date.getFullYear(), date.getMonth() + 1, 1);
-  return { start, end };
-};
-
-/** Creates a coin account if the user does not have one yet. */
-const getOrCreateAccount = async (userId: string, session?: ClientSession) =>
-  CoinAccount.findOneAndUpdate(
-    { user: userId },
-    {
-      $setOnInsert: {
-        user: userId,
-        balance: 0,
-        lastActivityAt: null,
-        inactiveReminderSentAt: null,
-      },
-    },
-    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true, session }
-  );
-
-/** Marks expired active coin rows before balance calculation. */
-const expireOldCoins = async (
-  userId: string,
-  now = new Date(),
-  session?: ClientSession
-) =>
-  CoinTransaction.updateMany(
-    {
-      user: userId,
-      status: COIN_TRANSACTION_STATUS.active,
-      remainingCoins: { $gt: 0 },
-      expiresAt: { $lte: now },
-    },
-    {
-      status: COIN_TRANSACTION_STATUS.expired,
-      remainingCoins: 0,
-    },
-    { session }
-  );
-
-/** Calculates active balance and next expiry from unexpired coin rows. */
-const getActiveCoinStats = async (userId: string, now = new Date()) => {
-  const [stats] = await CoinTransaction.aggregate([
-    {
-      $match: {
-        user: new Types.ObjectId(userId),
-        status: COIN_TRANSACTION_STATUS.active,
-        remainingCoins: { $gt: 0 },
-        expiresAt: { $gt: now },
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        balance: { $sum: '$remainingCoins' },
-        nextExpiryAt: { $min: '$expiresAt' },
-      },
-    },
-  ]);
-
-  const nextExpiryAt = stats?.nextExpiryAt ?? null;
-  const expiringCoins = nextExpiryAt
-    ? await CoinTransaction.aggregate([
-        {
-          $match: {
-            user: new Types.ObjectId(userId),
-            status: COIN_TRANSACTION_STATUS.active,
-            remainingCoins: { $gt: 0 },
-            expiresAt: nextExpiryAt,
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            coins: { $sum: '$remainingCoins' },
-          },
-        },
-      ])
-    : [];
-
-  return {
-    balance: stats?.balance ?? 0,
-    nextExpiryAt,
-    expiringCoins: expiringCoins[0]?.coins ?? 0,
-  };
-};
-
-/** Returns user's active coin balance and excludes expired coins. */
 const getSummary = async (userId: string) => {
   await expireOldCoins(userId);
   const [account, stats] = await Promise.all([
@@ -158,7 +65,6 @@ const getSummary = async (userId: string) => {
   };
 };
 
-/** Adds active coins with automatic 60-day expiry and idempotent references. */
 const addCoins = async (
   userId: string,
   coins: number,
@@ -240,20 +146,6 @@ const addProfileCompletionBonus = (userId: string, session?: ClientSession) =>
     userId,
     session
   );
-
-const getMonthlyEarnCount = async (
-  userId: string,
-  action: TCoinEarningAction,
-  now = new Date()
-) => {
-  const { start, end } = getMonthWindow(now);
-  return CoinTransaction.countDocuments({
-    user: userId,
-    type: COIN_TRANSACTION_TYPE.earn,
-    action,
-    createdAt: { $gte: start, $lt: end },
-  });
-};
 
 const addReviewBonus = async (
   userId: string,
@@ -518,7 +410,6 @@ const processReferralRewards = async (
   await addReferralInviterBonus(user.referredBy.toString(), userId);
 };
 
-/** Awards purchase and referral coins after orders become paid. */
 const processPaidOrderRewards = async (orderIds: TReferenceId[]) => {
   const uniqueOrderIds = [
     ...new Set(orderIds.map((orderId) => orderId.toString()).filter(Boolean)),
@@ -553,17 +444,6 @@ const processPaidOrderRewards = async (orderIds: TReferenceId[]) => {
   }
 };
 
-const syncAccountBalance = async (userId: string, now = new Date()) => {
-  const stats = await getActiveCoinStats(userId, now);
-  await CoinAccount.findOneAndUpdate(
-    { user: userId },
-    { balance: stats.balance },
-    { upsert: true }
-  );
-  return stats.balance;
-};
-
-/** Day 30 inactivity reminder for users with unused coins. */
 const sendInactiveCoinReminders = async (now = new Date()) => {
   const cutoff = addDays(now, -COIN_INACTIVITY_REMINDER_DAYS);
   const accounts = await CoinAccount.find({
@@ -592,7 +472,6 @@ const sendInactiveCoinReminders = async (now = new Date()) => {
   return { notifiedUsers: accounts.length };
 };
 
-/** Day 50 warning for coins that expire in 10 days. */
 const sendExpiryWarnings = async (now = new Date()) => {
   const warningWindowEnd = addDays(now, COIN_EXPIRY_WARNING_DAYS);
   const expiringTransactions = await CoinTransaction.aggregate<{
@@ -634,7 +513,6 @@ const sendExpiryWarnings = async (now = new Date()) => {
   return { notifiedUsers: expiringTransactions.length };
 };
 
-/** Day 60 expiry: invalidate due coins, sync balances, and notify. */
 const expireDueCoins = async (now = new Date()) => {
   const dueTransactions = await CoinTransaction.find({
     status: COIN_TRANSACTION_STATUS.active,

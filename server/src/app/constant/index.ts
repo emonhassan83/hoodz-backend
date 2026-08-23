@@ -1,3 +1,5 @@
+import { REVIEW_SORT } from '@/app/modules/review/review.constant';
+
 export const corsWhiteList = [
   'http://localhost:5173',
   'http://localhost:3000'
@@ -62,5 +64,126 @@ export const OTP_GENERATE_CONFIG = {
   specialChars: false,
   upperCaseAlphabets: false,
 } as const;
+
+/**
+ * ==============================================
+ * -------------------- JOB ---------------------
+ * ==============================================
+ */
+export const JOB_ASSIGNMENT_TYPE = {
+  agent: 'agent',
+  auto: 'auto',
+} as const;
+
+export const JOB_ACTIVE_STATUSES = [
+  'accepted',
+  'picked_up',
+  'on_the_way',
+  'otp_sent',
+] as const;
+
+export const RIDER_MATCH_DEFAULTS = {
+  intervalSeconds: 180,
+  maxAttempts: 5,
+} as const;
+
+export const RIDER_LOCATION = {
+  persistIntervalSeconds: 300,
+  minMoveMeters: 50,
+} as const;
+
+export const JOB_MATCH_RADIUS_KM = [5, 10, 20, 50] as const;
+
+/** Delivery OTP lives in Redis for 6 minutes. */
+export const DELIVERY_OTP_TTL_SECONDS = 360;
+
+/**
+ * ==============================================
+ * -------------------- COIN --------------------
+ * ==============================================
+ */
+export const COIN_EXPIRY_DAYS = 60;
+export const COIN_INACTIVITY_REMINDER_DAYS = 30;
+export const COIN_EXPIRY_WARNING_DAYS = 10;
+
+export const COIN_REWARD_AMOUNT = {
+  account_creation: 20,
+  profile_completion: 10,
+  product_review: 5,
+  photo_review: 15,
+  referral_inviter: 30,
+  referral_invitee: 20,
+} as const;
+
+export const COIN_PURCHASE_SPEND_UNIT_EGP = 100;
+export const COIN_REVIEW_MONTHLY_CAP = 2;
+
+export const COIN_REDEMPTION_MIN_BALANCE = 50;
+export const COIN_REDEMPTION_MIN_BASKET_SUBTOTAL_EGP = 500;
+export const COIN_REDEMPTION_MAX_SUBTOTAL_PERCENT = 15;
+
+/**
+ * ==============================================
+ * -------------------- CART --------------------
+ * ==============================================
+ */
+export const CART_RECOMMENDED_LIMIT = 6;
+
+/**
+ * ==============================================
+ * ------------------ ANALYSIS ------------------
+ * ==============================================
+ */
+export const MONTH_SHORT = [
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'may',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'oct',
+  'nov',
+  'dec',
+] as const;
+
+/**
+ * ==============================================
+ * ------------------- SEARCH -------------------
+ * ==============================================
+ */
+export const FILTER_PAGE_SIZES = [
+  'xs',
+  's',
+  'm',
+  'l',
+  'xl',
+  'xxl',
+  '3xl',
+  '4xl',
+  '5xl',
+] as const;
+
+export const FILTER_PAGE_GENDERS = [
+  'all',
+  'men',
+  'women',
+  'unisex',
+  'kids',
+  'baby',
+] as const;
+
+/**
+ * ==============================================
+ * ------------------- REVIEW -------------------
+ * ==============================================
+ */
+export const REVIEW_SORT_MAP: Record<string, string> = {
+  [REVIEW_SORT.latest]: '-createdAt',
+  [REVIEW_SORT.highest]: '-rating -createdAt',
+  [REVIEW_SORT.lowest]: 'rating -createdAt',
+};
 
 

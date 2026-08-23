@@ -103,6 +103,23 @@ export type TProductWithWishlist<T> = T & {
   isWishlisted: boolean;
 };
 
+export type TProductPaginationMeta = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPage: number;
+};
+
+export type TProductActor = {
+  userId?: string;
+  guestId?: string;
+};
+
+export type TProductListResponse = {
+  meta: TProductPaginationMeta;
+  data: Array<Record<string, any>>;
+};
+
 export type TProductDashboardStats = {
   overview: {
     allProducts: number;
@@ -114,6 +131,14 @@ export type TProductDashboardStats = {
     topCategories: { title: string; count: number }[];
     priceDistribution: { label: string; count: number }[];
     stockInsights: { label: string; count: number }[];
+  };
+};
+
+export type TMyProductsResponse = {
+  meta: TProductPaginationMeta;
+  data: {
+    stats: TProductDashboardStats;
+    products: Array<Record<string, any>>;
   };
 };
 

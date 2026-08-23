@@ -1,10 +1,14 @@
 import crypto from 'node:crypto';
 
 import axios, { HttpStatusCode } from 'axios';
+import mongoose from 'mongoose';
 
 import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { Product } from '@/app/modules/product/product.model';
+import { upsertShopToTypesense } from '@/app/modules/search/search.typesense';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
 import {
   ISignUpWithEmail,
   IGeoLocation,
@@ -13,6 +17,8 @@ import {
 import { User } from '@/app/modules/user/user.model';
 import {
   TCoordinate,
+  TGoogleDistanceElement,
+  TInvitePlatformUserPayload,
   TPlatformInviteEmailJobName,
   TPlatformInviteEmailPayload,
 } from '@/app/modules/user/user.types';
@@ -287,6 +293,166 @@ export const sendUserStatusNotifYToUser = async (
       reference: user._id.toString(),
     }
   );
+};
+
+export const toFiniteNumber = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+export const getNearbyShopGoogleElements = async (
+  origin: TCoordinate,
+  destinations: TCoordinate[]
+) => {
+  const googleDestinationLimit = 25;
+  let googleElements: TGoogleDistanceElement[] = [];
+  try {
+    for (let i = 0; i < destinations.length; i += googleDestinationLimit) {
+      const chunk = destinations.slice(i, i + googleDestinationLimit);
+      const elements = await getGoogleDistanceMatrix(origin, chunk);
+      googleElements.push(...elements);
+    }
+  } catch (error) {
+    console.warn(
+      '[Nearby Shops] Google Maps distance lookup failed:',
+      error instanceof Error ? error.message : error
+    );
+  }
+  return googleElements;
+};
+
+export const resolveShopViewerOrigin = async (
+  query: {
+    latitude?: number;
+    longitude?: number;
+    lat?: number;
+    lng?: number;
+    lang?: number;
+  },
+  userId?: string
+): Promise<TCoordinate | null> => {
+  const queryLatitude = toFiniteNumber(query.latitude ?? query.lat);
+  const queryLongitude = toFiniteNumber(query.longitude ?? query.lng ?? query.lang);
+  let origin =
+    queryLatitude !== undefined && queryLongitude !== undefined
+      ? { latitude: queryLatitude, longitude: queryLongitude }
+      : null;
+
+  if (!origin && userId) {
+    const user = await User.findById(userId)
+      .select('deliveryLocation location')
+      .lean();
+    const coordinates =
+      user?.deliveryLocation?.coordinates?.some((coordinate) => coordinate !== 0)
+        ? user.deliveryLocation.coordinates
+        : user?.location?.coordinates;
+
+    if (coordinates && coordinates.some((coordinate) => coordinate !== 0)) {
+      origin = { longitude: coordinates[0], latitude: coordinates[1] };
+    }
+  }
+
+  return origin;
+};
+
+export const resolveShopDistance = async (
+  origin: TCoordinate,
+  destination: TCoordinate
+) => {
+  try {
+    const [element] = await getGoogleDistanceMatrix(origin, [destination]);
+    const fallbackDistanceKm = Number(
+      calculateDistanceKm(origin, destination).toFixed(2)
+    );
+    const googleDistanceKm =
+      element?.status === 'OK' && element.distance?.value !== undefined
+        ? element.distance.value / 1000
+        : fallbackDistanceKm;
+    return {
+      distanceKm: Number(Math.max(googleDistanceKm, 0.01).toFixed(2)),
+      durationMinutes:
+        element?.status === 'OK' && element.duration?.value !== undefined
+          ? Math.ceil(element.duration.value / 60)
+          : null,
+    };
+  } catch {
+    const fallbackDistanceKm = Number(
+      calculateDistanceKm(origin, destination).toFixed(2)
+    );
+    return {
+      distanceKm: Number(Math.max(fallbackDistanceKm, 0.01).toFixed(2)),
+      durationMinutes: null,
+    };
+  }
+};
+
+export const getShopProductCategories = (vendorId: string) =>
+  Product.aggregate([
+    { $match: { vendor: new mongoose.Types.ObjectId(vendorId), isDeleted: false } },
+    { $group: { _id: '$category', productCount: { $sum: 1 } } },
+    {
+      $lookup: {
+        from: 'categories',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'category',
+      },
+    },
+    { $unwind: '$category' },
+    {
+      $project: {
+        _id: '$category._id',
+        title: '$category.title',
+      },
+    },
+    { $sort: { productCount: -1, title: 1 } },
+  ]);
+
+export const createInvitedPlatformUser = async (
+  traceId: string,
+  payload: TInvitePlatformUserPayload,
+  role: typeof USER_ROLE.vendor | typeof USER_ROLE.agent,
+  emailJobName: TPlatformInviteEmailJobName
+) => {
+  const exists = await User.findOne({
+    $or: [{ email: payload.email }, { phone: payload.phone }],
+  });
+  if (exists) {
+    throw new ApiError(
+      HttpStatusCode.Conflict,
+      'A user with this email or phone already exists',
+      traceId
+    );
+  }
+
+  const password = generateTemporaryPassword();
+  const user = await User.create({
+    ...payload,
+    role,
+    password,
+    isLegalTermsAccepted: true,
+    isSignUpOtpVerified: true,
+    isProfileSetUp: false,
+    needsPasswordChange: true,
+    expireAt: null as unknown as Date,
+  });
+
+  await enqueuePlatformInviteEmail(emailJobName, {
+    email: payload.email,
+    name: payload.name,
+    password,
+  });
+
+  if (role === USER_ROLE.vendor) {
+    await upsertShopToTypesense(user._id.toString()).catch((error) => {
+      console.warn(
+        '[Typesense] Vendor invite sync failed:',
+        error instanceof Error ? error.message : error
+      );
+    });
+  }
+
+  return user;
 };
 
 

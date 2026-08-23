@@ -1,16 +1,3 @@
-export const VENDOR_GENERAL_KEYS = [
-  'returnPolicyTime',
-  'deliveryMinTime',
-  'deliveryMaxTime',
-  'instantDeliveryMinTime',
-  'instantDeliveryMaxTime',
-  'isInstantDeliveryAvailable',
-  'openingTime',
-  'closingTime',
-  'weekends',
-  'timezone',
-] as const;
-
 export const SETTING_TIME_UNIT = {
   minute: 'minute',
   hour: 'hour',
@@ -37,11 +24,15 @@ export const PLATFORM_GENERAL_KEYS = [
   'riderMatchMaxAttempts',
 ] as const;
 
-export const GENERAL_KEYS = VENDOR_GENERAL_KEYS;
-
-export const ALLOWED_KEYS = [
-  ...VENDOR_GENERAL_KEYS,
-  ...ADMIN_SETTING_KEYS,
+export const GENERAL_KEYS = [
+  'returnPolicyTime',
+  'deliveryMinTime',
+  'deliveryMaxTime',
+  'instantDeliveryMinTime',
+  'instantDeliveryMaxTime',
+  'isInstantDeliveryAvailable',
+  'openingTime',
+  'closingTime',
+  'weekends',
+  'timezone',
 ] as const;
-
-

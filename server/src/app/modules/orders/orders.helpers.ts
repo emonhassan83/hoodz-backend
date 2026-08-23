@@ -2,10 +2,13 @@ import { HttpStatusCode } from 'axios';
 import { ClientSession, Types } from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
+import { buildCartItemMatch } from '@/app/modules/cart/cart.helpers';
 import { TEnrichedCartItem } from '@/app/modules/cart/cart.types';
+import { Cart } from '@/app/modules/cart/cart.model';
+import { CoinService } from '@/app/modules/coin/coin.services';
 import { Items } from '@/app/modules/items/items.model';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
-import { DELIVERY_TYPE } from '@/app/modules/orders/orders.constant';
+import { DELIVERY_TYPE, ORDER_STATUS } from '@/app/modules/orders/orders.constant';
 import { IOrders } from '@/app/modules/orders/orders.interface';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { User } from '@/app/modules/user/user.model';
@@ -15,6 +18,8 @@ import {
   TCheckoutVoucherQuote,
   TCreateOrderPayload,
 } from '@/app/modules/orders/orders.types';
+import { deleteCachePattern } from '@/app/redis/helpers';
+import { clearCartCache } from '@/app/redis/helpers/cart';
 import { PRODUCT_INVENTORY_TYPE } from '@/app/modules/product/product.constant';
 import { Product } from '@/app/modules/product/product.model';
 import { Setting } from '@/app/modules/settings/settings.model';
@@ -29,6 +34,24 @@ import {
   getActiveVoucherByCodeOrThrow,
 } from '@/app/modules/voucher/voucher.helpers';
 import { Voucher } from '@/app/modules/voucher/voucher.model';
+
+const ORDER_STATUS_AT_FIELD = {
+  [ORDER_STATUS.cancelled]: 'cancelledAt',
+  [ORDER_STATUS.confirmed]: 'confirmedAt',
+  [ORDER_STATUS.processing]: 'processedAt',
+  [ORDER_STATUS.rider_assigned]: 'riderAssignedAt',
+  [ORDER_STATUS.picked_up]: 'pickedUpAt',
+  [ORDER_STATUS.on_the_way]: 'onTheWayAt',
+  [ORDER_STATUS.delivered]: 'deliveredAt',
+} as const;
+
+export const getOrderStatusTimestampUpdate = (status?: string) => {
+  if (!status) return {};
+  const field =
+    ORDER_STATUS_AT_FIELD[status as keyof typeof ORDER_STATUS_AT_FIELD];
+  if (!field) return {};
+  return { [field]: new Date() };
+};
 
 /** Normalizes checkout lat/lng into GeoJSON [longitude, latitude]. */
 export const normalizeBillingDeliveryLocation = (
@@ -641,6 +664,185 @@ export const notifyOrderUser = async (
     .catch((error) => {
       console.warn('[Order] Failed to queue order email', error);
     });
+};
+
+export const orderPopulate = [
+  { path: 'user', select: 'name email phone profileAvatar' },
+  { path: 'author', select: 'name email phone profileAvatar coverPhoto' },
+];
+
+export const invalidateOrderCaches = async () => {
+  await Promise.all([
+    deleteCachePattern('order:*'),
+    deleteCachePattern('product:*'),
+    deleteCachePattern('cart:*'),
+  ]);
+};
+
+export const getBasketSubtotal = (items: TEnrichedCartItem[]) =>
+  Number(items.reduce((total, item) => total + item.totalPrice, 0).toFixed(2));
+
+export const getCoinEligibleSubtotal = (items: TEnrichedCartItem[]) =>
+  Number(
+    items
+      .filter((item) => !item.product.isDiscounted)
+      .reduce((total, item) => total + item.totalPrice, 0)
+      .toFixed(2)
+  );
+
+export const distributeCoinDiscount = (
+  totalCoins: number,
+  groupedItems: [string, TEnrichedCartItem[]][]
+) => {
+  if (totalCoins <= 0) return groupedItems.map(() => 0);
+
+  const eligibleSubtotals = groupedItems.map(([, items]) =>
+    getCoinEligibleSubtotal(items)
+  );
+  const totalEligibleSubtotal = eligibleSubtotals.reduce(
+    (total, subtotal) => total + subtotal,
+    0
+  );
+
+  if (totalEligibleSubtotal <= 0) return groupedItems.map(() => 0);
+
+  const allocations = eligibleSubtotals.map((subtotal, index) => {
+    const rawCoins = (subtotal / totalEligibleSubtotal) * totalCoins;
+    return {
+      index,
+      coins: Math.floor(rawCoins),
+      fraction: rawCoins - Math.floor(rawCoins),
+    };
+  });
+  let remainingCoins =
+    totalCoins - allocations.reduce((total, item) => total + item.coins, 0);
+
+  allocations
+    .sort((a, b) => b.fraction - a.fraction)
+    .forEach((allocation) => {
+      if (remainingCoins <= 0) return;
+      allocation.coins += 1;
+      remainingCoins -= 1;
+    });
+
+  return allocations
+    .sort((a, b) => a.index - b.index)
+    .map((allocation) => allocation.coins);
+};
+
+export const buildCheckoutQuote = async (
+  traceId: string,
+  userId: string,
+  payload: TCreateOrderPayload
+) => {
+  const checkoutItems = await resolveCheckoutItemsOrThrow(traceId, payload.items);
+  const groupedItems = [...groupCartItemsByAuthor(checkoutItems).entries()];
+  const deliveryCharge = await getDeliveryChargeFromSettingsOrThrow(
+    traceId,
+    payload.orderData.billingDetails.city,
+    payload.orderData.deliveryType
+  );
+  const deliveryCharges = distributeDeliveryCharge(
+    deliveryCharge,
+    groupedItems.length
+  );
+  const amount = getBasketSubtotal(checkoutItems);
+  const voucherQuote = await applyCheckoutVoucherOrThrow(
+    traceId,
+    userId,
+    payload.orderData.voucherCode,
+    groupedItems,
+    amount
+  );
+  const remainingAfterVoucher = Math.max(
+    0,
+    Number((amount - voucherQuote.voucherDiscount).toFixed(2))
+  );
+  const redemption = await CoinService.getRedemptionPreview(
+    traceId,
+    userId,
+    payload.orderData.redeemCoins ?? 0,
+    amount,
+    Math.min(getCoinEligibleSubtotal(checkoutItems), remainingAfterVoucher)
+  );
+  const coinDiscounts = distributeCoinDiscount(
+    redemption.redeemCoins,
+    groupedItems
+  ).map((coinDiscount, index) => {
+    const orderAmount = Number(
+      groupedItems[index][1].reduce((total, item) => total + item.totalPrice, 0).toFixed(2)
+    );
+    const voucherDiscount = voucherQuote.perOrderDiscounts[index] ?? 0;
+    return Math.min(
+      coinDiscount,
+      Math.max(0, Number((orderAmount - voucherDiscount).toFixed(2)))
+    );
+  });
+  const coinDiscount = Number(
+    coinDiscounts.reduce((total, value) => total + value, 0).toFixed(2)
+  );
+
+  const orders = groupedItems.map(([authorId, items], index) => {
+    const amount = Number(
+      items.reduce((total, item) => total + item.totalPrice, 0).toFixed(2)
+    );
+    const orderDeliveryCharge = deliveryCharges[index] ?? 0;
+    const coinDiscount = coinDiscounts[index] ?? 0;
+    const voucherDiscount = voucherQuote.perOrderDiscounts[index] ?? 0;
+
+    return {
+      author: authorId,
+      amount,
+      voucherDiscount,
+      giftDetails: voucherQuote.perOrderGifts[index],
+      coinDiscount,
+      deliveryCharge: orderDeliveryCharge,
+      totalAmount: Number(
+        (
+          amount - voucherDiscount - coinDiscount + orderDeliveryCharge
+        ).toFixed(2)
+      ),
+      items,
+    };
+  });
+
+  return {
+    groupedItems,
+    deliveryCharge,
+    deliveryCharges,
+    amount,
+    voucherQuote,
+    redemption: {
+      redeemCoins: coinDiscount,
+      coinDiscount,
+    },
+    coinDiscounts,
+    orders,
+  };
+};
+
+export const removeCheckedOutItemsFromCart = async (
+  userId: string,
+  items: TCreateOrderPayload['items']
+) => {
+  await Promise.all(
+    items.map((item) =>
+      Cart.updateOne(
+        { userId },
+        {
+          $pull: {
+            items: buildCartItemMatch({
+              productId: item.product,
+              size: item.size,
+              color: item.color,
+            }),
+          },
+        }
+      )
+    )
+  );
+
+  await clearCartCache(userId);
 };
 
 export const notifyOrdersPaid = async (orderIds: Array<string | Types.ObjectId>) => {

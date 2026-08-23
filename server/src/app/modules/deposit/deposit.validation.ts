@@ -7,7 +7,6 @@ const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
 const submitDepositValidationSchema = z.object({
   body: z.object({
     jobIds: z.array(objectIdSchema).min(1),
-    amount: z.number().positive(),
     fawryRefNo: z.string().trim().min(1),
     receiptFiles: z.array(z.string().trim().min(1)).min(1),
     note: z.string().trim().optional(),

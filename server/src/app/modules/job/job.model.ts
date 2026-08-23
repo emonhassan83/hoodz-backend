@@ -1,8 +1,8 @@
 import { Schema, model } from 'mongoose';
 
+import { JOB_ASSIGNMENT_TYPE } from '@/app/constant';
 import {
   DELIVERY_TYPE,
-  JOB_ASSIGNMENT_TYPE,
   JOB_DEPOSIT_STATUS,
   JOB_PAYMENT_METHOD,
   JOB_STATUS,

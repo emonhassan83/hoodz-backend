@@ -6,7 +6,7 @@ export type TFindOnlineRiderSocketPayload = {
 export type TJobAssignSocketPayload = {
   orderId: string;
   riderId: string;
-  assignmentType?: 'vendor' | 'admin' | 'agent' | 'auto';
+  assignmentType?: 'agent' | 'auto';
   paymentMethod?: 'card' | 'wallet' | 'cod';
 };
 

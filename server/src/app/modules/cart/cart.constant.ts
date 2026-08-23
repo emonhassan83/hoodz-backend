@@ -1,1 +1,0 @@
-export const CART_RECOMMENDED_LIMIT = 6;

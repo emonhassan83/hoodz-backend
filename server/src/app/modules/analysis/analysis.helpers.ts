@@ -1,4 +1,4 @@
-import { MONTH_SHORT } from '@/app/modules/analysis/analysis.constant';
+import { MONTH_SHORT } from '@/app/constant';
 
 export const parseYear = (value: unknown) => {
   const year = Number(value);

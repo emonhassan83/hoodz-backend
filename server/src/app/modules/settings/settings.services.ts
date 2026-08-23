@@ -6,17 +6,19 @@ import {
   GENERAL_KEYS,
   PLATFORM_GENERAL_KEYS,
 } from '@/app/modules/settings/settings.constant';
+import {
+  buildPlatformGenerals,
+  buildVendorGenerals,
+  hasAllKeys,
+  invalidateAdminSettingCaches,
+  invalidateVendorSettingCaches,
+} from '@/app/modules/settings/settings.helpers';
 import { Setting } from '@/app/modules/settings/settings.model';
 import {
   TGeneralSettings,
   TPlatformGeneralSettings,
 } from '@/app/modules/settings/settings.types';
-import {
-  deleteCache,
-  deleteCachePattern,
-  getCache,
-  setCache,
-} from '@/app/redis/helpers';
+import { getCache, setCache } from '@/app/redis/helpers';
 import { REDIS_KEYS } from '@/app/redis/keys';
 
 // ─── Read ──────────────────────────────────────────────────────────────────
@@ -24,12 +26,7 @@ import { REDIS_KEYS } from '@/app/redis/keys';
 const getAdminSettings = async () => {
   const cacheKey = REDIS_KEYS.SETTINGS_ADMIN;
   const cached = await getCache<TPlatformGeneralSettings>(cacheKey);
-  const hasCurrentGeneralKeys =
-    cached &&
-    !Array.isArray(cached) &&
-    Object.keys(cached).length === PLATFORM_GENERAL_KEYS.length &&
-    PLATFORM_GENERAL_KEYS.every((key) => Object.hasOwn(cached, key));
-  if (hasCurrentGeneralKeys) return cached;
+  if (hasAllKeys(cached, PLATFORM_GENERAL_KEYS)) return cached;
 
   const settings = await Setting.find({
     key: { $in: PLATFORM_GENERAL_KEYS },
@@ -38,12 +35,7 @@ const getAdminSettings = async () => {
     .select('key value -_id')
     .lean();
 
-  const settingsByKey = new Map(
-    settings.map((setting) => [setting.key, setting.value])
-  );
-  const adminSettings = Object.fromEntries(
-    PLATFORM_GENERAL_KEYS.map((key) => [key, settingsByKey.get(key) ?? null])
-  ) as TPlatformGeneralSettings;
+  const adminSettings = buildPlatformGenerals(settings);
 
   await setCache(cacheKey, adminSettings);
   return adminSettings;
@@ -111,12 +103,7 @@ const getSettingGenerals = async (traceId: string, vendorId: string) => {
 
   const cacheKey = REDIS_KEYS.SETTINGS_GENERALS(vendorId);
   const cached = await getCache<TGeneralSettings>(cacheKey);
-  const hasCurrentGeneralKeys =
-    cached &&
-    !Array.isArray(cached) &&
-    Object.keys(cached).length === GENERAL_KEYS.length &&
-    GENERAL_KEYS.every((key) => Object.hasOwn(cached, key));
-  if (hasCurrentGeneralKeys) return cached;
+  if (hasAllKeys(cached, GENERAL_KEYS)) return cached;
 
   const settings = await Setting.find({
     key: { $in: GENERAL_KEYS },
@@ -125,12 +112,7 @@ const getSettingGenerals = async (traceId: string, vendorId: string) => {
     .select('key value -_id')
     .lean();
 
-  const settingsByKey = new Map(
-    settings.map((setting) => [setting.key, setting.value])
-  );
-  const generalSettings = Object.fromEntries(
-    GENERAL_KEYS.map((key) => [key, settingsByKey.get(key) ?? null])
-  ) as TGeneralSettings;
+  const generalSettings = buildVendorGenerals(settings);
 
   await setCache(cacheKey, generalSettings);
   return generalSettings;
@@ -173,13 +155,7 @@ const createOrUpdate = async (traceId: string, key: string, payload: any) => {
     { returnDocument: 'after', upsert: true }
   ).select('key value -_id');
 
-  // Invalidate single + generals + pattern in parallel
-  await Promise.all([
-    deleteCache(REDIS_KEYS.SETTINGS_SINGLE(key)),
-    deleteCache(REDIS_KEYS.SETTINGS_SINGLE('generals')),
-    deleteCache(REDIS_KEYS.SETTINGS_ADMIN),
-    deleteCachePattern('setting:*'),
-  ]);
+  await invalidateAdminSettingCaches([key]);
 
   return setting;
 };
@@ -210,12 +186,7 @@ const updateAdminSettings = async (
     )
   );
 
-  await Promise.all([
-    deleteCache(REDIS_KEYS.SETTINGS_ADMIN),
-    deleteCache(REDIS_KEYS.SETTINGS_SINGLE('generals')),
-    deleteCachePattern('setting:*'),
-    ...validKeys.map((key) => deleteCache(REDIS_KEYS.SETTINGS_SINGLE(key))),
-  ]);
+  await invalidateAdminSettingCaches([...validKeys]);
 
   return getSetting(traceId, 'generals');
 };
@@ -254,14 +225,7 @@ const updateGenerals = async (
     )
   );
 
-  // Invalidate all affected caches in parallel
-  await Promise.all([
-    deleteCache(REDIS_KEYS.SETTINGS_GENERALS(vendorId)),
-    deleteCachePattern('setting:*'),
-    ...validKeys.map((key) =>
-      deleteCache(REDIS_KEYS.SETTINGS_SINGLE(key, vendorId))
-    ),
-  ]);
+  await invalidateVendorSettingCaches(vendorId, [...validKeys]);
 
   return getSettingGenerals(traceId, vendorId);
 };

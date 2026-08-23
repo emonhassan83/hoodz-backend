@@ -1,17 +1,22 @@
 import crypto from 'node:crypto';
 
 import { HttpStatusCode } from 'axios';
-import { Types } from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
+import { Cart } from '@/app/modules/cart/cart.model';
 import { Category } from '@/app/modules/category/category.model';
+import { Items } from '@/app/modules/items/items.model';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { ORDER_STATUS } from '@/app/modules/orders/orders.constant';
+import { Orders } from '@/app/modules/orders/orders.model';
 import { PRODUCT_INVENTORY_TYPE } from '@/app/modules/product/product.constant';
 import {
   Product,
   ProductStockNotify,
 } from '@/app/modules/product/product.model';
 import {
+  TProductActor,
   TProductColor,
   TProductDashboardStats,
   TProductFilterQuery,
@@ -19,8 +24,19 @@ import {
   TProductPayload,
   TProductVariant,
 } from '@/app/modules/product/product.types';
+import { REVIEW_MODEL_TYPE } from '@/app/modules/review/review.constant';
+import { Review } from '@/app/modules/review/review.model';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
+import {
+  calculateDistanceKm,
+  getGoogleDistanceMatrix,
+} from '@/app/modules/user/user.helpers';
 import { User } from '@/app/modules/user/user.model';
+import {
+  VOUCHER_STATUS,
+  VOUCHER_TYPE,
+} from '@/app/modules/voucher/voucher.constant';
+import { Voucher } from '@/app/modules/voucher/voucher.model';
 import { getWishlistProductReferenceIds } from '@/app/modules/wishlist/wishlist.helpers';
 import { deleteCachePattern } from '@/app/redis/helpers';
 import {
@@ -616,6 +632,284 @@ export const notifyProductRestockedSubscribers = async (
   );
 
   return users.length;
+};
+
+export const productPopulate = [
+  { path: 'vendor', select: 'name email phone profileAvatar address location' },
+  { path: 'category', select: 'title icon' },
+];
+
+export const productListSelect =
+  '_id category vendor title inventoryType collectionType brand brandType banner price discount discountPrice stock avgRating ratingCount sold createdAt';
+
+export const getProductActorKey = (actor: TProductActor) => {
+  if (actor.userId) return `user:${actor.userId}`;
+  if (actor.guestId) return `guest:${actor.guestId}`;
+  return 'anonymous';
+};
+
+export const getPagination = (query: Record<string, unknown>) => {
+  const page = Math.max(Number(query.page) || 1, 1);
+  const rawLimit = Number(query.limit ?? query.perPage) || 10;
+  const limit = Math.min(Math.max(rawLimit, 1), 50);
+  return {
+    page,
+    limit,
+    skip: (page - 1) * limit,
+  };
+};
+
+export const getActorCartProductIds = async (actor: TProductActor) => {
+  const cart = await Cart.findOne(
+    actor.userId ? { userId: actor.userId } : { guestId: actor.guestId }
+  )
+    .select('items.productId')
+    .lean();
+
+  return (cart?.items ?? []).map((item: any) => item.productId.toString());
+};
+
+export const getActorOrderedProductCounts = async (userId?: string) => {
+  if (!userId) return new Map<string, number>();
+
+  const orderedSignals = await Items.aggregate([
+    {
+      $lookup: {
+        from: 'orders',
+        localField: 'order',
+        foreignField: '_id',
+        as: 'order',
+      },
+    },
+    { $unwind: '$order' },
+    {
+      $match: {
+        'order.user': new mongoose.Types.ObjectId(userId),
+        'order.isDeleted': false,
+      },
+    },
+    { $group: { _id: '$product', count: { $sum: '$quantity' } } },
+  ]);
+
+  return new Map(
+    orderedSignals.map((item: any) => [item._id.toString(), item.count])
+  );
+};
+
+const GOOGLE_DESTINATION_LIMIT = 25;
+
+export const getGoogleDistanceElements = async (
+  origin: { latitude: number; longitude: number },
+  destinations: { latitude: number; longitude: number }[]
+) => {
+  const elements: Array<{
+    status?: string;
+    distance?: { value?: number };
+    duration?: { value?: number };
+  }> = [];
+
+  try {
+    for (let i = 0; i < destinations.length; i += GOOGLE_DESTINATION_LIMIT) {
+      const chunk = destinations.slice(i, i + GOOGLE_DESTINATION_LIMIT);
+      const chunkElements = await getGoogleDistanceMatrix(origin, chunk);
+      elements.push(...chunkElements);
+    }
+  } catch (error) {
+    console.warn(
+      '[Products] Google Maps distance lookup failed:',
+      error instanceof Error ? error.message : error
+    );
+  }
+
+  return elements;
+};
+
+export const getRelationId = (relation: any) =>
+  relation?._id?.toString?.() ?? relation?.toString?.() ?? null;
+
+export const formatProductVendor = (vendor: any) => {
+  if (!vendor || typeof vendor !== 'object') return null;
+
+  return {
+    _id: vendor._id,
+    name: vendor.name ?? null,
+    profileAvatar: vendor.profileAvatar ?? null,
+  };
+};
+
+export const formatProductCategory = (category: any) => {
+  if (!category || typeof category !== 'object') return null;
+
+  return {
+    _id: category._id,
+    title: category.title ?? null,
+  };
+};
+
+export const formatProductDetails = (product: any) => {
+  const { vendor: _vendor, category: _category, __v: _version, ...details } =
+    product;
+
+  return details;
+};
+
+const getSimilarProductScore = (
+  product: any,
+  currentProduct: any,
+  currentVendorId: string | null,
+  currentCategoryId: string | null
+) => {
+  const vendorScore =
+    getRelationId(product.vendor) === currentVendorId ? 400 : 0;
+  const categoryScore =
+    getRelationId(product.category) === currentCategoryId ? 300 : 0;
+  const collectionScore =
+    product.collectionType === currentProduct.collectionType ? 150 : 0;
+  const brandTypeScore =
+    product.brandType === currentProduct.brandType ? 100 : 0;
+  const qualityScore =
+    Number(product.avgRating ?? 0) * 30 +
+    Number(product.ratingCount ?? 0) * 2 +
+    Number(product.sold ?? 0);
+
+  return (
+    vendorScore +
+    categoryScore +
+    collectionScore +
+    brandTypeScore +
+    qualityScore
+  );
+};
+
+export const getSimilarProducts = async (
+  currentProduct: any,
+  wishlistIds: Set<string>
+) => {
+  const currentVendorId = getRelationId(currentProduct.vendor);
+  const currentCategoryId = getRelationId(currentProduct.category);
+  const matchSignals: Record<string, unknown>[] = [];
+  if (currentVendorId) matchSignals.push({ vendor: currentVendorId });
+  if (currentCategoryId) matchSignals.push({ category: currentCategoryId });
+  if (currentProduct.collectionType) {
+    matchSignals.push({ collectionType: currentProduct.collectionType });
+  }
+  if (currentProduct.brandType) {
+    matchSignals.push({ brandType: currentProduct.brandType });
+  }
+
+  if (matchSignals.length === 0) return [];
+
+  const products = await Product.find({
+    _id: { $ne: currentProduct._id },
+    isDeleted: false,
+    $or: matchSignals,
+  })
+    .populate([{ path: 'category', select: 'title' }])
+    .select(productListSelect)
+    .sort({ avgRating: -1, ratingCount: -1, sold: -1, createdAt: -1 })
+    .limit(30)
+    .lean();
+
+  const sortedProducts = products.sort(
+    (left, right) =>
+      getSimilarProductScore(
+        right,
+        currentProduct,
+        currentVendorId,
+        currentCategoryId
+      ) -
+      getSimilarProductScore(
+        left,
+        currentProduct,
+        currentVendorId,
+        currentCategoryId
+      )
+  );
+
+  return formatProductListItems(sortedProducts.slice(0, 4), wishlistIds);
+};
+
+export const getProductVouchers = async (vendorId: string | null) => {
+  const voucherScopes: Record<string, unknown>[] = [
+    { voucherType: VOUCHER_TYPE.global },
+  ];
+  if (vendorId) {
+    voucherScopes.push({ voucherType: VOUCHER_TYPE.shop, shop: vendorId });
+  }
+
+  return Voucher.find({
+    isDeleted: false,
+    status: VOUCHER_STATUS.active,
+    expiryDate: { $gte: new Date() },
+    $or: voucherScopes,
+  })
+    .select(
+      '_id title code voucherType discountType discountValue maxDiscountAmount minSpend expiryDate'
+    )
+    .sort({ expiryDate: 1, createdAt: -1 })
+    .limit(4)
+    .lean();
+};
+
+export const getLatestProductReviews = async (productId: string) =>
+  Review.find({
+    modelType: REVIEW_MODEL_TYPE.Product,
+    reference: productId,
+  })
+    .populate([{ path: 'user', select: 'name profileAvatar' }])
+    .select('_id user review files rating createdAt')
+    .sort({ createdAt: -1 })
+    .limit(3)
+    .lean();
+
+export const hasPurchasedProduct = async (
+  userId: string | undefined,
+  productId: string
+) => {
+  if (!userId) return false;
+
+  const [purchase] = await Items.aggregate([
+    {
+      $match: {
+        product: new mongoose.Types.ObjectId(productId),
+      },
+    },
+    {
+      $lookup: {
+        from: Orders.collection.name,
+        localField: 'order',
+        foreignField: '_id',
+        as: 'order',
+      },
+    },
+    { $unwind: '$order' },
+    {
+      $match: {
+        'order.user': new mongoose.Types.ObjectId(userId),
+        'order.status': ORDER_STATUS.delivered,
+        'order.isDeleted': false,
+      },
+    },
+    { $limit: 1 },
+    { $project: { _id: 1 } },
+  ]);
+
+  return Boolean(purchase);
+};
+
+export const hasSubmittedProductReview = async (
+  userId: string | undefined,
+  productId: string
+) => {
+  if (!userId) return false;
+
+  const review = await Review.exists({
+    user: userId,
+    modelType: REVIEW_MODEL_TYPE.Product,
+    reference: productId,
+  });
+
+  return Boolean(review);
 };
 
 

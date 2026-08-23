@@ -4,6 +4,8 @@ import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import { DEPOSIT_STATUS } from '@/app/modules/deposit/deposit.constant';
 import {
+  assertDepositAccess,
+  depositPopulate,
   getDepositOrThrow,
   getDepositableJobsOrThrow,
   getRiderMoneySummary,
@@ -17,13 +19,6 @@ import {
   TSubmitDepositPayload,
   TVerifyDepositPayload,
 } from '@/app/modules/deposit/deposit.types';
-import { USER_ROLE } from '@/app/modules/user/user.constant';
-
-const depositPopulate = [
-  { path: 'author', select: 'name email phone profileAvatar' },
-  { path: 'jobIds', select: 'id status collectedMoney earning order rider paymentMethod' },
-];
-
 /** Rider submits COD deposit proof. */
 const submitDeposit = async (
   traceId: string,
@@ -32,12 +27,12 @@ const submitDeposit = async (
 ) => {
   const jobs = await getDepositableJobsOrThrow(traceId, payload.jobIds, riderId);
   const calculatedAmount = Number(
-    jobs.reduce((total, job) => total + job.collectedMoney, 0).toFixed(2)
+    jobs.reduce((total, job) => total + (job.collectedMoney ?? 0), 0).toFixed(2)
   );
-  if (calculatedAmount !== Number(payload.amount.toFixed(2))) {
+  if (calculatedAmount <= 0) {
     throw new ApiError(
       HttpStatusCode.BadRequest,
-      'Deposit amount does not match selected COD jobs amount',
+      'Selected jobs have no collected money to deposit',
       traceId
     );
   }
@@ -166,13 +161,7 @@ const getById = async (
     throw new ApiError(HttpStatusCode.NotFound, 'Deposit not found', traceId);
   }
 
-  const canAccess =
-    requester.role === USER_ROLE.admin ||
-    deposit.author?._id?.toString?.() === requester.userId;
-  if (!canAccess) {
-    throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this deposit', traceId);
-  }
-
+  assertDepositAccess(traceId, deposit, requester);
   return deposit;
 };
 

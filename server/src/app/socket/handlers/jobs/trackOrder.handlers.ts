@@ -40,7 +40,7 @@ export const trackOrderHandler = eventHandler<TTrackOrderSocketPayload>(
 
     const job = await Job.findOne({
       order: order._id,
-      status: { $nin: [JOB_STATUS.delivered, JOB_STATUS.cancelled] },
+      status: { $ne: JOB_STATUS.delivered },
     }).select('rider');
 
     const requester = { userId: socket.auth._id, role: socket.auth.role! };

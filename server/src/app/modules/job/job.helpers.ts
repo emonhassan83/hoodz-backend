@@ -1,6 +1,7 @@
 import { compare, hash } from 'bcrypt';
 import { HttpStatusCode } from 'axios';
 import { Secret, sign, verify } from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import twilio from 'twilio';
 
 import { env } from '@/app/configs/env.configs';
@@ -8,14 +9,20 @@ import ApiError from '@/app/errors/ApiError';
 import { getRedisClient } from '@/app/configs/redis.config';
 import {
   DELIVERY_OTP_TTL_SECONDS,
+  JOB_ACTIVE_STATUSES,
   JOB_MATCH_RADIUS_KM,
+  RIDER_MATCH_DEFAULTS,
+} from '@/app/constant';
+import {
+  JOB_DEPOSIT_STATUS,
   JOB_PAYMENT_METHOD,
   JOB_STATUS,
-  RIDER_MATCH_DEFAULTS,
 } from '@/app/modules/job/job.constant';
 import { IJob } from '@/app/modules/job/job.interface';
 import { Job } from '@/app/modules/job/job.model';
+import { ORDER_STATUS } from '@/app/modules/orders/orders.constant';
 import { Orders } from '@/app/modules/orders/orders.model';
+import { Payment } from '@/app/modules/payment/payment.model';
 import { REDIS_KEYS } from '@/app/redis/keys';
 import { KYC_STATUS } from '@/app/modules/kyc/kyc.constant';
 import { Kyc } from '@/app/modules/kyc/kyc.model';
@@ -269,6 +276,29 @@ export const getAssignableRiderOrThrow = async (
   return rider;
 };
 
+/** Reads the latest order payment method so jobs stay in sync with COD/card/wallet. */
+export const resolveOrderPaymentMethod = async (orderId: string) => {
+  const payment = await Payment.findOne({
+    order: orderId,
+    isDeleted: { $ne: true },
+  })
+    .select('paymentMethod')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const method = payment?.paymentMethod;
+  if (
+    method &&
+    Object.values(JOB_PAYMENT_METHOD).includes(
+      method as (typeof JOB_PAYMENT_METHOD)[keyof typeof JOB_PAYMENT_METHOD]
+    )
+  ) {
+    return method as (typeof JOB_PAYMENT_METHOD)[keyof typeof JOB_PAYMENT_METHOD];
+  }
+
+  return JOB_PAYMENT_METHOD.card;
+};
+
 /** Infers money fields from order total and selected payment method. */
 export const buildJobMoneyFields = (
   paymentMethod: string,
@@ -355,7 +385,11 @@ export const buildJobLocationFields = async (order: any) => {
 };
 
 const JOB_LIST_CARD_FIELDS =
-  '_id id deliveryType destination earning pickup status createdAt distance';
+  '_id id deliveryType destination earning pickup status createdAt distance depositStatus paymentMethod collectedMoney assignmentType';
+
+export const isJobDepositSubmitted = (depositStatus?: string | null) =>
+  depositStatus === JOB_DEPOSIT_STATUS.submitted ||
+  depositStatus === JOB_DEPOSIT_STATUS.verified;
 
 /** Maps jobs into rider list-card payloads and backfills missing Google distances. */
 export const mapJobsToListCards = async (jobs: Array<Record<string, any>>) => {
@@ -378,11 +412,15 @@ export const mapJobsToListCards = async (jobs: Array<Record<string, any>>) => {
     deliveryType: job.deliveryType,
     destination: job.destination,
     earning: job.earning,
+    collectedMoney: job.collectedMoney ?? 0,
     distance: job.distance ?? null,
     id: job.id,
     pickup: job.pickup,
+    paymentMethod: job.paymentMethod,
+    assignmentType: job.assignmentType,
     status: job.status,
     createdAt: job.createdAt,
+    isDepositSubmitted: isJobDepositSubmitted(job.depositStatus),
   }));
 };
 
@@ -390,9 +428,7 @@ export const jobListCardSelect = JOB_LIST_CARD_FIELDS;
 
 /** Returns true when a job can be replaced by a new assignment. */
 export const isReassignableJob = (status: string) =>
-  [JOB_STATUS.matching, JOB_STATUS.assigned, JOB_STATUS.cancelled].includes(
-    status as any
-  );
+  [JOB_STATUS.matching, JOB_STATUS.assigned].includes(status as any);
 
 const toIdString = (value: unknown) => String((value as any)?._id ?? value ?? '');
 
@@ -561,6 +597,212 @@ export const stopJobMatchingForOrder = async (orderId: string) => {
     { order: orderId, matchingEnabled: true, rider: null },
     { matchingEnabled: false, nextMatchAt: null }
   );
+};
+
+export const toRiderObjectId = (riderId: string) =>
+  new mongoose.Types.ObjectId(riderId);
+
+export const toObjectIdList = (ids: string[]) =>
+  ids.filter(Boolean).map((id) => new mongoose.Types.ObjectId(id));
+
+/** Pending unmatched offers for a rider. Assigned jobs belong in my-jobs. */
+export const riderRequestJobFilter = (riderId: string) => {
+  const riderObjectId = toRiderObjectId(riderId);
+  return {
+    status: JOB_STATUS.matching,
+    rider: null,
+    $or: [
+      { requestedRider: riderObjectId },
+      { requestedRider: riderId },
+      { offeredRider: riderObjectId },
+      { offeredRider: riderId },
+    ],
+  };
+};
+
+export const jobPopulate = [
+  {
+    path: 'order',
+    select:
+      'id user author totalAmount deliveryCharge status paymentStatus billingDetails deliveryType isOtpVerified',
+  },
+  { path: 'rider', select: 'name email phone profileAvatar avgRating ratingCount' },
+  { path: 'user', select: 'name email phone profileAvatar' },
+  { path: 'requestedRider', select: 'name email phone profileAvatar' },
+  { path: 'assignedBy', select: 'name email role' },
+];
+
+export const parseBooleanQuery = (value: unknown) => {
+  if (value === true || value === 'true' || value === '1') return true;
+  if (value === false || value === 'false' || value === '0') return false;
+  return undefined;
+};
+
+const JOB_LIST_QUERY_KEYS = [
+  'filter',
+  'isDepositSubmitted',
+  'paymentMethod',
+  'depositStatus',
+  'assignmentType',
+] as const;
+
+export const stripJobListQueryParams = (query: Record<string, unknown>) => {
+  const restQuery = { ...query };
+  JOB_LIST_QUERY_KEYS.forEach((key) => {
+    delete restQuery[key];
+  });
+  return restQuery;
+};
+
+/** Applies list filters for my-jobs and rider jobs. */
+export const applyJobListQueryFilters = (
+  base: Record<string, unknown>,
+  query: Record<string, unknown>
+) => {
+  const filter: Record<string, unknown> = { ...base };
+
+  if (query.filter === 'completed') {
+    filter.status = JOB_STATUS.delivered;
+  } else if (query.filter === 'active') {
+    filter.status = { $in: [JOB_STATUS.assigned, ...JOB_ACTIVE_STATUSES] };
+  }
+
+  if (typeof query.paymentMethod === 'string' && query.paymentMethod) {
+    filter.paymentMethod = query.paymentMethod;
+  }
+
+  if (typeof query.assignmentType === 'string' && query.assignmentType) {
+    filter.assignmentType = query.assignmentType;
+  }
+
+  if (typeof query.depositStatus === 'string' && query.depositStatus) {
+    filter.depositStatus = query.depositStatus;
+  } else {
+    const isDepositSubmitted = parseBooleanQuery(query.isDepositSubmitted);
+    if (isDepositSubmitted === true) {
+      filter.depositStatus = {
+        $in: [JOB_DEPOSIT_STATUS.submitted, JOB_DEPOSIT_STATUS.verified],
+      };
+    }
+    if (isDepositSubmitted === false) {
+      filter.depositStatus = {
+        $nin: [JOB_DEPOSIT_STATUS.submitted, JOB_DEPOSIT_STATUS.verified],
+      };
+    }
+  }
+
+  return filter;
+};
+
+export const assertShopAndDeliveryLocations = (traceId: string, order: any) => {
+  const pickup = order.author as { location?: { coordinates?: number[] } };
+  const [longitude, latitude] = pickup?.location?.coordinates ?? [0, 0];
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !latitude || !longitude) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Shop location is required to match nearby riders',
+      traceId
+    );
+  }
+
+  const destination = order.billingDetails?.deliveryLocation;
+  const [destinationLng, destinationLat] = destination?.coordinates ?? [];
+  if (
+    !Number.isFinite(destinationLng) ||
+    !Number.isFinite(destinationLat) ||
+    (destinationLng === 0 && destinationLat === 0)
+  ) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Order delivery location is required to create a job',
+      traceId
+    );
+  }
+
+  return { latitude, longitude };
+};
+
+export const exhaustMatching = async (jobId: string) => {
+  const job = await Job.findOneAndUpdate(
+    { _id: jobId, rider: null, matchingEnabled: true },
+    { matchingEnabled: false, nextMatchAt: null },
+    { new: true }
+  ).populate(jobPopulate);
+  if (job) await notifyMatchingExhausted(job);
+  return job;
+};
+
+export const applyMatchRound = async (traceId: string, jobId: string) => {
+  const job = await Job.findById(jobId);
+  if (
+    !job ||
+    job.rider ||
+    !job.matchingEnabled ||
+    ![JOB_STATUS.matching, JOB_STATUS.assigned].includes(job.status as any)
+  ) {
+    return Job.findById(jobId).populate(jobPopulate);
+  }
+
+  const order = await getAssignableOrderOrThrow(traceId, job.order.toString());
+  if (order.status === ORDER_STATUS.cancelled || order.isDeleted) {
+    return exhaustMatching(jobId);
+  }
+
+  const settings = await getRiderMatchSettings();
+  if ((job.matchAttemptCount ?? 0) >= settings.maxAttempts) {
+    return exhaustMatching(jobId);
+  }
+
+  const { latitude, longitude } = assertShopAndDeliveryLocations(traceId, order);
+  const pendingRiderIds = (job.requestedRider ?? []).map((rider) => rider.toString());
+  const declinedRiderIds = (job.declinedRider ?? []).map((rider) => rider.toString());
+  const offeredRiderIds = (job.offeredRider ?? []).map((rider) => rider.toString());
+  const nextAttempt = (job.matchAttemptCount ?? 0) + 1;
+  const phaseRiders = await collectPhaseRequestedRiders(
+    latitude,
+    longitude,
+    nextAttempt,
+    [...new Set([...offeredRiderIds, ...declinedRiderIds])]
+  );
+  const newRiderIds = phaseRiders.map((rider) => rider.toString());
+  const requestedRiderIds = [
+    ...new Set([
+      ...offeredRiderIds.filter((id) => !declinedRiderIds.includes(id)),
+      ...pendingRiderIds.filter((id) => !declinedRiderIds.includes(id)),
+      ...newRiderIds,
+    ]),
+  ];
+  const offeredRiderIdsNext = [...new Set([...offeredRiderIds, ...newRiderIds])];
+  const now = new Date();
+  const nextMatchAt = new Date(now.getTime() + settings.intervalSeconds * 1000);
+
+  const updated = await Job.findOneAndUpdate(
+    {
+      _id: jobId,
+      rider: null,
+      matchingEnabled: true,
+      matchAttemptCount: job.matchAttemptCount ?? 0,
+      status: { $in: [JOB_STATUS.matching, JOB_STATUS.assigned] },
+    },
+    {
+      requestedRider: toObjectIdList(requestedRiderIds),
+      offeredRider: toObjectIdList(offeredRiderIdsNext),
+      user: (order.user as any)?._id ?? order.user ?? job.user,
+      matchAttemptCount: nextAttempt,
+      lastMatchedAt: now,
+      nextMatchAt,
+      status: JOB_STATUS.matching,
+    },
+    { new: true }
+  ).populate(jobPopulate);
+
+  if (!updated) return Job.findById(jobId).populate(jobPopulate);
+
+  await notifyJobOffer(updated, newRiderIds, {
+    attempt: nextAttempt,
+    maxAttempts: settings.maxAttempts,
+  });
+  return updated;
 };
 
 

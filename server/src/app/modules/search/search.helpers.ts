@@ -3,10 +3,7 @@ import { HttpStatusCode } from 'axios';
 import ApiError from '@/app/errors/ApiError';
 import { Category } from '@/app/modules/category/category.model';
 import { Product } from '@/app/modules/product/product.model';
-import {
-  FILTER_PAGE_GENDERS,
-  FILTER_PAGE_SIZES,
-} from '@/app/modules/search/search.constant';
+import { FILTER_PAGE_GENDERS, FILTER_PAGE_SIZES } from '@/app/constant';
 import { TSearchActor } from '@/app/modules/search/search.types';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';

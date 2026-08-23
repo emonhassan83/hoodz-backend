@@ -24,7 +24,7 @@ router.get(
 router.get(
   '/rider/:riderId',
   auth(USER_ROLE.agent, USER_ROLE.admin),
-  validateRequest(JobValidation.riderIdParamValidationSchema),
+  validateRequest(JobValidation.getRiderJobsQueryValidationSchema),
   JobController.getRiderJobs
 );
 

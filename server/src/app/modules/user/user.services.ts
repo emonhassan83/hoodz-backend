@@ -16,7 +16,6 @@ import { JOB_STATUS } from '@/app/modules/job/job.constant';
 import { Job } from '@/app/modules/job/job.model';
 import { Kyc } from '@/app/modules/kyc/kyc.model';
 import { getUserSupportFlags } from '@/app/modules/chat/chat.helpers';
-import { Product } from '@/app/modules/product/product.model';
 import { SettingService } from '@/app/modules/settings/settings.services';
 import {
   deleteShopFromTypesense,
@@ -29,20 +28,20 @@ import {
   assertPhoneNotTaken,
   buildGeoLocation,
   calculateDistanceKm,
-  enqueuePlatformInviteEmail,
+  createInvitedPlatformUser,
   findActiveUserOrThrow,
-  generateTemporaryPassword,
-  getGoogleDistanceMatrix,
+  getNearbyShopGoogleElements,
+  getShopProductCategories,
+  resolveShopDistance,
+  resolveShopViewerOrigin,
   sendUserStatusNotifYToUser,
 } from '@/app/modules/user/user.helpers';
 import { IUser } from '@/app/modules/user/user.interface';
 import { User } from '@/app/modules/user/user.model';
 import {
   TChangeEmailPayload,
-  TGoogleDistanceElement,
   TInvitePlatformUserPayload,
   TNearbyShopsQuery,
-  TPlatformInviteEmailJobName,
   TSetSecurityCodePayload,
   TUpdateDeliveryLocationPayload,
   TUpdateLocationPayload,
@@ -131,7 +130,6 @@ const getNearbyShops = async (
   };
   const limit = query.limit ?? 10;
   const radiusKm = query.radiusKm ?? 10;
-  const googleDestinationLimit = 25;
 
   const vendors = await User.find({
     role: USER_ROLE.vendor,
@@ -156,22 +154,10 @@ const getNearbyShops = async (
     })
     .filter((vendor) => vendor.distanceKm <= radiusKm);
 
-  let googleElements: TGoogleDistanceElement[] = [];
-  try {
-    for (let i = 0; i < candidates.length; i += googleDestinationLimit) {
-      const chunk = candidates.slice(i, i + googleDestinationLimit);
-      const elements = await getGoogleDistanceMatrix(
-        origin,
-        chunk.map((vendor) => vendor.coordinate)
-      );
-      googleElements.push(...elements);
-    }
-  } catch (error) {
-    console.warn(
-      '[Nearby Shops] Google Maps distance lookup failed:',
-      error instanceof Error ? error.message : error
-    );
-  }
+  const googleElements = await getNearbyShopGoogleElements(
+    origin,
+    candidates.map((vendor) => vendor.coordinate)
+  );
 
   const hasGoogleDistances = googleElements.length > 0;
   const followedVendorIds = await getFollowedVendorIdSet(userId);
@@ -258,11 +244,6 @@ const getShopDetails = async (
   },
   userId?: string
 ) => {
-  const toNumber = (value: unknown) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  };
-
   const vendor = await User.findOne({
     _id: vendorId,
     role: USER_ROLE.vendor,
@@ -279,26 +260,7 @@ const getShopDetails = async (
   }
 
   const [longitude, latitude] = vendor.location?.coordinates ?? [0, 0];
-  const queryLatitude = toNumber(query.latitude ?? query.lat);
-  const queryLongitude = toNumber(query.longitude ?? query.lng ?? query.lang);
-  let origin =
-    queryLatitude !== undefined && queryLongitude !== undefined
-      ? { latitude: queryLatitude, longitude: queryLongitude }
-      : null;
-
-  if (!origin && userId) {
-    const user = await User.findById(userId)
-      .select('deliveryLocation location')
-      .lean();
-    const coordinates =
-      user?.deliveryLocation?.coordinates?.some((coordinate) => coordinate !== 0)
-        ? user.deliveryLocation.coordinates
-        : user?.location?.coordinates;
-
-    if (coordinates && coordinates.some((coordinate) => coordinate !== 0)) {
-      origin = { longitude: coordinates[0], latitude: coordinates[1] };
-    }
-  }
+  const origin = await resolveShopViewerOrigin(query, userId);
 
   let distance = null as null | {
     distanceKm: number;
@@ -306,56 +268,11 @@ const getShopDetails = async (
   };
 
   if (origin && latitude !== 0 && longitude !== 0) {
-    try {
-      const [element] = await getGoogleDistanceMatrix(origin, [
-        { latitude, longitude },
-      ]);
-      const fallbackDistanceKm = Number(
-        calculateDistanceKm(origin, { latitude, longitude }).toFixed(2)
-      );
-      const googleDistanceKm =
-        element?.status === 'OK' && element.distance?.value !== undefined
-          ? element.distance.value / 1000
-          : fallbackDistanceKm;
-      distance = {
-        distanceKm: Number(Math.max(googleDistanceKm, 0.01).toFixed(2)),
-        durationMinutes:
-          element?.status === 'OK' && element.duration?.value !== undefined
-            ? Math.ceil(element.duration.value / 60)
-            : null,
-      };
-    } catch (error) {
-      const fallbackDistanceKm = Number(
-        calculateDistanceKm(origin, { latitude, longitude }).toFixed(2)
-      );
-      distance = {
-        distanceKm: Number(Math.max(fallbackDistanceKm, 0.01).toFixed(2)),
-        durationMinutes: null,
-      };
-    }
+    distance = await resolveShopDistance(origin, { latitude, longitude });
   }
 
   const [categories, policies, isFollowing, isWishlisted] = await Promise.all([
-    Product.aggregate([
-      { $match: { vendor: new mongoose.Types.ObjectId(vendorId), isDeleted: false } },
-      { $group: { _id: '$category', productCount: { $sum: 1 } } },
-      {
-        $lookup: {
-          from: 'categories',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'category',
-        },
-      },
-      { $unwind: '$category' },
-      {
-        $project: {
-          _id: '$category._id',
-          title: '$category.title',
-        },
-      },
-      { $sort: { productCount: -1, title: 1 } },
-    ]),
+    getShopProductCategories(vendorId),
     SettingService.getSettingGenerals(traceId, vendorId).catch(() => null),
     isFollowingVendor(userId, vendorId),
     isShopWishlisted(userId, vendorId),
@@ -639,58 +556,6 @@ const verifySecurityCode = async (
   return { verified: true, hasRiderActivateMode: true };
 };
 
-/** Creates an invited vendor or agent and queues their invite email. */
-const createInvitedPlatformUser = async (
-  traceId: string,
-  payload: TInvitePlatformUserPayload,
-  role: typeof USER_ROLE.vendor | typeof USER_ROLE.agent,
-  emailJobName: TPlatformInviteEmailJobName
-) => {
-  const exists = await User.findOne({
-    $or: [{ email: payload.email }, { phone: payload.phone }],
-  });
-  if (exists) {
-    throw new ApiError(
-      HttpStatusCode.Conflict,
-      'A user with this email or phone already exists',
-      traceId
-    );
-  }
-
-  const password = generateTemporaryPassword();
-  const user = await User.create({
-    ...payload,
-    role,
-    password,
-    isLegalTermsAccepted: true,
-    isSignUpOtpVerified: true,
-    isProfileSetUp: false,
-    needsPasswordChange: true,
-    expireAt: null as unknown as Date,
-  });
-
-  await enqueuePlatformInviteEmail(
-    emailJobName,
-    {
-      email: payload.email,
-      name: payload.name,
-      password,
-    }
-  );
-
-  if (role === USER_ROLE.vendor) {
-    await upsertShopToTypesense(user._id.toString()).catch((error) => {
-      console.warn(
-        '[Typesense] Vendor invite sync failed:',
-        error instanceof Error ? error.message : error
-      );
-    });
-  }
-
-  return user;
-};
-
-/** Invites a vendor with the vendor-specific email template. */
 const inviteVendor = async (
   traceId: string,
   payload: TInvitePlatformUserPayload

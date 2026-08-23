@@ -19,5 +19,3 @@ export const PRODUCT_BRAND_TYPE = {
   trending: 'trending',
   new: 'new',
 } as const;
-
-export type TCollection = keyof typeof COLLECTION_TYPE;

@@ -6,27 +6,41 @@ import ApiError from '@/app/errors/ApiError';
 import { Cart } from '@/app/modules/cart/cart.model';
 import { getFollowedVendorIdSet } from '@/app/modules/follow/follow.helpers';
 import { Items } from '@/app/modules/items/items.model';
-import { ORDER_STATUS } from '@/app/modules/orders/orders.constant';
-import { Orders } from '@/app/modules/orders/orders.model';
 import {
   assertCategoryExists,
+  assertInventoryOptionsValid,
   assertProductAccess,
   assertProductExists,
   assertSkuAvailable,
   assertVendorExists,
-  assertInventoryOptionsValid,
+  buildProductListFilter,
   buildProductWritePayload,
   buildVendorProductStats,
+  formatProductCategory,
+  formatProductDetails,
   formatProductListItem,
   formatProductListItems,
+  formatProductVendor,
   generateUniqueSku,
-  getWishlistProductIdSet,
+  getActorCartProductIds,
+  getActorOrderedProductCounts,
+  getGoogleDistanceElements,
+  getLatestProductReviews,
+  getPagination,
+  getProductActorKey,
   getProductByIdOrThrow,
+  getProductVouchers,
+  getRelationId,
+  getSimilarProducts,
+  getUserOrigin,
+  getWishlistProductIdSet,
+  hasPurchasedProduct,
+  hasSubmittedProductReview,
   invalidateProductCaches,
   notifyProductRestockedSubscribers,
+  productListSelect,
+  productPopulate,
   toNumber,
-  getUserOrigin,
-  buildProductListFilter,
 } from '@/app/modules/product/product.helpers';
 import {
   Product,
@@ -39,27 +53,21 @@ import {
 import { Wishlist } from '@/app/modules/wishlist/wishlist.model';
 import {
   TAdminProductPayload,
+  TMyProductsResponse,
+  TProductActor,
   TProductFilterQuery,
   TProductListQuery,
+  TProductListResponse,
+  TProductPaginationMeta,
   TProductPayload,
   TProductRequester,
 } from '@/app/modules/product/product.types';
-import { REVIEW_MODEL_TYPE } from '@/app/modules/review/review.constant';
-import { Review } from '@/app/modules/review/review.model';
 import {
   deleteProductFromTypesense,
   upsertProductToTypesense,
 } from '@/app/modules/search/search.typesense';
 import { SettingService } from '@/app/modules/settings/settings.services';
-import {
-  calculateDistanceKm,
-  getGoogleDistanceMatrix,
-} from '@/app/modules/user/user.helpers';
-import {
-  VOUCHER_STATUS,
-  VOUCHER_TYPE,
-} from '@/app/modules/voucher/voucher.constant';
-import { Voucher } from '@/app/modules/voucher/voucher.model';
+import { calculateDistanceKm } from '@/app/modules/user/user.helpers';
 import {
   deleteCache,
   deleteCachePattern,
@@ -72,40 +80,6 @@ import {
   mergeRecentlyViewedProducts,
 } from '@/app/redis/helpers/recentlyViewedProducts';
 import { REDIS_KEYS } from '@/app/redis/keys';
-
-const productPopulate = [
-  { path: 'vendor', select: 'name email phone profileAvatar address location' },
-  { path: 'category', select: 'title icon' },
-];
-
-const productListSelect =
-  '_id category vendor title inventoryType collectionType brand brandType banner price discount discountPrice stock avgRating ratingCount sold createdAt';
-
-type TProductPaginationMeta = {
-  page: number;
-  limit: number;
-  total: number;
-  totalPage: number;
-};
-
-type TMyProductsResponse = {
-  meta: TProductPaginationMeta;
-  data: {
-    stats: ReturnType<typeof buildVendorProductStats>;
-    products: ReturnType<typeof formatProductListItems>;
-  };
-};
-
-type TProductActor = {
-  userId?: string;
-  guestId?: string;
-};
-
-const getProductActorKey = (actor: TProductActor) => {
-  if (actor.userId) return `user:${actor.userId}`;
-  if (actor.guestId) return `guest:${actor.guestId}`;
-  return 'anonymous';
-};
 
 const createProduct = async (
   traceId: string,
@@ -177,11 +151,6 @@ const mergeGuestRecentlyViewed = async (
     deleteCache(REDIS_KEYS.PRODUCT_RECENTLY_VIEWED(userKey)),
   ]);
   return result;
-};
-
-type TProductListResponse = {
-  meta: TProductPaginationMeta;
-  data: ReturnType<typeof formatProductListItems>;
 };
 
 const getRecentlyViewedProducts = async (
@@ -280,54 +249,6 @@ const getTrendingProducts = async (
 
   await setCache(cacheKey, result, 300);
   return result;
-};
-
-const getPagination = (query: Record<string, unknown>) => {
-  const page = Math.max(Number(query.page) || 1, 1);
-  const rawLimit = Number(query.limit ?? query.perPage) || 10;
-  const limit = Math.min(Math.max(rawLimit, 1), 50);
-  return {
-    page,
-    limit,
-    skip: (page - 1) * limit,
-  };
-};
-
-const getActorCartProductIds = async (actor: TProductActor) => {
-  const cart = await Cart.findOne(
-    actor.userId ? { userId: actor.userId } : { guestId: actor.guestId }
-  )
-    .select('items.productId')
-    .lean();
-
-  return (cart?.items ?? []).map((item: any) => item.productId.toString());
-};
-
-const getActorOrderedProductCounts = async (userId?: string) => {
-  if (!userId) return new Map<string, number>();
-
-  const orderedSignals = await Items.aggregate([
-    {
-      $lookup: {
-        from: 'orders',
-        localField: 'order',
-        foreignField: '_id',
-        as: 'order',
-      },
-    },
-    { $unwind: '$order' },
-    {
-      $match: {
-        'order.user': new mongoose.Types.ObjectId(userId),
-        'order.isDeleted': false,
-      },
-    },
-    { $group: { _id: '$product', count: { $sum: '$quantity' } } },
-  ]);
-
-  return new Map(
-    orderedSignals.map((item: any) => [item._id.toString(), item.count])
-  );
 };
 
 const getAiRecommendedProducts = async (
@@ -443,34 +364,6 @@ const getAiRecommendedProducts = async (
 
   await setCache(cacheKey, result, 180);
   return result;
-};
-
-const GOOGLE_DESTINATION_LIMIT = 25;
-
-const getGoogleDistanceElements = async (
-  origin: { latitude: number; longitude: number },
-  destinations: { latitude: number; longitude: number }[]
-) => {
-  const elements: Array<{
-    status?: string;
-    distance?: { value?: number };
-    duration?: { value?: number };
-  }> = [];
-
-  try {
-    for (let i = 0; i < destinations.length; i += GOOGLE_DESTINATION_LIMIT) {
-      const chunk = destinations.slice(i, i + GOOGLE_DESTINATION_LIMIT);
-      const chunkElements = await getGoogleDistanceMatrix(origin, chunk);
-      elements.push(...chunkElements);
-    }
-  } catch (error) {
-    console.warn(
-      '[Products] Google Maps distance lookup failed:',
-      error instanceof Error ? error.message : error
-    );
-  }
-
-  return elements;
 };
 
 const getAllProduct = async (
@@ -757,7 +650,6 @@ const getShopProducts = async (
   return result;
 };
 
-/** Searches products inside one shop for the in-store search icon. */
 const searchShopProducts = async (
   traceId: string,
   vendorId: string,
@@ -848,204 +740,6 @@ const getMyProducts = async (
 
   await setCache(cacheKey, result, 300);
   return result;
-};
-
-// Safely reads ObjectId from populated or raw relation values.
-const getRelationId = (relation: any) =>
-  relation?._id?.toString?.() ?? relation?.toString?.() ?? null;
-
-// Keeps vendor summary compact for product details header.
-const formatProductVendor = (vendor: any) => {
-  if (!vendor || typeof vendor !== 'object') return null;
-
-  return {
-    _id: vendor._id,
-    name: vendor.name ?? null,
-    profileAvatar: vendor.profileAvatar ?? null,
-  };
-};
-
-// Keeps category summary compact for product details header.
-const formatProductCategory = (category: any) => {
-  if (!category || typeof category !== 'object') return null;
-
-  return {
-    _id: category._id,
-    title: category.title ?? null,
-  };
-};
-
-// Removes populated relation payloads from the product body.
-const formatProductDetails = (product: any) => {
-  const { vendor: _vendor, category: _category, __v: _version, ...details } =
-    product;
-
-  return details;
-};
-
-// Scores products for complete-look/similar recommendations.
-const getSimilarProductScore = (
-  product: any,
-  currentProduct: any,
-  currentVendorId: string | null,
-  currentCategoryId: string | null
-) => {
-  const vendorScore =
-    getRelationId(product.vendor) === currentVendorId ? 400 : 0;
-  const categoryScore =
-    getRelationId(product.category) === currentCategoryId ? 300 : 0;
-  const collectionScore =
-    product.collectionType === currentProduct.collectionType ? 150 : 0;
-  const brandTypeScore =
-    product.brandType === currentProduct.brandType ? 100 : 0;
-  const qualityScore =
-    Number(product.avgRating ?? 0) * 30 +
-    Number(product.ratingCount ?? 0) * 2 +
-    Number(product.sold ?? 0);
-
-  return (
-    vendorScore +
-    categoryScore +
-    collectionScore +
-    brandTypeScore +
-    qualityScore
-  );
-};
-
-// Loads four strongest products related to the current product.
-const getSimilarProducts = async (
-  currentProduct: any,
-  wishlistIds: Set<string>
-) => {
-  const currentVendorId = getRelationId(currentProduct.vendor);
-  const currentCategoryId = getRelationId(currentProduct.category);
-  const matchSignals: Record<string, unknown>[] = [];
-  if (currentVendorId) matchSignals.push({ vendor: currentVendorId });
-  if (currentCategoryId) matchSignals.push({ category: currentCategoryId });
-  if (currentProduct.collectionType) {
-    matchSignals.push({ collectionType: currentProduct.collectionType });
-  }
-  if (currentProduct.brandType) {
-    matchSignals.push({ brandType: currentProduct.brandType });
-  }
-
-  if (matchSignals.length === 0) return [];
-
-  const products = await Product.find({
-    _id: { $ne: currentProduct._id },
-    isDeleted: false,
-    $or: matchSignals,
-  })
-    .populate([{ path: 'category', select: 'title' }])
-    .select(productListSelect)
-    .sort({ avgRating: -1, ratingCount: -1, sold: -1, createdAt: -1 })
-    .limit(30)
-    .lean();
-
-  const sortedProducts = products.sort(
-    (left, right) =>
-      getSimilarProductScore(
-        right,
-        currentProduct,
-        currentVendorId,
-        currentCategoryId
-      ) -
-      getSimilarProductScore(
-        left,
-        currentProduct,
-        currentVendorId,
-        currentCategoryId
-      )
-  );
-
-  return formatProductListItems(sortedProducts.slice(0, 4), wishlistIds);
-};
-
-// Loads active shop/global vouchers that are still valid.
-const getProductVouchers = async (vendorId: string | null) => {
-  const voucherScopes: Record<string, unknown>[] = [
-    { voucherType: VOUCHER_TYPE.global },
-  ];
-  if (vendorId) {
-    voucherScopes.push({ voucherType: VOUCHER_TYPE.shop, shop: vendorId });
-  }
-
-  return Voucher.find({
-    isDeleted: false,
-    status: VOUCHER_STATUS.active,
-    expiryDate: { $gte: new Date() },
-    $or: voucherScopes,
-  })
-    .select(
-      '_id title code voucherType discountType discountValue maxDiscountAmount minSpend expiryDate'
-    )
-    .sort({ expiryDate: 1, createdAt: -1 })
-    .limit(4)
-    .lean();
-};
-
-// Loads newest product reviews for the detail page preview.
-const getLatestProductReviews = async (productId: string) =>
-  Review.find({
-    modelType: REVIEW_MODEL_TYPE.Product,
-    reference: productId,
-  })
-    .populate([{ path: 'user', select: 'name profileAvatar' }])
-    .select('_id user review files rating createdAt')
-    .sort({ createdAt: -1 })
-    .limit(3)
-    .lean();
-
-// Checks if the requester has a delivered order containing this product.
-const hasPurchasedProduct = async (
-  userId: string | undefined,
-  productId: string
-) => {
-  if (!userId) return false;
-
-  const [purchase] = await Items.aggregate([
-    {
-      $match: {
-        product: new mongoose.Types.ObjectId(productId),
-      },
-    },
-    {
-      $lookup: {
-        from: Orders.collection.name,
-        localField: 'order',
-        foreignField: '_id',
-        as: 'order',
-      },
-    },
-    { $unwind: '$order' },
-    {
-      $match: {
-        'order.user': new mongoose.Types.ObjectId(userId),
-        'order.status': ORDER_STATUS.delivered,
-        'order.isDeleted': false,
-      },
-    },
-    { $limit: 1 },
-    { $project: { _id: 1 } },
-  ]);
-
-  return Boolean(purchase);
-};
-
-// Checks if the requester already reviewed this product.
-const hasSubmittedProductReview = async (
-  userId: string | undefined,
-  productId: string
-) => {
-  if (!userId) return false;
-
-  const review = await Review.exists({
-    user: userId,
-    modelType: REVIEW_MODEL_TYPE.Product,
-    reference: productId,
-  });
-
-  return Boolean(review);
 };
 
 const getProductById = async (
@@ -1211,5 +905,3 @@ export const ProductService = {
   notifyMe,
   mergeGuestRecentlyViewed,
 };
-
-

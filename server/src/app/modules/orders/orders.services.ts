@@ -3,9 +3,6 @@ import mongoose from 'mongoose';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
-import { buildCartItemMatch } from '@/app/modules/cart/cart.helpers';
-import { TEnrichedCartItem } from '@/app/modules/cart/cart.types';
-import { Cart } from '@/app/modules/cart/cart.model';
 import { COIN_REFERENCE_TYPE } from '@/app/modules/coin/coin.constant';
 import { CoinService } from '@/app/modules/coin/coin.services';
 import { hasOrderSupportChat } from '@/app/modules/chat/chat.helpers';
@@ -17,18 +14,18 @@ import {
   PAYMENT_STATUS,
 } from '@/app/modules/orders/orders.constant';
 import {
-  applyCheckoutVoucherOrThrow,
   assertOrderAccess,
+  buildCheckoutQuote,
   consumeCheckoutVoucher,
   createOrderItems,
-  distributeDeliveryCharge,
-  getDeliveryChargeFromSettingsOrThrow,
-  groupCartItemsByAuthor,
+  getOrderStatusTimestampUpdate,
+  invalidateOrderCaches,
   mapOrdersToListCards,
   normalizeBillingDeliveryLocation,
   notifyOrderUser,
   orderListCardSelect,
-  resolveCheckoutItemsOrThrow,
+  orderPopulate,
+  removeCheckedOutItemsFromCart,
 } from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
 import {
@@ -36,165 +33,7 @@ import {
   TCreateOrderPayload,
   TOrderRequester,
 } from '@/app/modules/orders/orders.types';
-import { deleteCachePattern } from '@/app/redis/helpers';
-import { clearCartCache } from '@/app/redis/helpers/cart';
 
-const orderPopulate = [
-  { path: 'user', select: 'name email phone profileAvatar' },
-  { path: 'author', select: 'name email phone profileAvatar coverPhoto' },
-];
-
-const invalidateOrderCaches = async () => {
-  await Promise.all([
-    deleteCachePattern('order:*'),
-    deleteCachePattern('product:*'),
-    deleteCachePattern('cart:*'),
-  ]);
-};
-
-const getBasketSubtotal = (items: TEnrichedCartItem[]) =>
-  Number(items.reduce((total, item) => total + item.totalPrice, 0).toFixed(2));
-
-const getCoinEligibleSubtotal = (items: TEnrichedCartItem[]) =>
-  Number(
-    items
-      .filter((item) => !item.product.isDiscounted)
-      .reduce((total, item) => total + item.totalPrice, 0)
-      .toFixed(2)
-  );
-
-const distributeCoinDiscount = (
-  totalCoins: number,
-  groupedItems: [string, TEnrichedCartItem[]][]
-) => {
-  if (totalCoins <= 0) return groupedItems.map(() => 0);
-
-  const eligibleSubtotals = groupedItems.map(([, items]) =>
-    getCoinEligibleSubtotal(items)
-  );
-  const totalEligibleSubtotal = eligibleSubtotals.reduce(
-    (total, subtotal) => total + subtotal,
-    0
-  );
-
-  if (totalEligibleSubtotal <= 0) return groupedItems.map(() => 0);
-
-  const allocations = eligibleSubtotals.map((subtotal, index) => {
-    const rawCoins = (subtotal / totalEligibleSubtotal) * totalCoins;
-    return {
-      index,
-      coins: Math.floor(rawCoins),
-      fraction: rawCoins - Math.floor(rawCoins),
-    };
-  });
-  let remainingCoins =
-    totalCoins - allocations.reduce((total, item) => total + item.coins, 0);
-
-  allocations
-    .sort((a, b) => b.fraction - a.fraction)
-    .forEach((allocation) => {
-      if (remainingCoins <= 0) return;
-      allocation.coins += 1;
-      remainingCoins -= 1;
-    });
-
-  return allocations
-    .sort((a, b) => a.index - b.index)
-    .map((allocation) => allocation.coins);
-};
-
-const buildCheckoutQuote = async (
-  traceId: string,
-  userId: string,
-  payload: TCreateOrderPayload
-) => {
-  const checkoutItems = await resolveCheckoutItemsOrThrow(traceId, payload.items);
-  const groupedItems = [...groupCartItemsByAuthor(checkoutItems).entries()];
-  const deliveryCharge = await getDeliveryChargeFromSettingsOrThrow(
-    traceId,
-    payload.orderData.billingDetails.city,
-    payload.orderData.deliveryType
-  );
-  const deliveryCharges = distributeDeliveryCharge(
-    deliveryCharge,
-    groupedItems.length
-  );
-  const amount = getBasketSubtotal(checkoutItems);
-  const voucherQuote = await applyCheckoutVoucherOrThrow(
-    traceId,
-    userId,
-    payload.orderData.voucherCode,
-    groupedItems,
-    amount
-  );
-  const remainingAfterVoucher = Math.max(
-    0,
-    Number((amount - voucherQuote.voucherDiscount).toFixed(2))
-  );
-  const redemption = await CoinService.getRedemptionPreview(
-    traceId,
-    userId,
-    payload.orderData.redeemCoins ?? 0,
-    amount,
-    Math.min(getCoinEligibleSubtotal(checkoutItems), remainingAfterVoucher)
-  );
-  const coinDiscounts = distributeCoinDiscount(
-    redemption.redeemCoins,
-    groupedItems
-  ).map((coinDiscount, index) => {
-    const orderAmount = Number(
-      groupedItems[index][1].reduce((total, item) => total + item.totalPrice, 0).toFixed(2)
-    );
-    const voucherDiscount = voucherQuote.perOrderDiscounts[index] ?? 0;
-    return Math.min(
-      coinDiscount,
-      Math.max(0, Number((orderAmount - voucherDiscount).toFixed(2)))
-    );
-  });
-  const coinDiscount = Number(
-    coinDiscounts.reduce((total, value) => total + value, 0).toFixed(2)
-  );
-
-  const orders = groupedItems.map(([authorId, items], index) => {
-    const amount = Number(
-      items.reduce((total, item) => total + item.totalPrice, 0).toFixed(2)
-    );
-    const orderDeliveryCharge = deliveryCharges[index] ?? 0;
-    const coinDiscount = coinDiscounts[index] ?? 0;
-    const voucherDiscount = voucherQuote.perOrderDiscounts[index] ?? 0;
-
-    return {
-      author: authorId,
-      amount,
-      voucherDiscount,
-      giftDetails: voucherQuote.perOrderGifts[index],
-      coinDiscount,
-      deliveryCharge: orderDeliveryCharge,
-      totalAmount: Number(
-        (
-          amount - voucherDiscount - coinDiscount + orderDeliveryCharge
-        ).toFixed(2)
-      ),
-      items,
-    };
-  });
-
-  return {
-    groupedItems,
-    deliveryCharge,
-    deliveryCharges,
-    amount,
-    voucherQuote,
-    redemption: {
-      redeemCoins: coinDiscount,
-      coinDiscount,
-    },
-    coinDiscounts,
-    orders,
-  };
-};
-
-/** Returns checkout preview without creating orders or items. */
 const getOrderSummary = async (
   traceId: string,
   userId: string,
@@ -227,32 +66,6 @@ const getOrderSummary = async (
   };
 };
 
-/** Removes checked-out items from cart if they were present there. */
-const removeCheckedOutItemsFromCart = async (
-  userId: string,
-  items: TCreateOrderPayload['items']
-) => {
-  await Promise.all(
-    items.map((item) =>
-      Cart.updateOne(
-        { userId },
-        {
-          $pull: {
-            items: buildCartItemMatch({
-              productId: item.product,
-              size: item.size,
-              color: item.color,
-            }),
-          },
-        }
-      )
-    )
-  );
-
-  await clearCartCache(userId);
-};
-
-/** Creates one order per vendor from frontend checkout items. */
 const createOrders = async (
   traceId: string,
   userId: string,
@@ -333,7 +146,6 @@ const createOrders = async (
   }
 };
 
-/** Returns paginated orders for admins. */
 const getAllOrders = async (query: Record<string, unknown>) => {
   const ordersQuery = new QueryBuilder(
     Orders.find({ isDeleted: false }).select(orderListCardSelect).lean(),
@@ -352,8 +164,6 @@ const getAllOrders = async (query: Record<string, unknown>) => {
   return { meta, orders: await mapOrdersToListCards(orders) };
 };
 
-/** Returns paginated orders created by the authenticated user. */
-/** Returns paginated orders for the authenticated buyer, excluding unpaid/failed checkouts. */
 const getMyOrders = async (userId: string, query: Record<string, unknown>) => {
   const ordersQuery = new QueryBuilder(
     Orders.find({
@@ -381,7 +191,6 @@ const getMyOrders = async (userId: string, query: Record<string, unknown>) => {
   return { meta, orders: await mapOrdersToListCards(orders) };
 };
 
-/** Returns paginated orders assigned to the authenticated vendor/author. */
 const getAuthorOrders = async (
   authorId: string,
   query: Record<string, unknown>
@@ -405,7 +214,6 @@ const getAuthorOrders = async (
   return { meta, orders: await mapOrdersToListCards(orders, authorId) };
 };
 
-/** Returns one order with its item lines. */
 const getOrdersById = async (
   traceId: string,
   orderId: string,
@@ -431,7 +239,6 @@ const getOrdersById = async (
   return { ...order, items, hasOrderSupports };
 };
 
-/** Updates order status/payment state. */
 const changeOrderStatus = async (
   traceId: string,
   orderId: string,
@@ -449,9 +256,16 @@ const changeOrderStatus = async (
     payload.paymentStatus === PAYMENT_STATUS.paid &&
     order.paymentStatus !== PAYMENT_STATUS.paid;
 
-  const updatedOrder = await Orders.findByIdAndUpdate(orderId, payload, {
+  const updatedOrder = await Orders.findByIdAndUpdate(
+    orderId,
+    {
+      ...payload,
+      ...getOrderStatusTimestampUpdate(payload.status),
+    },
+    {
     returnDocument: 'after',
-  })
+    }
+  )
     .populate(orderPopulate)
     .select('-__v');
 
@@ -468,7 +282,6 @@ const changeOrderStatus = async (
   return updatedOrder;
 };
 
-/** Confirms a pending paid order. Shop confirmation only; rider matching starts on processing. */
 const confirmOrder = async (
   traceId: string,
   orderId: string,
@@ -512,7 +325,6 @@ const confirmOrder = async (
   return confirmedOrder;
 };
 
-/** Moves a confirmed order into processing and offers the job to nearby riders. */
 const processOrder = async (
   traceId: string,
   orderId: string,
@@ -549,7 +361,6 @@ const processOrder = async (
   return { order: processedOrder, job };
 };
 
-/** Soft deletes an order. */
 const deleteOrder = async (
   traceId: string,
   orderId: string,
@@ -584,5 +395,3 @@ export const OrdersService = {
   processOrder,
   deleteOrder,
 };
-
-

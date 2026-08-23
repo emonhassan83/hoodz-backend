@@ -2,7 +2,7 @@ import { HttpStatusCode } from 'axios';
 import { Types } from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
-import { CART_RECOMMENDED_LIMIT } from '@/app/modules/cart/cart.constant';
+import { CART_RECOMMENDED_LIMIT } from '@/app/constant';
 import { Cart } from '@/app/modules/cart/cart.model';
 import {
   TCartItem,

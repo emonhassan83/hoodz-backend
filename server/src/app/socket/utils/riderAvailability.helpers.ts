@@ -4,7 +4,7 @@ import { getRedisClient } from '@/app/configs/redis.config';
 import ApiError from '@/app/errors/ApiError';
 import { KYC_STATUS } from '@/app/modules/kyc/kyc.constant';
 import { Kyc } from '@/app/modules/kyc/kyc.model';
-import { RIDER_LOCATION } from '@/app/modules/job/job.constant';
+import { RIDER_LOCATION } from '@/app/constant';
 import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import { REDIS_KEYS } from '@/app/redis/keys';

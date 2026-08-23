@@ -5,10 +5,10 @@ import ApiError from '@/app/errors/ApiError';
 import { JOB_STATUS } from '@/app/modules/job/job.constant';
 import { Job } from '@/app/modules/job/job.model';
 import { Product } from '@/app/modules/product/product.model';
+import { REVIEW_SORT_MAP } from '@/app/constant';
 import {
   REVIEW_MODEL_TYPE,
   REVIEW_SORT,
-  REVIEW_SORT_MAP,
 } from '@/app/modules/review/review.constant';
 import { TCreateReviewPayload } from '@/app/modules/review/review.types';
 

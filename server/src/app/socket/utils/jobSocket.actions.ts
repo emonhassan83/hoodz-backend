@@ -3,7 +3,6 @@ import mongoose from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
 import {
-  JOB_ASSIGNMENT_TYPE,
   JOB_PAYMENT_METHOD,
   JOB_STATUS,
 } from '@/app/modules/job/job.constant';

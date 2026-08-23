@@ -10,6 +10,26 @@ import {
 } from '@/app/modules/job/job.constant';
 import { Job } from '@/app/modules/job/job.model';
 import { User } from '@/app/modules/user/user.model';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
+import { TDepositRequester } from '@/app/modules/deposit/deposit.types';
+
+export const depositPopulate = [
+  { path: 'author', select: 'name email phone profileAvatar' },
+  { path: 'jobIds', select: 'id status collectedMoney earning order rider paymentMethod' },
+];
+
+export const assertDepositAccess = (
+  traceId: string,
+  deposit: { author?: { _id?: unknown } | unknown },
+  requester: TDepositRequester
+) => {
+  const authorId = String((deposit.author as any)?._id ?? deposit.author ?? '');
+  const canAccess =
+    requester.role === USER_ROLE.admin || authorId === requester.userId;
+  if (!canAccess) {
+    throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this deposit', traceId);
+  }
+};
 
 /** Returns COD delivered jobs for deposit submission or throws. */
 export const getDepositableJobsOrThrow = async (
