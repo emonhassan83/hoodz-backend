@@ -21,4 +21,19 @@ export const DELIVERY_TYPE = {
   instant: 'instant',
 } as const;
 
+export const ORDER_LIST_FILTER = {
+  active: 'active',
+  completed: 'completed',
+  cancelled: 'cancelled',
+} as const;
+
+export const ORDER_ACTIVE_STATUSES = [
+  ORDER_STATUS.pending,
+  ORDER_STATUS.confirmed,
+  ORDER_STATUS.processing,
+  ORDER_STATUS.rider_assigned,
+  ORDER_STATUS.picked_up,
+  ORDER_STATUS.on_the_way,
+] as const;
+
 

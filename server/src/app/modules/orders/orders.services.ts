@@ -15,6 +15,7 @@ import {
 } from '@/app/modules/orders/orders.constant';
 import {
   assertOrderAccess,
+  applyMyOrdersListFilter,
   attachHasGrievanceIssued,
   buildCheckoutQuote,
   buildVisibleOrdersFilter,
@@ -29,6 +30,7 @@ import {
   orderListCardSelect,
   orderPopulate,
   removeCheckedOutItemsFromCart,
+  stripOrderListQueryParams,
 } from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
 import {
@@ -169,12 +171,15 @@ const getAllOrders = async (query: Record<string, unknown>) => {
 };
 
 const getMyOrders = async (userId: string, query: Record<string, unknown>) => {
-  const filter = await buildVisibleOrdersFilter({ user: userId });
+  const filter = applyMyOrdersListFilter(
+    await buildVisibleOrdersFilter({ user: userId }),
+    query
+  );
   const ordersQuery = new QueryBuilder(
     Orders.find(filter)
       .select(orderListCardSelect)
       .lean(),
-    query
+    stripOrderListQueryParams(query)
   )
     .filter()
     .sort()

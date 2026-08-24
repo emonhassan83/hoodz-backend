@@ -117,10 +117,19 @@ const orderIdParamValidationSchema = z.object({
   }),
 });
 
+const getMyOrdersQueryValidationSchema = z.object({
+  query: z
+    .object({
+      filter: z.enum(['active', 'completed', 'cancelled']).optional(),
+    })
+    .passthrough(),
+});
+
 export const OrdersValidation = {
   createOrderValidationSchema,
   changeOrderStatusValidationSchema,
   orderIdParamValidationSchema,
+  getMyOrdersQueryValidationSchema,
 };
 
 

@@ -27,7 +27,11 @@ router
 
 router
   .route('/my-orders')
-  .get(auth(USER_ROLE.user), OrdersController.getMyOrders);
+  .get(
+    auth(USER_ROLE.user),
+    validateRequest(OrdersValidation.getMyOrdersQueryValidationSchema),
+    OrdersController.getMyOrders
+  );
 
 router
   .route('/author-orders')

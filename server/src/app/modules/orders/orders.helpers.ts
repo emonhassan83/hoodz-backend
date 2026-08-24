@@ -11,7 +11,7 @@ import { Items } from '@/app/modules/items/items.model';
 import { Job } from '@/app/modules/job/job.model';
 import { Kyc } from '@/app/modules/kyc/kyc.model';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
-import { DELIVERY_TYPE, ORDER_STATUS, PAYMENT_STATUS } from '@/app/modules/orders/orders.constant';
+import { DELIVERY_TYPE, ORDER_ACTIVE_STATUSES, ORDER_LIST_FILTER, ORDER_STATUS, PAYMENT_STATUS } from '@/app/modules/orders/orders.constant';
 import { IOrders } from '@/app/modules/orders/orders.interface';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { PAYMENT_METHOD } from '@/app/modules/payment/payment.constant';
@@ -581,6 +581,30 @@ export const buildVisibleOrdersFilter = async (
       { paymentStatus: PAYMENT_STATUS.failed },
     ],
   };
+};
+
+/** Maps my-orders list filter query to order.status. */
+export const applyMyOrdersListFilter = (
+  base: Record<string, unknown>,
+  query: Record<string, unknown>
+) => {
+  const filter = { ...base };
+
+  if (query.filter === ORDER_LIST_FILTER.completed) {
+    filter.status = ORDER_STATUS.delivered;
+  } else if (query.filter === ORDER_LIST_FILTER.cancelled) {
+    filter.status = ORDER_STATUS.cancelled;
+  } else if (query.filter === ORDER_LIST_FILTER.active) {
+    filter.status = { $in: [...ORDER_ACTIVE_STATUSES] };
+  }
+
+  return filter;
+};
+
+export const stripOrderListQueryParams = (query: Record<string, unknown>) => {
+  const restQuery = { ...query };
+  delete restQuery.filter;
+  return restQuery;
 };
 
 /** Adds hasGrievanceIssued for the current user's orders. */
