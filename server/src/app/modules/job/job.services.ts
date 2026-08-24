@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import { JOB_ASSIGNMENT_TYPE } from '@/app/constant';
+import { hasSingleChatBetweenUsers } from '@/app/modules/chat/chat.helpers';
 import ApiError from '@/app/errors/ApiError';
 import {
   JOB_DEPOSIT_STATUS,
@@ -641,7 +642,18 @@ const getAJobDetails = async (
   const job = await Job.findById(jobId).populate(jobPopulate).select('-__v').lean();
   if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
   await assertJobAccess(traceId, job as any, requester);
-  return job;
+
+  const customerId = String(
+    (job.user as any)?._id ??
+      job.user ??
+      (job.order as any)?.user?._id ??
+      (job.order as any)?.user ??
+      ''
+  );
+  const riderId = String((job.rider as any)?._id ?? job.rider ?? '');
+  const hasCustomerChat = await hasSingleChatBetweenUsers(customerId, riderId);
+
+  return { ...job, hasCustomerChat };
 };
 
 /** Returns order's delivery job after access check. */

@@ -47,10 +47,17 @@ const orderIdParamValidationSchema = z.object({
   }),
 });
 
+const userIdParamValidationSchema = z.object({
+  params: z.object({
+    userId: objectIdSchema,
+  }),
+});
+
 export const ChatValidation = {
   createChatValidationSchema,
   chatIdParamValidationSchema,
   orderIdParamValidationSchema,
+  userIdParamValidationSchema,
 };
 
 

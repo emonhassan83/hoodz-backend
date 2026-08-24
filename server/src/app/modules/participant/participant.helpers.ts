@@ -87,8 +87,8 @@ export const getParticipantsByChatIds = async (chatIds: string[]) => {
     chat: { $in: chatIds },
     status: PARTICIPANT_STATUS.active,
   })
-    .populate([{ path: 'user', select: 'name email phone profileAvatar role' }])
-    .select('chat user status')
+    .populate([{ path: 'user', select: 'name profileAvatar' }])
+    .select('chat user')
     .lean();
 
   return participants.reduce<Map<string, typeof participants>>((map, item) => {

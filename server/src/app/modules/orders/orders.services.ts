@@ -5,7 +5,7 @@ import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import { COIN_REFERENCE_TYPE } from '@/app/modules/coin/coin.constant';
 import { CoinService } from '@/app/modules/coin/coin.services';
-import { hasOrderSupportChat } from '@/app/modules/chat/chat.helpers';
+import { hasOrderSupportChat, hasSingleChatBetweenUsers } from '@/app/modules/chat/chat.helpers';
 import { Items } from '@/app/modules/items/items.model';
 import { JobService } from '@/app/modules/job/job.services';
 import { stopJobMatchingForOrder } from '@/app/modules/job/job.helpers';
@@ -17,8 +17,10 @@ import {
   assertOrderAccess,
   attachHasGrievanceIssued,
   buildCheckoutQuote,
+  buildVisibleOrdersFilter,
   consumeCheckoutVoucher,
   createOrderItems,
+  getOrderAssignedRiderCard,
   getOrderStatusTimestampUpdate,
   invalidateOrderCaches,
   mapOrdersToListCards,
@@ -148,8 +150,9 @@ const createOrders = async (
 };
 
 const getAllOrders = async (query: Record<string, unknown>) => {
+  const filter = await buildVisibleOrdersFilter();
   const ordersQuery = new QueryBuilder(
-    Orders.find({ isDeleted: false }).select(orderListCardSelect).lean(),
+    Orders.find(filter).select(orderListCardSelect).lean(),
     query
   )
     .filter()
@@ -166,15 +169,9 @@ const getAllOrders = async (query: Record<string, unknown>) => {
 };
 
 const getMyOrders = async (userId: string, query: Record<string, unknown>) => {
+  const filter = await buildVisibleOrdersFilter({ user: userId });
   const ordersQuery = new QueryBuilder(
-    Orders.find({
-      user: userId,
-      isDeleted: false,
-      $nor: [
-        { paymentStatus: PAYMENT_STATUS.unpaid, status: ORDER_STATUS.pending },
-        { paymentStatus: PAYMENT_STATUS.failed },
-      ],
-    })
+    Orders.find(filter)
       .select(orderListCardSelect)
       .lean(),
     query
@@ -202,8 +199,9 @@ const getAuthorOrders = async (
   authorId: string,
   query: Record<string, unknown>
 ) => {
+  const filter = await buildVisibleOrdersFilter({ author: authorId });
   const ordersQuery = new QueryBuilder(
-    Orders.find({ author: authorId, isDeleted: false })
+    Orders.find(filter)
       .select(orderListCardSelect)
       .lean(),
     query
@@ -235,15 +233,33 @@ const getOrdersById = async (
   }
 
   assertOrderAccess(traceId, order, requester);
-  const [items, hasOrderSupports] = await Promise.all([
+  const customerId = String((order.user as any)?._id ?? order.user ?? '');
+
+  const [items, hasOrderSupports, rider] = await Promise.all([
     Items.find({ order: orderId })
-      .populate([{ path: 'product', select: 'title images price discountPrice' }])
+      .populate([{ path: 'product', select: 'title banner price discountPrice' }])
       .select('-__v')
       .lean(),
     hasOrderSupportChat(orderId),
+    getOrderAssignedRiderCard(orderId),
   ]);
 
-  return { ...order, items, hasOrderSupports };
+  const totalOrderItems = items.reduce(
+    (total: number, item: { quantity?: number }) => total + (item.quantity ?? 0),
+    0
+  );
+  const hasRiderChat = rider
+    ? await hasSingleChatBetweenUsers(customerId, String(rider._id))
+    : false;
+
+  return {
+    ...order,
+    items,
+    totalOrderItems,
+    rider,
+    hasOrderSupports,
+    hasRiderChat,
+  };
 };
 
 const changeOrderStatus = async (

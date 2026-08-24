@@ -26,6 +26,14 @@ router
   );
 
 router
+  .route('/user/:userId')
+  .get(
+    auth(...AUTHENTICATED_ROLES),
+    validateRequest(ChatValidation.userIdParamValidationSchema),
+    ChatController.getChatByUserId
+  );
+
+router
   .route('/:chatId')
   .get(
     auth(...AUTHENTICATED_ROLES),

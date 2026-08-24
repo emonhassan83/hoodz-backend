@@ -176,6 +176,24 @@ export const hasOrderSupportChat = async (orderId: string) =>
     })
   );
 
+/** Returns whether two users already share a 1:1 chat. */
+export const hasSingleChatBetweenUsers = async (
+  userIdA?: string | null,
+  userIdB?: string | null
+) => {
+  if (!userIdA || !userIdB || userIdA === userIdB) return false;
+
+  const sharedChatIds = await getSharedChatIds(userIdA, userIdB);
+  if (!sharedChatIds.length) return false;
+
+  return Boolean(
+    await Chat.exists({
+      _id: { $in: sharedChatIds },
+      type: CHAT_TYPES.single_chat,
+    })
+  );
+};
+
 /** Throws when requester is not inside the chat participants. */
 export const assertChatAccess = async (
   traceId: string,
@@ -191,7 +209,7 @@ export const assertChatAccess = async (
 };
 
 export const chatPopulate = [
-  { path: 'order', select: 'id status paymentStatus totalAmount deliveryType' },
+  { path: 'order', select: '_id id' },
 ];
 
 export const attachParticipantsToChat = async (chat: any) => {
@@ -200,6 +218,37 @@ export const attachParticipantsToChat = async (chat: any) => {
   ]);
   return chatWithParticipants;
 };
+
+const formatChatOrder = (order: any) => {
+  if (!order || typeof order !== 'object' || !order._id) return null;
+  return { _id: order._id, id: order.id };
+};
+
+/** Slim chat card used by the grouped inbox list. */
+export const formatChatListCard = (chat: any) => ({
+  _id: chat._id,
+  type: chat.type,
+  order: formatChatOrder(chat.order),
+  createdAt: chat.createdAt,
+});
+
+/** Chat detail with populated order and participant users. */
+export const formatChatDetail = (chat: any) => ({
+  ...formatChatListCard(chat),
+  participants: (chat.participants ?? []).map((participant: any) => {
+    const user = participant?.user;
+    if (user && typeof user === 'object') {
+      return {
+        user: {
+          _id: user._id,
+          name: user.name ?? null,
+          profileAvatar: user.profileAvatar ?? null,
+        },
+      };
+    }
+    return { user: { _id: user, name: null, profileAvatar: null } };
+  }),
+});
 
 export const getExistingUserChatByType = async (
   userId: string,

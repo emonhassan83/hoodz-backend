@@ -497,12 +497,14 @@ export const initiateWalletPayment = async (
   const session = await mongoose.startSession();
   const paymentIntentId = `WALLET-${Date.now()}`;
   let paymentIds: mongoose.Types.ObjectId[] = [];
+  const orderIds = orders.map((order) => order._id);
 
   try {
     session.startTransaction();
+
     const debitedUser = await User.findOneAndUpdate(
       { _id: userId, walletBalance: { $gte: amount } },
-      { $inc: { walletBalance: -amount, balance: -amount } },
+      { $inc: { walletBalance: -amount } },
       { session, new: true }
     );
     if (!debitedUser) {
@@ -513,32 +515,43 @@ export const initiateWalletPayment = async (
       );
     }
 
-    const payments = await createPaymentRows(userId, orders, payload, session);
-    paymentIds = payments.map((payment) => payment._id);
-    await Payment.updateMany(
-      { _id: { $in: paymentIds } },
-      {
+    const payments = await Payment.create(
+      orders.map((order) => ({
+        account: userId,
+        order: order._id,
+        subtotalAmount: order.amount,
+        coinDiscount: order.coinDiscount ?? 0,
+        deliveryCharge: order.deliveryCharge ?? 0,
+        amount: order.totalAmount,
+        paymentMethod: PAYMENT_METHOD.wallet,
+        savedCard: null,
+        saveCardRequested: false,
         status: PAYMENT_STATUS.paid,
         isPaid: true,
         paymentIntentId,
         transactionId: paymentIntentId,
-      },
+      })),
       { session }
     );
-    await Orders.updateMany(
-      { _id: { $in: orders.map((order) => order._id) } },
+    paymentIds = payments.map((payment) => payment._id);
+
+    const orderUpdateResult = await Orders.updateMany(
+      { _id: { $in: orderIds } },
       {
         paymentStatus: ORDER_PAYMENT_STATUS.paid,
         transactionId: paymentIntentId,
       },
       { session }
     );
-    await applyOrderInventoryOrThrow(
-      traceId,
-      orders.map((order) => order._id),
-      session
-    );
+    if (!orderUpdateResult.matchedCount) {
+      throw new ApiError(
+        HttpStatusCode.BadRequest,
+        'Failed to mark orders as paid',
+        traceId
+      );
+    }
 
+    await applyOrderInventoryOrThrow(traceId, orderIds, session);
     await session.commitTransaction();
   } catch (error) {
     await session.abortTransaction();
@@ -547,8 +560,8 @@ export const initiateWalletPayment = async (
     await session.endSession();
   }
 
-  await CoinService.processPaidOrderRewards(orders.map((order) => order._id));
-  await notifyOrdersPaid(orders.map((order) => order._id));
+  await CoinService.processPaidOrderRewards(orderIds);
+  await notifyOrdersPaid(orderIds);
   await Promise.all(
     orders.map((order) =>
       WalletTransactionService.createWalletTransaction({

@@ -13,16 +13,17 @@ import {
   createAiAssistantChat,
   createOrderSupportChat,
   createSingleChat,
+  formatChatDetail,
+  formatChatListCard,
   getChatOrderOrThrow,
   getPayloadParticipantId,
 } from '@/app/modules/chat/chat.helpers';
 import { Chat } from '@/app/modules/chat/chat.model';
 import { TChatRequester, TCreateChatPayload } from '@/app/modules/chat/chat.types';
 import {
-  attachParticipantsToChats,
   getMyParticipantChatIds,
+  getSharedChatIds,
 } from '@/app/modules/participant/participant.helpers';
-import { USER_ROLE } from '@/app/modules/user/user.constant';
 
 const createChat = async (
   traceId: string,
@@ -101,30 +102,24 @@ const getMyChatList = async (requester: TChatRequester) => {
   })
     .populate(chatPopulate)
     .sort({ updatedAt: -1 })
-    .select('-__v')
+    .select('_id type order createdAt')
     .lean();
 
-  const withParticipants = await attachParticipantsToChats(chats);
-  const isStaffInbox =
-    requester.role === USER_ROLE.agent || requester.role === USER_ROLE.admin;
-
   const ofType = (type: IChatType) =>
-    withParticipants.filter((chat) => chat.type === type);
+    chats.filter((chat) => chat.type === type).map(formatChatListCard);
   const oldestOne = (type: IChatType) => {
-    const items = [...ofType(type)].sort(
-      (left, right) =>
-        new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
-    );
-    return items[0] ?? null;
+    const items = chats
+      .filter((chat) => chat.type === type)
+      .sort(
+        (left, right) =>
+          new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+      );
+    return items[0] ? formatChatListCard(items[0]) : null;
   };
 
   return {
-    customer_support: isStaffInbox
-      ? ofType(CHAT_TYPES.customer_support)
-      : oldestOne(CHAT_TYPES.customer_support),
-    staff_support: isStaffInbox
-      ? ofType(CHAT_TYPES.staff_support)
-      : oldestOne(CHAT_TYPES.staff_support),
+    customer_support: oldestOne(CHAT_TYPES.customer_support),
+    staff_support: oldestOne(CHAT_TYPES.staff_support),
     order_support: ofType(CHAT_TYPES.order_support),
   };
 };
@@ -145,7 +140,7 @@ const getChatId = async (
   }
 
   await assertChatAccess(traceId, chat._id.toString(), requester);
-  return attachParticipantsToChat(chat);
+  return formatChatDetail(await attachParticipantsToChat(chat));
 };
 
 const getChatOrderById = async (
@@ -168,7 +163,50 @@ const getChatOrderById = async (
   }
 
   await assertChatAccess(traceId, chat._id.toString(), requester);
-  return attachParticipantsToChat(chat);
+  return formatChatDetail(await attachParticipantsToChat(chat));
+};
+
+const getChatByUserId = async (
+  traceId: string,
+  requester: TChatRequester,
+  userId: string
+) => {
+  if (requester.userId === userId) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Cannot get a chat with yourself',
+      traceId
+    );
+  }
+
+  await assertChatUserExists(traceId, userId);
+
+  const sharedChatIds = await getSharedChatIds(requester.userId, userId);
+  if (!sharedChatIds.length) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Chat not found', traceId);
+  }
+
+  const chat =
+    (await Chat.findOne({
+      _id: { $in: sharedChatIds },
+      type: CHAT_TYPES.single_chat,
+    })
+      .sort({ updatedAt: -1 })
+      .populate(chatPopulate)
+      .select('-__v')) ||
+    (await Chat.findOne({
+      _id: { $in: sharedChatIds },
+      type: { $ne: CHAT_TYPES.ai_assistant },
+    })
+      .sort({ updatedAt: -1 })
+      .populate(chatPopulate)
+      .select('-__v'));
+
+  if (!chat) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Chat not found', traceId);
+  }
+
+  return formatChatDetail(await attachParticipantsToChat(chat));
 };
 
 export const ChatService = {
@@ -176,6 +214,7 @@ export const ChatService = {
   getMyChatList,
   getChatId,
   getChatOrderById,
+  getChatByUserId,
   getOrCreateAiAssistantChat,
   resolveChatIdForSend,
 };

@@ -64,11 +64,29 @@ const getChatOrderById = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const getChatByUserId = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await ChatService.getChatByUserId(
+    traceId,
+    req.user,
+    req.params.userId as string
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Chat fetched successfully',
+    data,
+    traceId,
+  });
+});
+
 export const ChatController = {
   createChat,
   getMyChatList,
   getChatId,
   getChatOrderById,
+  getChatByUserId,
 };
 
 

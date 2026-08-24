@@ -8,10 +8,14 @@ import { Cart } from '@/app/modules/cart/cart.model';
 import { CoinService } from '@/app/modules/coin/coin.services';
 import { Grievance } from '@/app/modules/grievance/grievance.model';
 import { Items } from '@/app/modules/items/items.model';
+import { Job } from '@/app/modules/job/job.model';
+import { Kyc } from '@/app/modules/kyc/kyc.model';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
-import { DELIVERY_TYPE, ORDER_STATUS } from '@/app/modules/orders/orders.constant';
+import { DELIVERY_TYPE, ORDER_STATUS, PAYMENT_STATUS } from '@/app/modules/orders/orders.constant';
 import { IOrders } from '@/app/modules/orders/orders.interface';
 import { Orders } from '@/app/modules/orders/orders.model';
+import { PAYMENT_METHOD } from '@/app/modules/payment/payment.constant';
+import { Payment } from '@/app/modules/payment/payment.model';
 import { User } from '@/app/modules/user/user.model';
 import { sendNotificationViaQueue } from '@/app/utils/notification-queue.service';
 import { getEmailQueueInstance } from '@/app/utils/queueHelper';
@@ -553,8 +557,36 @@ export const mapOrdersToListCards = async (
 
 export const orderListCardSelect = ORDER_LIST_CARD_FIELDS;
 
+/**
+ * Hides abandoned unpaid pending checkouts and failed payments,
+ * but always keeps COD unpaid orders visible.
+ */
+export const buildVisibleOrdersFilter = async (
+  extra: Record<string, unknown> = {}
+) => {
+  const codOrderIds = await Payment.distinct('order', {
+    paymentMethod: PAYMENT_METHOD.cod,
+    isDeleted: { $ne: true },
+  });
+
+  return {
+    isDeleted: false,
+    ...extra,
+    $nor: [
+      {
+        paymentStatus: PAYMENT_STATUS.unpaid,
+        status: ORDER_STATUS.pending,
+        _id: { $nin: codOrderIds },
+      },
+      { paymentStatus: PAYMENT_STATUS.failed },
+    ],
+  };
+};
+
 /** Adds hasGrievanceIssued for the current user's orders. */
-export const attachHasGrievanceIssued = async <T extends { _id: unknown }>(
+export const attachHasGrievanceIssued = async <
+  T extends { _id: Types.ObjectId | string }
+>(
   userId: string,
   cards: T[]
 ) => {
@@ -694,6 +726,35 @@ export const orderPopulate = [
   { path: 'user', select: 'name email phone profileAvatar' },
   { path: 'author', select: 'name email phone profileAvatar coverPhoto' },
 ];
+
+/** Assigned delivery rider card for order details, including KYC vehicle. */
+export const getOrderAssignedRiderCard = async (orderId: string) => {
+  const job = await Job.findOne({
+    order: orderId,
+    rider: { $ne: null },
+  })
+    .select('rider')
+    .lean();
+  if (!job?.rider) return null;
+
+  const [rider, kyc] = await Promise.all([
+    User.findById(job.rider)
+      .select('name profileAvatar phone avgRating ratingCount')
+      .lean(),
+    Kyc.findOne({ user: job.rider }).select('vehicle').lean(),
+  ]);
+  if (!rider) return null;
+
+  return {
+    _id: rider._id,
+    name: rider.name ?? null,
+    profileAvatar: rider.profileAvatar ?? null,
+    phone: rider.phone ?? null,
+    avgRating: rider.avgRating ?? 0,
+    ratingCount: rider.ratingCount ?? 0,
+    vehicle: kyc?.vehicle ?? null,
+  };
+};
 
 export const invalidateOrderCaches = async () => {
   await Promise.all([
