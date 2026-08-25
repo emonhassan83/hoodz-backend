@@ -511,6 +511,9 @@ const deliveredJob = async (
 
     order.status = ORDER_STATUS.delivered;
     await order.save({ session });
+    if (job.paymentMethod === JOB_PAYMENT_METHOD.cod) {
+      await creditShopBalanceForPaidOrders([order._id], session);
+    }
 
     await session.commitTransaction();
     await RiderAvailabilitySocketHelper.setActiveJob(riderId, null);
