@@ -226,6 +226,19 @@ export const assertJobStatusIn = (
   }
 };
 
+const JOB_STEPPER_BY_STATUS: Record<string, number> = {
+  [JOB_STATUS.assigned]: 1,
+  [JOB_STATUS.accepted]: 1,
+  [JOB_STATUS.picked_up]: 2,
+  [JOB_STATUS.on_the_way]: 3,
+  [JOB_STATUS.otp_sent]: 4,
+  [JOB_STATUS.delivered]: 5,
+};
+
+/** Maps job status to UI stepper step (1-5). Matching has no step. */
+export const getJobSteper = (status?: string | null) =>
+  status ? (JOB_STEPPER_BY_STATUS[status] ?? null) : null;
+
 /** Loads an order for job assignment. */
 export const getAssignableOrderOrThrow = async (
   traceId: string,

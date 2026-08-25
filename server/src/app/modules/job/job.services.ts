@@ -30,6 +30,7 @@ import {
   getAssignableRiderOrThrow,
   getCustomerDeliveryPhone,
   getDeliveryOtpFromRedis,
+  getJobSteper,
   getRiderMatchSettings,
   hashDeliveryOtp,
   isReassignableJob,
@@ -65,6 +66,7 @@ import {
 import {
   getOrderStatusTimestampUpdate,
   notifyOrderUser,
+  creditShopBalanceForPaidOrders,
 } from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { PAYMENT_METHOD, PAYMENT_STATUS } from '@/app/modules/payment/payment.constant';
@@ -665,7 +667,7 @@ const getJobByOrderId = async (
   const job = await Job.findOne({ order: orderId }).populate(jobPopulate).select('-__v').lean();
   if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
   await assertJobAccess(traceId, job as any, requester);
-  return job;
+  return { ...job, jobSteper: getJobSteper(job.status) };
 };
 
 /** Creates an unmatched job and offers it to nearby online riders. */

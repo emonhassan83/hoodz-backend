@@ -22,6 +22,7 @@ import {
   consumeCheckoutVoucher,
   createOrderItems,
   getOrderAssignedRiderCard,
+  getOrderSteper,
   getOrderStatusTimestampUpdate,
   invalidateOrderCaches,
   mapOrdersToListCards,
@@ -33,6 +34,7 @@ import {
   stripOrderListQueryParams,
 } from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
+import { User } from '@/app/modules/user/user.model';
 import {
   TChangeOrderStatusPayload,
   TCreateOrderPayload,
@@ -44,7 +46,11 @@ const getOrderSummary = async (
   userId: string,
   payload: TCreateOrderPayload
 ) => {
-  const checkout = await buildCheckoutQuote(traceId, userId, payload);
+  const [checkout, user, coinSummary] = await Promise.all([
+    buildCheckoutQuote(traceId, userId, payload),
+    User.findById(userId).select('walletBalance').lean(),
+    CoinService.getSummary(userId),
+  ]);
 
   return {
     amount: checkout.amount,
@@ -62,6 +68,8 @@ const getOrderSummary = async (
         checkout.deliveryCharge
       ).toFixed(2)
     ),
+    walletBalance: Number((user?.walletBalance ?? 0).toFixed(2)),
+    pointBalance: coinSummary.balance,
     deliveryType: payload.orderData.deliveryType,
     city: payload.orderData.billingDetails.city,
     billingDetails: normalizeBillingDeliveryLocation(
@@ -264,6 +272,7 @@ const getOrdersById = async (
     rider,
     hasOrderSupports,
     hasRiderChat,
+    orderSteper: getOrderSteper(order.status),
   };
 };
 

@@ -111,6 +111,11 @@ const ordersSchema = new Schema<IOrders, IOrdersModel>(
       default: false,
       index: true,
     },
+    isShopBalanceCredited: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     isDeleted: {
       type: Boolean,
       default: false,

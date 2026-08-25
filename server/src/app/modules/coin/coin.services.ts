@@ -196,8 +196,12 @@ const getRedemptionPreview = async (
     return { redeemCoins: 0, coinDiscount: 0 };
   }
 
-  if (requestedCoins < 0) {
-    throw new ApiError(HttpStatusCode.BadRequest, 'Redeem coins cannot be negative', traceId);
+  if (requestedCoins > 0 && requestedCoins < COIN_REDEMPTION_MIN_BALANCE) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      `Minimum ${COIN_REDEMPTION_MIN_BALANCE} coins must be redeemed`,
+      traceId
+    );
   }
 
   await expireOldCoins(userId);
@@ -221,14 +225,6 @@ const getRedemptionPreview = async (
     );
   }
 
-  if (availableCoins < COIN_REDEMPTION_MIN_BALANCE) {
-    throw new ApiError(
-      HttpStatusCode.BadRequest,
-      `You have ${availableCoins} coins. Minimum ${COIN_REDEMPTION_MIN_BALANCE} coins are required to redeem`,
-      traceId
-    );
-  }
-
   if (basketSubtotal < COIN_REDEMPTION_MIN_BASKET_SUBTOTAL_EGP) {
     throw new ApiError(
       HttpStatusCode.BadRequest,
@@ -245,10 +241,18 @@ const getRedemptionPreview = async (
     );
   }
 
+  if (requestedCoins > maxCoinsByBasket) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      `You can redeem up to ${COIN_REDEMPTION_MAX_SUBTOTAL_PERCENT}% of the product basket (max ${maxCoinsByBasket} coins)`,
+      traceId
+    );
+  }
+
   if (requestedCoins > maxRedeemableCoins) {
     throw new ApiError(
       HttpStatusCode.BadRequest,
-      `You have ${availableCoins} coins, but you can redeem up to ${maxRedeemableCoins} coins for this basket`,
+      `You can redeem up to ${maxRedeemableCoins} coins for this basket`,
       traceId
     );
   }

@@ -58,6 +58,20 @@ export const getOrderStatusTimestampUpdate = (status?: string) => {
   return { [field]: new Date() };
 };
 
+const ORDER_STEPPER_BY_STATUS: Record<string, number> = {
+  [ORDER_STATUS.pending]: 1,
+  [ORDER_STATUS.confirmed]: 2,
+  [ORDER_STATUS.processing]: 3,
+  [ORDER_STATUS.rider_assigned]: 4,
+  [ORDER_STATUS.picked_up]: 5,
+  [ORDER_STATUS.on_the_way]: 6,
+  [ORDER_STATUS.delivered]: 7,
+};
+
+/** Maps order status to UI stepper step (1-7). Cancelled has no step. */
+export const getOrderSteper = (status?: string | null) =>
+  status ? (ORDER_STEPPER_BY_STATUS[status] ?? null) : null;
+
 /** Normalizes checkout lat/lng into GeoJSON [longitude, latitude]. */
 export const normalizeBillingDeliveryLocation = (
   billingDetails: TCreateOrderPayload['orderData']['billingDetails']
@@ -956,6 +970,7 @@ export const removeCheckedOutItemsFromCart = async (
 
 export const notifyOrdersPaid = async (orderIds: Array<string | Types.ObjectId>) => {
   await applyOrderInventoryOrThrow('payment', orderIds);
+  await creditShopBalanceForPaidOrders(orderIds);
 
   const orders = await Orders.find({
     _id: { $in: orderIds },
@@ -965,6 +980,50 @@ export const notifyOrdersPaid = async (orderIds: Array<string | Types.ObjectId>)
     .lean();
 
   await Promise.all(orders.map((order) => notifyOrderUser(order, 'paid')));
+};
+
+/** Credits shop (order.author) balance once after the order is paid. */
+export const creditShopBalanceForPaidOrders = async (
+  orderIds: Array<string | Types.ObjectId>,
+  session?: ClientSession | null
+) => {
+  const uniqueOrderIds = [...new Set(orderIds.map((id) => id.toString()))];
+  if (!uniqueOrderIds.length) return;
+
+  const orderQuery = Orders.find({
+    _id: { $in: uniqueOrderIds },
+    isDeleted: false,
+    isShopBalanceCredited: { $ne: true },
+    paymentStatus: PAYMENT_STATUS.paid,
+  });
+  if (session) orderQuery.session(session);
+  const orders = await orderQuery.select(
+    '_id author amount coinDiscount voucherDiscount'
+  );
+
+  for (const order of orders) {
+    const shopCredit = Number(
+      (
+        (order.amount ?? 0) -
+        (order.coinDiscount ?? 0) -
+        (order.voucherDiscount ?? 0)
+      ).toFixed(2)
+    );
+    if (shopCredit > 0 && order.author) {
+      await User.findByIdAndUpdate(
+        order.author,
+        { $inc: { balance: shopCredit } },
+        session ? { session } : undefined
+      );
+    }
+
+    const flagQuery = Orders.updateOne(
+      { _id: order._id, isShopBalanceCredited: { $ne: true } },
+      { isShopBalanceCredited: true }
+    );
+    if (session) flagQuery.session(session);
+    await flagQuery;
+  }
 };
 
 

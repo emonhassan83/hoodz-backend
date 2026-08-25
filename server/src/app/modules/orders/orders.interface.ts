@@ -35,6 +35,7 @@ export interface IOrders {
   deliveredAt?: Date | null;
   isOtpVerified: boolean;
   isStockDeducted: boolean;
+  isShopBalanceCredited: boolean;
   isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
