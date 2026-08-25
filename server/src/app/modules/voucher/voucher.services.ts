@@ -16,7 +16,11 @@ import {
   assertVoucherMutationAccess,
   assertVoucherReferences,
   formatVoucherListItems,
+  filterVouchersByHasUsed,
+  getVoucherUsageForUser,
+  getVoucherUsageMap,
   normalizeVoucherPayload,
+  sortVouchersByHasUsed,
   voucherListSelect,
 } from '@/app/modules/voucher/voucher.helpers';
 import { Voucher } from '@/app/modules/voucher/voucher.model';
@@ -100,7 +104,11 @@ const getShopwiseVoutures = async (
 };
 
 /** Returns compact active shop and global vouchers for product details. */
-const getActiveShopAndGlobalVoutures = async (vendorId: string) => {
+const getActiveShopAndGlobalVoutures = async (
+  vendorId: string,
+  userId?: string,
+  query: Record<string, unknown> = {}
+) => {
   const vouchers = await Voucher.find({
     ...activeVoucherFilter(),
     $or: [
@@ -112,7 +120,13 @@ const getActiveShopAndGlobalVoutures = async (vendorId: string) => {
     .sort({ expiryDate: 1, createdAt: -1 })
     .lean();
 
-  return formatVoucherListItems(vouchers);
+  const usageByVoucherId = await getVoucherUsageMap(
+    userId,
+    vouchers.map((voucher) => voucher._id)
+  );
+
+  const formatted = formatVoucherListItems(vouchers, usageByVoucherId);
+  return sortVouchersByHasUsed(filterVouchersByHasUsed(formatted, query.hasUsed));
 };
 
 /** Returns compensation vouchers of every status for the user, or all for admin/agent. */
@@ -120,6 +134,7 @@ const getCompensionVoutures = async (
   requester: TVoucherRequester,
   query: Record<string, unknown>
 ) => {
+  const { hasUsed, ...listQuery } = query;
   const filter =
     requester.role === USER_ROLE.admin || requester.role === USER_ROLE.agent
       ? { voucherType: VOUCHER_TYPE.compensation, isDeleted: false }
@@ -131,7 +146,7 @@ const getCompensionVoutures = async (
 
   const voucherQuery = new QueryBuilder(
     Voucher.find(filter).select(voucherListSelect).lean(),
-    query
+    listQuery
   )
     .filter()
     .sort()
@@ -141,8 +156,16 @@ const getCompensionVoutures = async (
     voucherQuery.modelQuery,
     voucherQuery.countTotal(),
   ]);
+  const usageByVoucherId = await getVoucherUsageMap(
+    requester.userId,
+    vouchers.map((voucher) => voucher._id)
+  );
 
-  return { meta, data: formatVoucherListItems(vouchers) };
+  const formatted = formatVoucherListItems(vouchers, usageByVoucherId);
+  return {
+    meta,
+    data: sortVouchersByHasUsed(filterVouchersByHasUsed(formatted, hasUsed)),
+  };
 };
 
 /** Returns one voucher. Public; compensation vouchers stay owner-only when a user is logged in. */
@@ -164,7 +187,14 @@ const getAVouture = async (
     throw new ApiError(HttpStatusCode.Forbidden, 'You are not allowed to view this voucher', traceId);
   }
 
-  return voucher;
+  const data = voucher!.toObject();
+  const usage = await getVoucherUsageForUser(requester?.userId, voucher!._id);
+
+  return {
+    ...data,
+    hasUsed: usage.hasUsed,
+    useAt: usage.useAt,
+  };
 };
 
 /** Updates one voucher after ownership and business-rule checks. */

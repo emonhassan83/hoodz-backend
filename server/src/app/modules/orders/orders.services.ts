@@ -138,7 +138,7 @@ const createOrders = async (
       orders.push(order);
     }
 
-    await consumeCheckoutVoucher(checkout.voucherQuote, session);
+    await consumeCheckoutVoucher(checkout.voucherQuote, userId, session);
     await session.commitTransaction();
     if (checkout.redemption.redeemCoins > 0) {
       await CoinService.sendRedemptionNotification(

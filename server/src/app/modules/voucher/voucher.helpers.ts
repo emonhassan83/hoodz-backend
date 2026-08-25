@@ -1,6 +1,8 @@
 import { HttpStatusCode } from 'axios';
+import { ClientSession, Types } from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
+import { Orders } from '@/app/modules/orders/orders.model';
 import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import {
@@ -10,6 +12,7 @@ import {
 } from '@/app/modules/voucher/voucher.constant';
 import { IVoucher } from '@/app/modules/voucher/voucher.interface';
 import { Voucher } from '@/app/modules/voucher/voucher.model';
+import { VoucherLog } from '@/app/modules/voucher/voucherLog.model';
 import {
   TUpdateVoucherPayload,
   TVoucherPayload,
@@ -189,7 +192,7 @@ export const getActiveVoucherByCodeOrThrow = async (
 
 /** Calculates money discount for a voucher against an eligible subtotal. */
 export const calculateVoucherDiscountAmount = (
-  voucher: Pick<IVoucher, 'discountType' | 'discountValue' | 'maxDiscountAmount'>,
+  voucher: Pick<IVoucher, 'discountType' | 'discountValue'>,
   eligibleAmount: number
 ) => {
   if (eligibleAmount <= 0) return 0;
@@ -200,8 +203,7 @@ export const calculateVoucherDiscountAmount = (
   }
 
   const percentDiscount = (eligibleAmount * voucher.discountValue) / 100;
-  const maxDiscount = voucher.maxDiscountAmount ?? percentDiscount;
-  return Number(Math.min(percentDiscount, maxDiscount, eligibleAmount).toFixed(2));
+  return Number(Math.min(percentDiscount, eligibleAmount).toFixed(2));
 };
 
 /** Shapes gift payload for checkout and order documents. */
@@ -231,26 +233,163 @@ export const normalizeVoucherPayload = <T extends TVoucherPayload | TUpdateVouch
 };
 
 export const voucherListSelect =
-  '_id code title voucherType discountType discountValue maxDiscountAmount giftDetails minSpend expiryDate status';
+  '_id code title voucherType discountType discountValue giftDetails minSpend expiryDate status';
 
 /** Shapes voucher list cards for frontend. */
-export const formatVoucherListItem = (voucher: Record<string, any>) => ({
-  _id: voucher._id,
-  code: voucher.code,
-  title: voucher.title,
-  voucherType: voucher.voucherType,
-  discountType: voucher.discountType,
-  discountValue: voucher.discountValue ?? 0,
-  maxDiscountAmount: voucher.maxDiscountAmount ?? null,
-  giftDetails: {
-    name: voucher.giftDetails?.name ?? null,
-    bannerImage: voucher.giftDetails?.bannerImage ?? [],
-    description: voucher.giftDetails?.description ?? null,
-  },
-  minSpend: voucher.minSpend ?? 0,
-  expiryDate: voucher.expiryDate,
-  status: voucher.status,
-});
+export const formatVoucherListItem = (
+  voucher: Record<string, any>,
+  usage?: { hasUsed: boolean; useAt: Date | null }
+) => {
+  const item: Record<string, unknown> = {
+    _id: voucher._id,
+    code: voucher.code,
+    title: voucher.title,
+    voucherType: voucher.voucherType,
+    discountType: voucher.discountType,
+    discountValue: voucher.discountValue ?? 0,
+    giftDetails: {
+      name: voucher.giftDetails?.name ?? null,
+      bannerImage: voucher.giftDetails?.bannerImage ?? [],
+      description: voucher.giftDetails?.description ?? null,
+    },
+    minSpend: voucher.minSpend ?? 0,
+    expiryDate: voucher.expiryDate,
+    status: voucher.status,
+  };
+  if (usage) {
+    item.hasUsed = usage.hasUsed;
+    item.useAt = usage.useAt;
+  }
+  return item;
+};
 
-export const formatVoucherListItems = (vouchers: Record<string, any>[]) =>
-  vouchers.map(formatVoucherListItem);
+export const formatVoucherListItems = (
+  vouchers: Record<string, any>[],
+  usageByVoucherId?: Map<string, Date | null>
+) =>
+  vouchers.map((voucher) => {
+    if (!usageByVoucherId) return formatVoucherListItem(voucher);
+
+    const voucherId = voucher._id.toString();
+    const hasUsed = usageByVoucherId.has(voucherId);
+    return formatVoucherListItem(voucher, {
+      hasUsed,
+      useAt: hasUsed ? usageByVoucherId.get(voucherId) ?? null : null,
+    });
+  });
+
+/** Unused vouchers first, then used vouchers. */
+export const sortVouchersByHasUsed = <T extends { hasUsed?: boolean }>(
+  vouchers: T[]
+) =>
+  [...vouchers].sort((left, right) => {
+    const leftUsed = left.hasUsed ? 1 : 0;
+    const rightUsed = right.hasUsed ? 1 : 0;
+    return leftUsed - rightUsed;
+  });
+
+/** Filters list items by hasUsed query when provided. */
+export const filterVouchersByHasUsed = <T extends { hasUsed?: boolean }>(
+  vouchers: T[],
+  hasUsedQuery: unknown
+) => {
+  if (hasUsedQuery === undefined || hasUsedQuery === null || hasUsedQuery === '') {
+    return vouchers;
+  }
+
+  const raw = String(hasUsedQuery).toLowerCase();
+  if (raw === 'true') return vouchers.filter((voucher) => voucher.hasUsed === true);
+  if (raw === 'false') return vouchers.filter((voucher) => voucher.hasUsed === false);
+  return vouchers;
+};
+
+/** Returns voucherId -> VoucherLog.createdAt (or null when only order history exists). */
+export const getVoucherUsageMap = async (
+  userId: string | undefined,
+  voucherIds: Array<string | Types.ObjectId>
+) => {
+  const usage = new Map<string, Date | null>();
+  if (!userId || voucherIds.length === 0) return usage;
+
+  const [logs, orders] = await Promise.all([
+    VoucherLog.find({
+      user: userId,
+      voucher: { $in: voucherIds },
+    })
+      .select('voucher createdAt')
+      .lean(),
+    Orders.find({
+      user: userId,
+      voucher: { $in: voucherIds },
+    })
+      .select('voucher createdAt')
+      .lean(),
+  ]);
+
+  for (const order of orders) {
+    const id = order.voucher?.toString();
+    if (id && !usage.has(id)) usage.set(id, null);
+  }
+
+  for (const log of logs) {
+    const id = log.voucher?.toString();
+    if (id) usage.set(id, log.createdAt ?? null);
+  }
+
+  return usage;
+};
+
+/** True when this user already consumed the voucher. */
+export const hasUserUsedVoucher = async (
+  userId: string | undefined,
+  voucherId: string | Types.ObjectId
+) => {
+  if (!userId) return false;
+
+  const [log, order] = await Promise.all([
+    VoucherLog.exists({ user: userId, voucher: voucherId }),
+    Orders.exists({ user: userId, voucher: voucherId }),
+  ]);
+
+  return Boolean(log || order);
+};
+
+/** Returns usage flag and VoucherLog.createdAt for one voucher. */
+export const getVoucherUsageForUser = async (
+  userId: string | undefined,
+  voucherId: string | Types.ObjectId
+) => {
+  if (!userId) return { hasUsed: false, useAt: null as Date | null };
+
+  const log = await VoucherLog.findOne({ user: userId, voucher: voucherId })
+    .select('createdAt')
+    .lean();
+  if (log) return { hasUsed: true, useAt: log.createdAt ?? null };
+
+  const order = await Orders.exists({ user: userId, voucher: voucherId });
+  return { hasUsed: Boolean(order), useAt: null };
+};
+
+/** Blocks checkout when the same user tries the same voucher again. */
+export const assertVoucherNotUsedByUser = async (
+  traceId: string,
+  userId: string,
+  voucherId: string | Types.ObjectId
+) => {
+  if (await hasUserUsedVoucher(userId, voucherId)) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'You have already used this voucher',
+      traceId
+    );
+  }
+};
+
+/** Stores a user-voucher usage row inside the order transaction. */
+export const createVoucherLog = async (
+  userId: string,
+  voucherId: string | Types.ObjectId,
+  session: ClientSession
+) => {
+  await VoucherLog.create([{ user: userId, voucher: voucherId }], { session });
+};

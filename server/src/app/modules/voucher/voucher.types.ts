@@ -28,7 +28,6 @@ export type TVoucherPayload = {
   user?: string | null;
   discountType: TVoucherDiscountType;
   discountValue: number;
-  maxDiscountAmount?: number;
   giftDetails?: TVoucherGiftDetails;
   minSpend?: number;
   expiryDate: string | Date;

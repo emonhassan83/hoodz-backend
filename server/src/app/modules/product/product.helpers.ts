@@ -36,6 +36,10 @@ import {
   VOUCHER_STATUS,
   VOUCHER_TYPE,
 } from '@/app/modules/voucher/voucher.constant';
+import {
+  formatVoucherListItems,
+  getVoucherUsageMap,
+} from '@/app/modules/voucher/voucher.helpers';
 import { Voucher } from '@/app/modules/voucher/voucher.model';
 import { getWishlistProductReferenceIds } from '@/app/modules/wishlist/wishlist.helpers';
 import { deleteCachePattern } from '@/app/redis/helpers';
@@ -829,7 +833,10 @@ export const getSimilarProducts = async (
   return formatProductListItems(sortedProducts.slice(0, 4), wishlistIds);
 };
 
-export const getProductVouchers = async (vendorId: string | null) => {
+export const getProductVouchers = async (
+  vendorId: string | null,
+  userId?: string
+) => {
   const voucherScopes: Record<string, unknown>[] = [
     { voucherType: VOUCHER_TYPE.global },
   ];
@@ -837,18 +844,34 @@ export const getProductVouchers = async (vendorId: string | null) => {
     voucherScopes.push({ voucherType: VOUCHER_TYPE.shop, shop: vendorId });
   }
 
-  return Voucher.find({
+  const vouchers = await Voucher.find({
     isDeleted: false,
     status: VOUCHER_STATUS.active,
     expiryDate: { $gte: new Date() },
     $or: voucherScopes,
   })
     .select(
-      '_id title code voucherType discountType discountValue maxDiscountAmount minSpend expiryDate'
+      '_id title code voucherType discountType discountValue giftDetails minSpend expiryDate status'
     )
     .sort({ expiryDate: 1, createdAt: -1 })
-    .limit(4)
+    .limit(20)
     .lean();
+
+  const usageByVoucherId = await getVoucherUsageMap(
+    userId,
+    vouchers.map((voucher) => voucher._id)
+  );
+
+  return formatVoucherListItems(vouchers, usageByVoucherId)
+    .sort((left, right) => {
+      const usedDiff = Number(Boolean(left.hasUsed)) - Number(Boolean(right.hasUsed));
+      if (usedDiff !== 0) return usedDiff;
+      return (
+        new Date(left.expiryDate as Date).getTime() -
+        new Date(right.expiryDate as Date).getTime()
+      );
+    })
+    .slice(0, 4);
 };
 
 export const getLatestProductReviews = async (productId: string) =>

@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import { POS_ORDER_STATUS } from '@/app/modules/posOrder/posOrder.constant';
-
 const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
 
 const colorSchema = z.object({
@@ -20,14 +18,18 @@ const posOrderItemSchema = z.object({
   quantity: z.number().int().positive(),
 });
 
+const posOrderQuoteBodySchema = z.object({
+  items: z.array(posOrderItemSchema).min(1),
+  discount: z.number().min(0).max(100).optional(),
+  tax: z.number().min(0).max(100).optional(),
+});
+
 const createPosOrderValidationSchema = z.object({
-  body: z.object({
-    items: z.array(posOrderItemSchema).min(1),
-    subTotal: z.number().min(0),
-    discount: z.number().min(0).optional(),
-    tax: z.number().min(0).optional(),
-    totalCost: z.number().min(0),
-  }),
+  body: posOrderQuoteBodySchema,
+});
+
+const posOrderSummaryValidationSchema = z.object({
+  body: posOrderQuoteBodySchema,
 });
 
 const updatePosOrderValidationSchema = z.object({
@@ -35,11 +37,8 @@ const updatePosOrderValidationSchema = z.object({
     posOrderId: objectIdSchema,
   }),
   body: z.object({
-    subTotal: z.number().min(0).optional(),
-    discount: z.number().min(0).optional(),
-    tax: z.number().min(0).optional(),
-    totalCost: z.number().min(0).optional(),
-    status: z.enum(Object.values(POS_ORDER_STATUS) as [string, ...string[]]).optional(),
+    discount: z.number().min(0).max(100),
+    tax: z.number().min(0).max(100),
   }),
 });
 
@@ -51,6 +50,7 @@ const posOrderIdParamValidationSchema = z.object({
 
 export const PosOrderValidation = {
   createPosOrderValidationSchema,
+  posOrderSummaryValidationSchema,
   updatePosOrderValidationSchema,
   posOrderIdParamValidationSchema,
 };

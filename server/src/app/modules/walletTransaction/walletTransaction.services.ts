@@ -9,7 +9,7 @@ import {
   refundPaymobTransaction,
   toPaymobCents,
 } from '@/app/modules/payment/payment.helpers';
-import { SavedCard } from '@/app/modules/savedCard/savedCard.model';
+import { SavedCardService } from '@/app/modules/savedCard/savedCard.services';
 import { TopUp } from '@/app/modules/topUp/topUp.model';
 import { User } from '@/app/modules/user/user.model';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
@@ -28,9 +28,25 @@ import {
 } from '@/app/modules/walletTransaction/walletTransaction.types';
 
 const walletTransactionPopulate = [
-  { path: 'user', select: 'name email phone profileAvatar walletBalance balance' },
+  { path: 'user', select: 'name email phone profileAvatar walletBalance' },
   { path: 'savedCard', select: 'maskedPan last4 cardBrand cardSubType isDefault' },
 ];
+
+/** Formats one wallet ledger row for list responses. */
+const formatWalletTransaction = (transaction: Record<string, any>) => ({
+  _id: transaction._id,
+  referenceType: transaction.referenceType ?? null,
+  type: transaction.type,
+  reference: transaction.reference ?? null,
+  amount: transaction.amount,
+  createdAt: transaction.createdAt,
+  direction: transaction.direction,
+  id: transaction.id,
+  note: transaction.note ?? null,
+  paymobTransactionId: transaction.paymobTransactionId ?? null,
+  savedCard: transaction.savedCard ?? null,
+  status: transaction.status,
+});
 
 /** Creates a wallet ledger row once for a reference. */
 const createWalletTransaction = async (
@@ -60,7 +76,7 @@ const createWalletTransaction = async (
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );
 
-/** Returns paginated wallet transactions for user/admin. */
+/** Returns wallet balance and paginated ledger rows for user/admin. */
 const getAllIntoDB = async (
   query: Record<string, unknown>,
   requester: TWalletTransactionRequester
@@ -72,8 +88,9 @@ const getAllIntoDB = async (
 
   const transactionQuery = new QueryBuilder(
     WalletTransaction.find(filter)
-      .populate(walletTransactionPopulate)
-      .select('-__v')
+      .select(
+        '_id id type amount direction status referenceType reference savedCard paymobTransactionId note createdAt'
+      )
       .lean(),
     query
   )
@@ -82,12 +99,21 @@ const getAllIntoDB = async (
     .paginate()
     .fields();
 
-  const [data, meta] = await Promise.all([
+  const [transactions, meta, user] = await Promise.all([
     transactionQuery.modelQuery,
     transactionQuery.countTotal(),
+    User.findById(requester.userId).select('walletBalance').lean(),
   ]);
 
-  return { meta, data };
+  return {
+    meta,
+    data: {
+      walletBalance: Number((user?.walletBalance ?? 0).toFixed(2)),
+      transactions: (transactions as Record<string, any>[]).map(
+        formatWalletTransaction
+      ),
+    },
+  };
 };
 
 /** Returns one wallet transaction after access verification. */
@@ -101,7 +127,8 @@ const getAIntoDB = async (
     isDeleted: false,
   })
     .populate(walletTransactionPopulate)
-    .select('-__v');
+    .select('-__v')
+    .lean();
   if (!transaction) {
     throw new ApiError(
       HttpStatusCode.NotFound,
@@ -111,10 +138,10 @@ const getAIntoDB = async (
   }
 
   assertWalletTransactionAccess(traceId, transaction, requester);
-  return transaction;
+  return formatWalletTransaction(transaction);
 };
 
-/** Refunds wallet credit back to the selected saved card when Paymob allows it. */
+/** Refunds wallet credit only to a user-owned saved card via Paymob. */
 const refundToCard = async (
   traceId: string,
   userId: string,
@@ -122,14 +149,11 @@ const refundToCard = async (
 ) => {
   assertPaymobConfig(traceId);
 
-  const savedCard = await SavedCard.findOne({
-    _id: payload.savedCardId,
-    user: userId,
-    isDeleted: false,
-  });
-  if (!savedCard) {
-    throw new ApiError(HttpStatusCode.NotFound, 'Saved card not found', traceId);
-  }
+  await SavedCardService.getUsableCardById(
+    traceId,
+    userId,
+    payload.savedCardId
+  );
 
   const sourceTopUp = await TopUp.findOne({
     user: userId,
@@ -141,7 +165,7 @@ const refundToCard = async (
   if (!sourceTopUp?.transactionId) {
     throw new ApiError(
       HttpStatusCode.BadRequest,
-      'No refundable Paymob card transaction found for this saved card',
+      'Refund to card requires a paid top-up on this saved card. Random or unsaved cards are not supported',
       traceId
     );
   }
@@ -201,7 +225,7 @@ const refundToCard = async (
 
       const updatedUser = await User.findOneAndUpdate(
         { _id: userId, walletBalance: { $gte: payload.amount } },
-        { $inc: { walletBalance: -payload.amount, balance: -payload.amount } },
+        { $inc: { walletBalance: -payload.amount } },
         { new: true, session: debitSession }
       );
       if (!updatedUser) {

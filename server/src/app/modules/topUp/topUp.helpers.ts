@@ -50,8 +50,59 @@ export const applyTopUpBalanceOnce = async (
   if (!updatedTopUp) return null;
 
   await User.findByIdAndUpdate(userId, {
-    $inc: { walletBalance: amount, balance: amount },
+    $inc: { walletBalance: amount },
   });
 
   return updatedTopUp;
 };
+
+const topUpListPopulate = [
+  { path: 'user', select: 'name profileAvatar' },
+  { path: 'savedCard', select: 'maskedPan last4 cardBrand cardSubType isDefault' },
+];
+
+/** Sums one amount field for matching documents. */
+export const sumTopUpAmount = async (
+  match: Record<string, unknown>,
+  field = '$amount'
+) => {
+  const [result] = await TopUp.aggregate([
+    { $match: match },
+    { $group: { _id: null, total: { $sum: field } } },
+  ]);
+
+  return Number((result?.total ?? 0).toFixed(2));
+};
+
+/** Formats one top-up row for list responses. */
+export const formatTopUpTransaction = (topUp: Record<string, any>) => {
+  const user =
+    topUp.user && typeof topUp.user === 'object' && topUp.user._id
+      ? {
+          _id: topUp.user._id,
+          name: topUp.user.name ?? '',
+          profileAvatar: topUp.user.profileAvatar ?? null,
+        }
+      : topUp.user
+        ? { _id: topUp.user, name: '', profileAvatar: null }
+        : null;
+
+  return {
+    _id: topUp._id,
+    user,
+    savedCard: topUp.savedCard ?? null,
+    amount: topUp.amount,
+    paymentMethod: topUp.paymentMethod,
+    status: topUp.status,
+    transactionId: topUp.transactionId ?? null,
+    paymentIntentId: topUp.paymentIntentId ?? null,
+    saveCardRequested: Boolean(topUp.saveCardRequested),
+    isPaid: Boolean(topUp.isPaid),
+    balanceAppliedAt: topUp.balanceAppliedAt ?? null,
+    isDeleted: Boolean(topUp.isDeleted),
+    id: topUp.id,
+    createdAt: topUp.createdAt,
+  };
+};
+
+export { topUpListPopulate };

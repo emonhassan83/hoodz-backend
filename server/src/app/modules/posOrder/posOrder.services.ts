@@ -3,12 +3,13 @@ import { HttpStatusCode } from 'axios';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
-import { POS_ORDER_STATUS } from '@/app/modules/posOrder/posOrder.constant';
 import {
   assertPosOrderAccess,
-  decrementPosItemStockOrThrow,
+  applyPosItemsInventoryOrThrow,
+  buildPosOrderQuote,
+  calculatePosOrderTotals,
+  formatPosOrderListCard,
   getPosOrderOrThrow,
-  restorePosItemStockOrThrow,
 } from '@/app/modules/posOrder/posOrder.helpers';
 import { PosOrder } from '@/app/modules/posOrder/posOrder.model';
 import {
@@ -21,10 +22,21 @@ import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { deleteCachePattern } from '@/app/redis/helpers';
 
 const posOrderPopulate = [
-  { path: 'soldBy', select: 'name email phone profileAvatar role' },
   { path: 'shop', select: 'name email phone profileAvatar coverPhoto' },
-  { path: 'items.product', select: 'title images sku price discountPrice inventoryType stock variants vendor' },
+  {
+    path: 'items.product',
+    select: 'title images sku price discountPrice inventoryType stock variants vendor banner',
+  },
 ];
+
+const posOrderListPopulate = [{ path: 'items.product', select: 'title banner' }];
+
+/** Quotes POS totals from shop items, discount, and tax without creating an order. */
+const getPosOrderSummary = async (
+  traceId: string,
+  requester: TPosOrderRequester,
+  payload: TCreatePosOrderPayload
+) => buildPosOrderQuote(traceId, requester.userId, payload);
 
 /** Creates a POS order and decrements product inventory in one transaction. */
 const create = async (
@@ -32,21 +44,27 @@ const create = async (
   requester: TPosOrderRequester,
   payload: TCreatePosOrderPayload
 ) => {
+  const quote = await buildPosOrderQuote(traceId, requester.userId, payload);
   const session = await mongoose.startSession();
   try {
     session.startTransaction();
 
-    await Promise.all(
-      payload.items.map((item) =>
-        decrementPosItemStockOrThrow(traceId, requester.userId, item, session)
-      )
+    const soldItems = await applyPosItemsInventoryOrThrow(
+      traceId,
+      requester.userId,
+      payload.items,
+      session,
+      'sell'
     );
 
     const [posOrder] = await PosOrder.create(
       [
         {
-          ...payload,
-          soldBy: requester.userId,
+          items: soldItems,
+          subTotal: quote.subTotal,
+          discount: quote.discount,
+          tax: quote.tax,
+          totalAmount: quote.totalAmount,
           shop: requester.userId,
         },
       ],
@@ -76,13 +94,19 @@ const getPosOrders = async (
       : typeof query.shop === 'string' && query.shop
         ? query.shop
         : undefined;
-  const filter = shopId
-    ? { shop: shopId, isDeleted: false }
-    : { isDeleted: false };
+  const shopObjectId =
+    shopId && mongoose.Types.ObjectId.isValid(shopId)
+      ? new mongoose.Types.ObjectId(shopId)
+      : undefined;
+  const filter = shopObjectId ? { shop: shopObjectId } : {};
+  const { shop: _shop, ...listQuery } = query;
 
   const posOrderQuery = new QueryBuilder(
-    PosOrder.find(filter).populate(posOrderPopulate).select('-__v').lean(),
-    query
+    PosOrder.find(filter)
+      .populate(posOrderListPopulate)
+      .select('_id items subTotal discount tax totalAmount createdAt')
+      .lean(),
+    listQuery
   )
     .filter()
     .sort()
@@ -91,9 +115,8 @@ const getPosOrders = async (
 
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
-  const earningMatch = {
-    ...filter,
-    status: POS_ORDER_STATUS.completed,
+  const earningValue = {
+    $ifNull: ['$totalAmount', { $ifNull: ['$totalCost', 0] }],
   };
 
   const [posOrders, meta, allProducts, todayEarningAgg, totalEarningAgg, totalOrders] =
@@ -101,17 +124,17 @@ const getPosOrders = async (
       posOrderQuery.modelQuery,
       posOrderQuery.countTotal(),
       Product.countDocuments({
-        ...(shopId ? { vendor: shopId } : {}),
+        ...(shopObjectId ? { vendor: shopObjectId } : {}),
         isDeleted: false,
         stock: { $gt: 0 },
       }),
       PosOrder.aggregate([
-        { $match: { ...earningMatch, createdAt: { $gte: startOfToday } } },
-        { $group: { _id: null, total: { $sum: '$totalCost' } } },
+        { $match: { ...filter, createdAt: { $gte: startOfToday } } },
+        { $group: { _id: null, total: { $sum: earningValue } } },
       ]),
       PosOrder.aggregate([
-        { $match: earningMatch },
-        { $group: { _id: null, total: { $sum: '$totalCost' } } },
+        { $match: filter },
+        { $group: { _id: null, total: { $sum: earningValue } } },
       ]),
       PosOrder.countDocuments(filter),
     ]);
@@ -123,7 +146,7 @@ const getPosOrders = async (
       todayEarning: Number((todayEarningAgg[0]?.total ?? 0).toFixed(2)),
       totalEarning: Number((totalEarningAgg[0]?.total ?? 0).toFixed(2)),
       totalOrders,
-      posOrders,
+      posOrders: posOrders.map(formatPosOrderListCard),
     },
   };
 };
@@ -140,7 +163,7 @@ const getAPosOrder = async (
   return PosOrder.findById(posOrder._id).populate(posOrderPopulate).select('-__v');
 };
 
-/** Updates POS order summary/status without mutating sold items. */
+/** Updates POS discount/tax and recalculates totalAmount. */
 const updateAPosOrder = async (
   traceId: string,
   posOrderId: string,
@@ -150,9 +173,21 @@ const updateAPosOrder = async (
   const posOrder = await getPosOrderOrThrow(traceId, posOrderId);
   assertPosOrderAccess(traceId, posOrder, requester);
 
-  return PosOrder.findByIdAndUpdate(posOrderId, payload, {
-    returnDocument: 'after',
-  })
+  const totals = calculatePosOrderTotals(
+    posOrder.subTotal,
+    payload.discount,
+    payload.tax
+  );
+
+  return PosOrder.findByIdAndUpdate(
+    posOrderId,
+    {
+      discount: totals.discount,
+      tax: totals.tax,
+      totalAmount: totals.totalAmount,
+    },
+    { returnDocument: 'after' }
+  )
     .populate(posOrderPopulate)
     .select('-__v');
 };
@@ -170,34 +205,28 @@ const removeAPosOrder = async (
   try {
     session.startTransaction();
 
-    const current = await PosOrder.findOne({
-      _id: posOrderId,
-      isDeleted: false,
-    }).session(session);
+    const current = await PosOrder.findById(posOrderId).session(session);
     if (!current) {
       throw new ApiError(HttpStatusCode.NotFound, 'POS order not found', traceId);
     }
 
-    for (const item of current.items) {
-      await restorePosItemStockOrThrow(
-        traceId,
-        current.shop.toString(),
-        {
-          product: item.product.toString(),
-          variant: item.variant,
-          quantity: item.quantity,
-        },
-        session
-      );
-    }
+    await applyPosItemsInventoryOrThrow(
+      traceId,
+      current.shop.toString(),
+      current.items.map((item) => ({
+        product: item.product.toString(),
+        variant: item.variant,
+        quantity: item.quantity,
+      })),
+      session,
+      'restore'
+    );
 
-    current.isDeleted = true;
-    current.status = POS_ORDER_STATUS.cancelled;
-    await current.save({ session });
+    await current.deleteOne({ session });
     await session.commitTransaction();
     await deleteCachePattern('product:*');
 
-    return PosOrder.findById(current._id).populate(posOrderPopulate).select('-__v');
+    return { _id: current._id };
   } catch (error) {
     await session.abortTransaction();
     throw error;
@@ -207,6 +236,7 @@ const removeAPosOrder = async (
 };
 
 export const PosOrderService = {
+  getPosOrderSummary,
   create,
   getPosOrders,
   getAPosOrder,

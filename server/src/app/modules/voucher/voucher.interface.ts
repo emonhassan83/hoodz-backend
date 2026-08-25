@@ -17,7 +17,6 @@ export interface IVoucher {
   user?: Types.ObjectId | null;
   discountType: TVoucherDiscountType;
   discountValue: number;
-  maxDiscountAmount?: number | null;
   giftDetails?: TVoucherGiftDetails;
   minSpend: number;
   expiryDate: Date;

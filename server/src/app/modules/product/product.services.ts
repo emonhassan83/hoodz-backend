@@ -776,7 +776,7 @@ const getProductById = async (
       ? SettingService.getSettingGenerals(traceId, vendorId).catch(() => null)
       : Promise.resolve(null),
     getSimilarProducts(product, wishlistIds),
-    getProductVouchers(vendorId),
+    getProductVouchers(vendorId, userId),
     getLatestProductReviews(productId),
     hasPurchasedProduct(userId, productId),
     hasSubmittedProductReview(userId, productId),

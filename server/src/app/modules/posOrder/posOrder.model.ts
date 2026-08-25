@@ -1,5 +1,5 @@
 import { Schema, model } from 'mongoose';
-import { POS_ORDER_STATUS } from '@/app/modules/posOrder/posOrder.constant';
+
 import { IPosOrder, IPosOrderModel } from './posOrder.interface';
 
 const posOrderColorSchema = new Schema(
@@ -40,28 +40,11 @@ const posOrderSchema = new Schema<IPosOrder, IPosOrderModel>(
     subTotal: { type: Number, required: true, min: 0 },
     discount: { type: Number, default: 0, min: 0 },
     tax: { type: Number, default: 0, min: 0 },
-    totalCost: { type: Number, required: true, min: 0 },
-    soldBy: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-      index: true,
-    },
+    totalAmount: { type: Number, required: true, min: 0 },
     shop: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      index: true,
-    },
-    status: {
-      type: String,
-      enum: Object.values(POS_ORDER_STATUS),
-      default: POS_ORDER_STATUS.completed,
-      index: true,
-    },
-    isDeleted: {
-      type: Boolean,
-      default: false,
       index: true,
     },
   },
@@ -71,6 +54,5 @@ const posOrderSchema = new Schema<IPosOrder, IPosOrderModel>(
 );
 
 posOrderSchema.index({ shop: 1, createdAt: -1 });
-posOrderSchema.index({ soldBy: 1, createdAt: -1 });
 
 export const PosOrder = model<IPosOrder, IPosOrderModel>('PosOrder', posOrderSchema);

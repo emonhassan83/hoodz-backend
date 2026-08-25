@@ -52,7 +52,9 @@ const getActiveShopAndGlobalVoutures = asyncHandler(
   async (req: Request, res: Response) => {
     const traceId = getTraceId();
     const data = await VoucherService.getActiveShopAndGlobalVoutures(
-      req.params.vendorId as string
+      req.params.vendorId as string,
+      req.user?.userId,
+      req.query
     );
 
     sendResponse(res, {

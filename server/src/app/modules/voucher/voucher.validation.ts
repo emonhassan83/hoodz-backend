@@ -25,7 +25,6 @@ const voucherBodyBaseSchema = z.object({
     Object.values(VOUCHER_DISCOUNT_TYPE) as [string, ...string[]]
   ),
   discountValue: z.number().min(0),
-  maxDiscountAmount: z.number().min(0).optional(),
   giftDetails: giftDetailsSchema.optional(),
   minSpend: z.number().min(0).optional(),
   expiryDate: z.string().datetime().or(z.string().min(1)),

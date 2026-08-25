@@ -1,6 +1,5 @@
 import { Model, Types } from 'mongoose';
 
-import { TPosOrderStatus } from '@/app/modules/posOrder/posOrder.types';
 import { TProductColor } from '@/app/modules/product/product.types';
 
 export interface IPosOrderItem {
@@ -18,11 +17,8 @@ export interface IPosOrder {
   subTotal: number;
   discount: number;
   tax: number;
-  totalCost: number;
-  soldBy: Types.ObjectId;
+  totalAmount: number;
   shop: Types.ObjectId;
-  status: TPosOrderStatus;
-  isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

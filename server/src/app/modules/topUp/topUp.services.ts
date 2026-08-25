@@ -28,6 +28,9 @@ import {
   applyTopUpBalanceOnce,
   buildTopUpMerchantOrderId,
   findTopUpByPaymobReference,
+  formatTopUpTransaction,
+  sumTopUpAmount,
+  topUpListPopulate,
 } from '@/app/modules/topUp/topUp.helpers';
 import { TopUp } from '@/app/modules/topUp/topUp.model';
 import { TAddWalletMoneyPayload } from '@/app/modules/topUp/topUp.types';
@@ -37,27 +40,9 @@ import {
   WALLET_TRANSACTION_REFERENCE_TYPE,
   WALLET_TRANSACTION_TYPE,
 } from '@/app/modules/walletTransaction/walletTransaction.constant';
-import { WalletTransaction } from '@/app/modules/walletTransaction/walletTransaction.model';
 import { WalletTransactionService } from '@/app/modules/walletTransaction/walletTransaction.services';
 
-const topUpPopulate = [
-  { path: 'user', select: 'name email phone profileAvatar walletBalance balance' },
-  { path: 'savedCard', select: 'maskedPan last4 cardBrand cardSubType isDefault' },
-];
-
-/** Sums one amount field for matching documents. */
-const sumAmount = async (
-  model: any,
-  match: Record<string, unknown>,
-  field = '$amount'
-) => {
-  const [result] = await model.aggregate([
-    { $match: match },
-    { $group: { _id: null, total: { $sum: field } } },
-  ]);
-
-  return Number((result?.total ?? 0).toFixed(2));
-};
+const topUpPopulate = topUpListPopulate;
 
 /** Starts a Paymob wallet top-up flow for a new or saved card. */
 const addWalletMoney = async (
@@ -210,7 +195,7 @@ const processTopUpWebhook = async (
   };
 };
 
-/** Returns platform finance summary plus paginated top-up transactions. */
+/** Returns top-up summary plus paginated top-up transactions. */
 const getSummary = async (query: Record<string, unknown>) => {
   const topUpQuery = new QueryBuilder(
     TopUp.find({ isDeleted: false })
@@ -224,40 +209,13 @@ const getSummary = async (query: Record<string, unknown>) => {
     .paginate()
     .fields();
 
-  const [
-    totalTopUpReceived,
-    totalWalletSpent,
-    totalRefundedToWallet,
-    totalRefundedToCard,
-    currentCustomerWalletLiability,
-    topUpTransctions,
-    meta,
-  ] = await Promise.all([
-    sumAmount(TopUp, {
+  const [totalTopUpReceived, topUpTransctions, meta] = await Promise.all([
+    sumTopUpAmount({
       isDeleted: false,
       status: TOP_UP_STATUS.paid,
       isPaid: true,
       balanceAppliedAt: { $ne: null },
     }),
-    sumAmount(WalletTransaction, {
-      isDeleted: false,
-      type: WALLET_TRANSACTION_TYPE.purchase,
-      direction: WALLET_TRANSACTION_DIRECTION.debit,
-      status: 'completed',
-    }),
-    sumAmount(WalletTransaction, {
-      isDeleted: false,
-      type: WALLET_TRANSACTION_TYPE.refund_credit,
-      direction: WALLET_TRANSACTION_DIRECTION.credit,
-      status: 'completed',
-    }),
-    sumAmount(WalletTransaction, {
-      isDeleted: false,
-      type: WALLET_TRANSACTION_TYPE.refund_to_card,
-      direction: WALLET_TRANSACTION_DIRECTION.debit,
-      status: 'completed',
-    }),
-    sumAmount(User, { isDeleted: false }, '$walletBalance'),
     topUpQuery.modelQuery,
     topUpQuery.countTotal(),
   ]);
@@ -266,11 +224,9 @@ const getSummary = async (query: Record<string, unknown>) => {
     meta,
     data: {
       totalTopUpReceived,
-      totalWalletSpent,
-      totalRefundedToWallet,
-      totalRefundedToCard,
-      currentCustomerWalletLiability,
-      topUpTransctions,
+      topUpTransctions: (topUpTransctions as Record<string, any>[]).map(
+        formatTopUpTransaction
+      ),
     },
   };
 };

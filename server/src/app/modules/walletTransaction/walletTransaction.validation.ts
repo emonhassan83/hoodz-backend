@@ -9,10 +9,12 @@ const walletTransactionIdParamValidationSchema = z.object({
 });
 
 const refundToCardValidationSchema = z.object({
-  body: z.object({
-    savedCardId: objectIdSchema,
-    amount: z.number().positive('Amount must be greater than 0'),
-  }),
+  body: z
+    .object({
+      savedCardId: objectIdSchema,
+      amount: z.number().positive('Amount must be greater than 0'),
+    })
+    .strict(),
 });
 
 export const WalletTransactionValidation = {

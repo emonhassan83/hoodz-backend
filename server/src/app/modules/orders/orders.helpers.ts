@@ -34,7 +34,9 @@ import {
   VOUCHER_TYPE,
 } from '@/app/modules/voucher/voucher.constant';
 import {
+  assertVoucherNotUsedByUser,
   calculateVoucherDiscountAmount,
+  createVoucherLog,
   formatCheckoutGiftDetails,
   getActiveVoucherByCodeOrThrow,
 } from '@/app/modules/voucher/voucher.helpers';
@@ -182,6 +184,7 @@ export const applyCheckoutVoucherOrThrow = async (
   if (!voucherCode?.trim()) return emptyVoucherQuote(groupedItems.length);
 
   const voucher = await getActiveVoucherByCodeOrThrow(traceId, voucherCode);
+  await assertVoucherNotUsedByUser(traceId, userId, voucher._id);
 
   if (
     voucher.voucherType === VOUCHER_TYPE.compensation &&
@@ -257,18 +260,23 @@ export const applyCheckoutVoucherOrThrow = async (
   return quote;
 };
 
-/** Marks a one-time compensation voucher as used. */
+/** Marks a one-time compensation voucher as used and logs the user usage. */
 export const consumeCheckoutVoucher = async (
   quote: TCheckoutVoucherQuote,
+  userId: string,
   session: ClientSession
 ) => {
-  if (!quote.consumeOnCreate || !quote.voucherId) return;
+  if (!quote.voucherId) return;
 
-  await Voucher.updateOne(
-    { _id: quote.voucherId },
-    { status: VOUCHER_STATUS.deactivated },
-    { session }
-  );
+  if (quote.consumeOnCreate) {
+    await Voucher.updateOne(
+      { _id: quote.voucherId },
+      { status: VOUCHER_STATUS.deactivated },
+      { session }
+    );
+  }
+
+  await createVoucherLog(userId, quote.voucherId, session);
 };
 
 /** Returns delivery charge from admin settings by city/state and delivery type. */

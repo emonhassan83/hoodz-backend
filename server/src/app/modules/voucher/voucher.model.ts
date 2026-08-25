@@ -55,11 +55,6 @@ const voucherSchema = new Schema<IVoucher, IVoucherModel>(
       required: true,
       min: 0,
     },
-    maxDiscountAmount: {
-      type: Number,
-      default: null,
-      min: 0,
-    },
     giftDetails: {
       name: { type: String, default: null, trim: true },
       bannerImage: { type: [String], default: [] },

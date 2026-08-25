@@ -9,6 +9,14 @@ import validateRequest from '@/app/utils/validateRequest';
 const router = Router();
 
 router
+  .route('/summary')
+  .post(
+    auth(USER_ROLE.vendor),
+    validateRequest(PosOrderValidation.posOrderSummaryValidationSchema),
+    PosOrderController.getPosOrderSummary
+  );
+
+router
   .route('/')
   .post(
     auth(USER_ROLE.vendor),
