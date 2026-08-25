@@ -1,10 +1,14 @@
 import mongoose from 'mongoose';
+import { HttpStatusCode } from 'axios';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
+import ApiError from '@/app/errors/ApiError';
+import { POS_ORDER_STATUS } from '@/app/modules/posOrder/posOrder.constant';
 import {
   assertPosOrderAccess,
   decrementPosItemStockOrThrow,
   getPosOrderOrThrow,
+  restorePosItemStockOrThrow,
 } from '@/app/modules/posOrder/posOrder.helpers';
 import { PosOrder } from '@/app/modules/posOrder/posOrder.model';
 import {
@@ -12,6 +16,7 @@ import {
   TPosOrderRequester,
   TUpdatePosOrderPayload,
 } from '@/app/modules/posOrder/posOrder.types';
+import { Product } from '@/app/modules/product/product.model';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { deleteCachePattern } from '@/app/redis/helpers';
 
@@ -65,10 +70,15 @@ const getPosOrders = async (
   requester: TPosOrderRequester,
   query: Record<string, unknown>
 ) => {
-  const filter =
-    requester.role === USER_ROLE.admin
-      ? { isDeleted: false }
-      : { shop: requester.userId, isDeleted: false };
+  const shopId =
+    requester.role === USER_ROLE.vendor
+      ? requester.userId
+      : typeof query.shop === 'string' && query.shop
+        ? query.shop
+        : undefined;
+  const filter = shopId
+    ? { shop: shopId, isDeleted: false }
+    : { isDeleted: false };
 
   const posOrderQuery = new QueryBuilder(
     PosOrder.find(filter).populate(posOrderPopulate).select('-__v').lean(),
@@ -79,12 +89,43 @@ const getPosOrders = async (
     .paginate()
     .fields();
 
-  const [data, meta] = await Promise.all([
-    posOrderQuery.modelQuery,
-    posOrderQuery.countTotal(),
-  ]);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const earningMatch = {
+    ...filter,
+    status: POS_ORDER_STATUS.completed,
+  };
 
-  return { meta, data };
+  const [posOrders, meta, allProducts, todayEarningAgg, totalEarningAgg, totalOrders] =
+    await Promise.all([
+      posOrderQuery.modelQuery,
+      posOrderQuery.countTotal(),
+      Product.countDocuments({
+        ...(shopId ? { vendor: shopId } : {}),
+        isDeleted: false,
+        stock: { $gt: 0 },
+      }),
+      PosOrder.aggregate([
+        { $match: { ...earningMatch, createdAt: { $gte: startOfToday } } },
+        { $group: { _id: null, total: { $sum: '$totalCost' } } },
+      ]),
+      PosOrder.aggregate([
+        { $match: earningMatch },
+        { $group: { _id: null, total: { $sum: '$totalCost' } } },
+      ]),
+      PosOrder.countDocuments(filter),
+    ]);
+
+  return {
+    meta,
+    data: {
+      allProducts,
+      todayEarning: Number((todayEarningAgg[0]?.total ?? 0).toFixed(2)),
+      totalEarning: Number((totalEarningAgg[0]?.total ?? 0).toFixed(2)),
+      totalOrders,
+      posOrders,
+    },
+  };
 };
 
 /** Returns one POS order after shopwise access verification. */
@@ -116,9 +157,59 @@ const updateAPosOrder = async (
     .select('-__v');
 };
 
+/** Soft-deletes a POS order and restores product stock/sold. */
+const removeAPosOrder = async (
+  traceId: string,
+  posOrderId: string,
+  requester: TPosOrderRequester
+) => {
+  const posOrder = await getPosOrderOrThrow(traceId, posOrderId);
+  assertPosOrderAccess(traceId, posOrder, requester);
+
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction();
+
+    const current = await PosOrder.findOne({
+      _id: posOrderId,
+      isDeleted: false,
+    }).session(session);
+    if (!current) {
+      throw new ApiError(HttpStatusCode.NotFound, 'POS order not found', traceId);
+    }
+
+    for (const item of current.items) {
+      await restorePosItemStockOrThrow(
+        traceId,
+        current.shop.toString(),
+        {
+          product: item.product.toString(),
+          variant: item.variant,
+          quantity: item.quantity,
+        },
+        session
+      );
+    }
+
+    current.isDeleted = true;
+    current.status = POS_ORDER_STATUS.cancelled;
+    await current.save({ session });
+    await session.commitTransaction();
+    await deleteCachePattern('product:*');
+
+    return PosOrder.findById(current._id).populate(posOrderPopulate).select('-__v');
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+};
+
 export const PosOrderService = {
   create,
   getPosOrders,
   getAPosOrder,
   updateAPosOrder,
+  removeAPosOrder,
 };

@@ -70,16 +70,7 @@ export const decrementPosItemStockOrThrow = async (
     return;
   }
 
-  const matchedVariant = product.variants.find((variant) => {
-    if (product.inventoryType === PRODUCT_INVENTORY_TYPE.colorOnly) {
-      return variant.color?.code === item.variant?.color?.code;
-    }
-
-    return (
-      variant.size === item.variant?.size &&
-      variant.color?.code === item.variant?.color?.code
-    );
-  });
+  const matchedVariant = findPosVariant(product, item);
 
   if (!matchedVariant) {
     throw new ApiError(HttpStatusCode.NotFound, 'Product variant not found', traceId);
@@ -96,5 +87,68 @@ export const decrementPosItemStockOrThrow = async (
   matchedVariant.quantity -= item.quantity;
   product.stock -= item.quantity;
   product.sold += item.quantity;
+  await product.save({ session });
+};
+
+const findPosVariant = (
+  product: {
+    inventoryType: string;
+    variants: Array<{
+      size?: string | null;
+      color?: { code?: string | null } | null;
+      quantity: number;
+    }>;
+  },
+  item: TPosOrderItemPayload
+) => {
+  if (product.inventoryType === PRODUCT_INVENTORY_TYPE.single) return null;
+
+  return product.variants.find((variant) => {
+    if (product.inventoryType === PRODUCT_INVENTORY_TYPE.colorOnly) {
+      return variant.color?.code === item.variant?.color?.code;
+    }
+
+    return (
+      variant.size === item.variant?.size &&
+      variant.color?.code === item.variant?.color?.code
+    );
+  });
+};
+
+/** Restores product stock and sold count after a POS order is removed. */
+export const restorePosItemStockOrThrow = async (
+  traceId: string,
+  shopId: string,
+  item: TPosOrderItemPayload,
+  session: ClientSession
+) => {
+  const product = await Product.findOne({
+    _id: item.product,
+    vendor: shopId,
+    isDeleted: false,
+  }).session(session);
+  if (!product) {
+    throw new ApiError(
+      HttpStatusCode.NotFound,
+      'Product not found for this shop',
+      traceId
+    );
+  }
+
+  if (product.inventoryType === PRODUCT_INVENTORY_TYPE.single) {
+    product.stock += item.quantity;
+    product.sold = Math.max(0, (product.sold ?? 0) - item.quantity);
+    await product.save({ session });
+    return;
+  }
+
+  const matchedVariant = findPosVariant(product, item);
+  if (!matchedVariant) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Product variant not found', traceId);
+  }
+
+  matchedVariant.quantity += item.quantity;
+  product.stock += item.quantity;
+  product.sold = Math.max(0, (product.sold ?? 0) - item.quantity);
   await product.save({ session });
 };

@@ -120,6 +120,19 @@ export const assertVariantStock = (
   }
 };
 
+const normalizeCartSize = (size?: string | null) => {
+  const value = size?.trim();
+  return value ? value.toLowerCase() : null;
+};
+
+const normalizeCartColorCode = (code?: string | null) => {
+  const value = code?.trim().toLowerCase().replace(/^#/, '');
+  return value ? value : null;
+};
+
+const getCartItemProductId = (productId: TCartItem['productId'] | string) =>
+  productId?.toString?.() ?? String(productId);
+
 /** Builds the MongoDB cart item payload from a resolved product variant. */
 export const buildCartItem = (
   productId: string,
@@ -127,20 +140,27 @@ export const buildCartItem = (
   quantity: number
 ): TCartItem => ({
   productId: new Types.ObjectId(productId),
-  size: variant.size ?? null,
-  color: variant.color ?? null,
+  size: variant.size?.trim() || null,
+  color: variant.color
+    ? {
+        code: variant.color.code.trim(),
+        name: variant.color.name.trim(),
+      }
+    : null,
   quantity,
 });
 
-/** Builds the cart item identity used by MongoDB update and pull operations. */
-export const buildCartItemMatch = (payload: TCartItemIdentity) => {
+/** Builds Mongo identity from a stored cart line so update/pull match BSON types. */
+export const buildCartItemMatchFromItem = (
+  item: Pick<TCartItem, 'productId' | 'size' | 'color'>
+) => {
   const match: Record<string, unknown> = {
-    productId: payload.productId,
-    size: payload.size ?? null,
+    productId: item.productId,
+    size: item.size ?? null,
   };
 
-  if (payload.color?.code) {
-    match['color.code'] = payload.color.code;
+  if (item.color?.code) {
+    match['color.code'] = item.color.code;
   } else {
     match.color = null;
   }
@@ -148,14 +168,83 @@ export const buildCartItemMatch = (payload: TCartItemIdentity) => {
   return match;
 };
 
-/** Checks if a stored cart item matches the incoming product, size, and color. */
+/** Builds the cart item identity used by MongoDB pull operations. */
+export const buildCartItemMatch = (payload: TCartItemIdentity) =>
+  buildCartItemMatchFromItem({
+    productId: new Types.ObjectId(payload.productId),
+    size: payload.size ?? null,
+    color: payload.color ?? null,
+  });
+
+/** Checks if a stored cart item matches the incoming product and variant. */
 export const isSameCartItem = (
   item: Pick<TCartItem, 'productId' | 'size' | 'color'>,
   payload: TCartItemIdentity
-) =>
-  item.productId.toString() === payload.productId &&
-  (item.size ?? null) === (payload.size ?? null) &&
-  (item.color?.code ?? null) === (payload.color?.code ?? null);
+) => {
+  if (getCartItemProductId(item.productId) !== String(payload.productId)) {
+    return false;
+  }
+
+  const storedSize = normalizeCartSize(item.size);
+  const storedColor = normalizeCartColorCode(item.color?.code);
+  const payloadSize = normalizeCartSize(payload.size);
+  const payloadColor = normalizeCartColorCode(payload.color?.code);
+
+  // Single-stock lines ignore extra size/color from the client.
+  if (storedSize === null && storedColor === null) return true;
+
+  // Color-only lines ignore extra size from the client.
+  if (storedSize === null) {
+    return storedColor === payloadColor;
+  }
+
+  return storedSize === payloadSize && storedColor === payloadColor;
+};
+
+/** Finds a cart line by product/variant id, then size and color. */
+export const findCartItem = <T extends Pick<TCartItem, 'productId' | 'size' | 'color'>>(
+  items: T[],
+  payload: TCartItemIdentity
+) => {
+  const payloadId = String(payload.productId);
+  const payloadSize = normalizeCartSize(payload.size);
+  const payloadColor = normalizeCartColorCode(payload.color?.code);
+  const payloadColorName = payload.color?.name?.trim().toLowerCase() || null;
+
+  const sameId = items.filter(
+    (item) => getCartItemProductId(item.productId) === payloadId
+  );
+  const variantMatch = sameId.find((item) => isSameCartItem(item, payload));
+  if (variantMatch) return variantMatch;
+  if (sameId.length === 1) return sameId[0];
+
+  const sameOption = items.filter((item) => {
+    const sameSize = normalizeCartSize(item.size) === payloadSize;
+    const sameColor =
+      normalizeCartColorCode(item.color?.code) === payloadColor ||
+      (!!payloadColorName &&
+        (item.color?.name?.trim().toLowerCase() || null) === payloadColorName);
+    return sameSize && sameColor;
+  });
+
+  return sameOption.length === 1 ? sameOption[0] : undefined;
+};
+
+/** Accepts either a product id or a product variant id. */
+export const resolveCartProductId = async (productId: string) => {
+  const product = await Product.findOne({
+    _id: productId,
+    isDeleted: false,
+  }).select('_id');
+  if (product) return product._id.toString();
+
+  const productByVariant = await Product.findOne({
+    'variants._id': productId,
+    isDeleted: false,
+  }).select('_id');
+
+  return productByVariant?._id.toString() ?? productId;
+};
 
 /** Returns existing cart items or an empty list for new carts. */
 export const getCartItemsOrEmpty = async (actor: TCartActor) => {

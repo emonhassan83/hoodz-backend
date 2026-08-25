@@ -66,9 +66,27 @@ const updateAPosOrder = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const removeAPosOrder = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await PosOrderService.removeAPosOrder(
+    traceId,
+    req.params.posOrderId as string,
+    req.user
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'POS order removed successfully',
+    data,
+    traceId,
+  });
+});
+
 export const PosOrderController = {
   create,
   getPosOrders,
   getAPosOrder,
   updateAPosOrder,
+  removeAPosOrder,
 };

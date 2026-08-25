@@ -28,6 +28,11 @@ router
     auth(USER_ROLE.admin, USER_ROLE.vendor),
     validateRequest(PosOrderValidation.updatePosOrderValidationSchema),
     PosOrderController.updateAPosOrder
+  )
+  .delete(
+    auth(USER_ROLE.admin, USER_ROLE.vendor),
+    validateRequest(PosOrderValidation.posOrderIdParamValidationSchema),
+    PosOrderController.removeAPosOrder
   );
 
 export const PosOrderRoutes = router;
