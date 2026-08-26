@@ -18,6 +18,7 @@ import {
   initiateCodPayment,
   initiateWalletPayment,
   normalizePaymobCallbackPayload,
+  formatPaymentTransaction,
   paymentPopulate,
   resolvePaymentStatusFromPaymob,
   verifyPaymobWebhookHmac,
@@ -31,6 +32,7 @@ import {
 import { SavedCardService } from '@/app/modules/savedCard/savedCard.services';
 import { TopUpService } from '@/app/modules/topUp/topUp.services';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
+import { User } from '@/app/modules/user/user.model';
 
 const initiatePayment = async (
   traceId: string,
@@ -233,9 +235,46 @@ const getAllPayments = async (
   return { meta, data: payments };
 };
 
+/** Returns wallet balance and paginated payments for the logged-in user. */
+const getUserTransactionHistory = async (
+  userId: string,
+  query: Record<string, unknown>
+) => {
+  const paymentQuery = new QueryBuilder(
+    Payment.find({ account: userId, isDeleted: false })
+      .populate({ path: 'order', select: '_id id' })
+      .select(
+        '_id order transactionId paymentIntentId subtotalAmount coinDiscount deliveryCharge amount status paymentMethod isPaid id createdAt'
+      )
+      .lean(),
+    query
+  )
+    .filter()
+    .sort()
+    .paginate()
+    .fields();
+
+  const [payments, meta, user] = await Promise.all([
+    paymentQuery.modelQuery,
+    paymentQuery.countTotal(),
+    User.findById(userId).select('walletBalance').lean(),
+  ]);
+
+  return {
+    meta,
+    data: {
+      walletBalance: Number((user?.walletBalance ?? 0).toFixed(2)),
+      transactions: (payments as Record<string, any>[]).map(
+        formatPaymentTransaction
+      ),
+    },
+  };
+};
+
 export const PaymentService = {
   initiatePayment,
   confirmPayment,
   confirmPaymentByWebhook,
   getAllPayments,
+  getUserTransactionHistory,
 };

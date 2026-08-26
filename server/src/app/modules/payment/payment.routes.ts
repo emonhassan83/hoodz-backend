@@ -34,6 +34,10 @@ router
   .get(PaymentController.paymobReturnPage);
 
 router
+  .route('/user/transctions')
+  .get(auth(...AUTHENTICATED_ROLES), PaymentController.getUserTransactionHistory);
+
+router
   .route('/')
   .get(auth(...AUTHENTICATED_ROLES), PaymentController.getAllPayments);
 

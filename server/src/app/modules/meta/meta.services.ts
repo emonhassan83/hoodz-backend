@@ -13,7 +13,8 @@ import {
   getRiderJobStats,
   getRiderUnreadNotificationCount,
   getVendorDashboardStats,
-  getVendorOrderAnalysis,
+  getVendorOrderCountAnalysis,
+  getVendorOrderEarningAnalysis,
   parseOriginFromQuery,
   resolveUserOrigin,
   toHomeProductCards,
@@ -26,6 +27,7 @@ import {
   TRiderMetaPayload,
   TUserMetaPayload,
   TVendorMetaPayload,
+  TVendorMetaQuery,
 } from '@/app/modules/meta/meta.types';
 import { User } from '@/app/modules/user/user.model';
 import { ProductService } from '@/app/modules/product/product.services';
@@ -150,14 +152,18 @@ const getAdminMeta = async (
 
 const getVendorMeta = async (
   vendorId: string,
-  query: { year?: unknown }
+  query: TVendorMetaQuery
 ): Promise<TVendorMetaPayload> => {
-  const [stats, orderAnalysis] = await Promise.all([
+  const earningYear = query.ordersEarninigFilter ?? query.year;
+  const countYear = query.ordersCountFilter ?? query.year;
+
+  const [stats, orderEarningAnalysis, orderCountAnalysis] = await Promise.all([
     getVendorDashboardStats(vendorId),
-    getVendorOrderAnalysis(vendorId, query.year),
+    getVendorOrderEarningAnalysis(vendorId, earningYear),
+    getVendorOrderCountAnalysis(vendorId, countYear),
   ]);
 
-  return { stats, orderAnalysis };
+  return { stats, orderEarningAnalysis, orderCountAnalysis };
 };
 
 export const MetaService = {

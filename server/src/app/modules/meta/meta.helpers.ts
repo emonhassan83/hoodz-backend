@@ -13,6 +13,7 @@ import { Cart } from '@/app/modules/cart/cart.model';
 import { Items } from '@/app/modules/items/items.model';
 import mongoose from 'mongoose';
 
+import { JOB_ASSIGNMENT_TYPE } from '@/app/constant';
 import { JOB_STATUS } from '@/app/modules/job/job.constant';
 import { Job } from '@/app/modules/job/job.model';
 import {
@@ -20,7 +21,8 @@ import {
   TAdminMetaStats,
   TAdminRecentOrder,
   TAdminUserGrowthItem,
-  TVendorOrderAnalysisItem,
+  TVendorOrderCountAnalysisItem,
+  TVendorOrderEarningAnalysisItem,
   TMetaBannerItem,
   TMetaBrandItem,
   TMetaLastOrder,
@@ -281,9 +283,8 @@ export const getRiderAssignJobs = async (
 ): Promise<TRiderAssignJob[]> => {
   const jobs = await Job.find({
     rider: riderId,
-    status: {
-      $ne: JOB_STATUS.delivered,
-    },
+    status: JOB_STATUS.assigned,
+    assignmentType: JOB_ASSIGNMENT_TYPE.agent,
   })
     .populate([{ path: 'order', select: 'totalAmount' }])
     .select('id earning pickup destination status collectedMoney')
@@ -586,59 +587,62 @@ export const getVendorDashboardStats = async (
   };
 };
 
-export const getVendorOrderAnalysis = async (
+export const getVendorOrderEarningAnalysis = async (
   vendorId: string,
   yearValue: unknown
-): Promise<TVendorOrderAnalysisItem[]> => {
+): Promise<TVendorOrderEarningAnalysisItem[]> => {
   const year = parseYear(yearValue);
   const vendor = new mongoose.Types.ObjectId(vendorId);
 
-  const rows = await Orders.aggregate<{
-    month: number;
-    count: number;
-    amount: number;
-  }>([
+  const rows = await Orders.aggregate<{ month: number; amount: number }>([
     {
       $match: {
         author: vendor,
         isDeleted: false,
+        paymentStatus: PAYMENT_STATUS.paid,
         createdAt: yearRange(year),
       },
     },
     {
       $group: {
         _id: { $month: '$createdAt' },
-        count: {
-          $sum: {
-            $cond: [
-              {
-                $and: [
-                  { $ne: ['$status', ORDER_STATUS.cancelled] },
-                  { $ne: ['$paymentStatus', PAYMENT_STATUS.refunded] },
-                ],
-              },
-              1,
-              0,
-            ],
-          },
-        },
-        amount: {
-          $sum: {
-            $cond: [
-              { $eq: ['$paymentStatus', PAYMENT_STATUS.paid] },
-              '$totalAmount',
-              0,
-            ],
-          },
-        },
+        amount: { $sum: '$totalAmount' },
       },
     },
-    { $project: { _id: 0, month: '$_id', count: 1, amount: 1 } },
+    { $project: { _id: 0, month: '$_id', amount: 1 } },
   ]);
 
-  return fillMonthSeries(rows, { count: 0, amount: 0 }).map((item) => ({
+  return fillMonthSeries(rows, { amount: 0 }).map((item) => ({
     month: item.month,
-    count: item.count,
     amount: toMoney(item.amount),
   }));
+};
+
+export const getVendorOrderCountAnalysis = async (
+  vendorId: string,
+  yearValue: unknown
+): Promise<TVendorOrderCountAnalysisItem[]> => {
+  const year = parseYear(yearValue);
+  const vendor = new mongoose.Types.ObjectId(vendorId);
+
+  const rows = await Orders.aggregate<{ month: number; count: number }>([
+    {
+      $match: {
+        author: vendor,
+        isDeleted: false,
+        status: { $ne: ORDER_STATUS.cancelled },
+        paymentStatus: { $ne: PAYMENT_STATUS.refunded },
+        createdAt: yearRange(year),
+      },
+    },
+    {
+      $group: {
+        _id: { $month: '$createdAt' },
+        count: { $sum: 1 },
+      },
+    },
+    { $project: { _id: 0, month: '$_id', count: 1 } },
+  ]);
+
+  return fillMonthSeries(rows, { count: 0 });
 };

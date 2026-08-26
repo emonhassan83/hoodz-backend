@@ -510,4 +510,91 @@ export const createInvitedPlatformUser = async (
   return user;
 };
 
+/** Returns an active vendor for admin payout. */
+export const getActiveVendorOrThrow = async (traceId: string, vendorId: string) => {
+  const vendor = await User.findOne({
+    _id: vendorId,
+    role: USER_ROLE.vendor,
+    isDeleted: false,
+  }).select('_id id name email fcmToken balance status role');
+
+  if (!vendor) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Vendor not found', traceId);
+  }
+
+  if (vendor.status !== 'active') {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Only active vendors can be paid',
+      traceId
+    );
+  }
+
+  return vendor;
+};
+
+/** Sends push + detailed payout email after admin pays a vendor. */
+export const notifyVendorPayoutCompleted = async (payload: {
+  vendor: {
+    _id: unknown;
+    name?: string | null;
+    email?: string | null;
+    fcmToken?: string | null;
+  };
+  amount: number;
+  previousBalance: number;
+  remainingBalance: number;
+  note?: string | null;
+  paidBy?: string | null;
+}) => {
+  const vendorId = String(payload.vendor._id);
+  const amountText = Number(payload.amount).toFixed(2);
+  const remainingText = Number(payload.remainingBalance).toFixed(2);
+  const paidAt = new Date().toISOString();
+
+  await sendBothNotificationViaQueue(
+    vendorId,
+    String(payload.vendor.fcmToken ?? ''),
+    'Vendor payout completed',
+    `Admin paid ${amountText} to your shop. Remaining balance: ${remainingText}.`,
+    {
+      modelType: NOTIFICATION_MODEL_TYPE.User,
+      reference: vendorId,
+      type: 'vendor_payout',
+      amount: payload.amount,
+      previousBalance: payload.previousBalance,
+      remainingBalance: payload.remainingBalance,
+      note: payload.note ?? null,
+    }
+  ).catch((error) => {
+    console.warn('[User] Failed to notify vendor about payout', error);
+  });
+
+  if (!payload.vendor.email) return;
+
+  const emailQueue = await getEmailQueueInstance();
+  await emailQueue
+    .add(
+      'send-vendor-payout-email',
+      {
+        email: payload.vendor.email,
+        name: payload.vendor.name ?? 'Vendor',
+        amount: payload.amount,
+        previousBalance: payload.previousBalance,
+        remainingBalance: payload.remainingBalance,
+        paidAt,
+        note: payload.note ?? null,
+        paidBy: payload.paidBy ?? null,
+      },
+      {
+        priority: 1,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+      }
+    )
+    .catch((error: unknown) => {
+      console.warn('[User] Failed to queue vendor payout email', error);
+    });
+};
+
 

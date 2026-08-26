@@ -6,6 +6,7 @@ import { getOrderStatusEmailTemplate } from '@/app/worker/templates/order-status
 import { getOtpEmailTemplate } from '@/app/worker/templates/otp-email.template';
 import { getRiderSignupVerifiedEmailTemplate } from '@/app/worker/templates/rider-signup-verified-email.template';
 import { getVendorInviteEmailTemplate } from '@/app/worker/templates/vendor-invite-email.template';
+import { getVendorPayoutEmailTemplate } from '@/app/worker/templates/vendor-payout-email.template';
 import { getWithdrawStatusEmailTemplate } from '@/app/worker/templates/withdraw-status-email.template';
 
 import { env } from '@/app/configs/env.configs';
@@ -170,6 +171,47 @@ export const initializeEmailWorker = () => {
           } catch (error) {
             console.error(
               `[Email Worker] Error sending withdraw status email to ${email}:`,
+              error
+            );
+            throw error;
+          }
+          break;
+        }
+
+        case 'send-vendor-payout-email': {
+          const {
+            email,
+            name,
+            amount,
+            previousBalance,
+            remainingBalance,
+            paidAt,
+            note,
+            paidBy,
+          } = job.data;
+          console.log(`[Email Worker] Processing vendor payout email for ${email}`);
+
+          const mailOptions = {
+            from: env.SMTP_USER,
+            to: email,
+            subject: `Hoodz vendor payout of ${Number(amount).toFixed(2)} completed`,
+            html: getVendorPayoutEmailTemplate({
+              name,
+              amount,
+              previousBalance,
+              remainingBalance,
+              paidAt,
+              note,
+              paidBy,
+            }),
+          };
+
+          try {
+            await sendEmail(mailOptions);
+            console.log(`[Email Worker] Successfully sent vendor payout email to ${email}`);
+          } catch (error) {
+            console.error(
+              `[Email Worker] Error sending vendor payout email to ${email}:`,
               error
             );
             throw error;

@@ -46,6 +46,24 @@ const inviteVendor = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const payVendor = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await UserService.payVendor(
+    traceId,
+    req.params.vendorId as string,
+    req.user.userId,
+    req.body
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Vendor paid successfully',
+    data,
+    traceId,
+  });
+});
+
 const getNearbyShops = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await UserService.getNearbyShops(
@@ -257,6 +275,7 @@ export const UserControllers = {
   inviteVendor,
   inviteAgent,
   applyReferralCodeToUser,
+  payVendor,
   changedEmail,
   updateUserProfile,
   updateUserStatus,

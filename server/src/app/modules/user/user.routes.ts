@@ -26,6 +26,14 @@ router
   );
 
 router
+  .route('/vendors/:vendorId/pay')
+  .post(
+    auth(USER_ROLE.admin),
+    validateRequest(UserValidation.payVendorValidationSchema),
+    UserControllers.payVendor
+  );
+
+router
   .route('/agents/invite')
   .post(
     auth(USER_ROLE.admin),

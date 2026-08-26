@@ -30,9 +30,11 @@ import {
   calculateDistanceKm,
   createInvitedPlatformUser,
   findActiveUserOrThrow,
+  getActiveVendorOrThrow,
   getNearbyShopGoogleElements,
   getShopProductCategories,
   normalizeDeliveryAddress,
+  notifyVendorPayoutCompleted,
   resolveShopDistance,
   resolveShopViewerOrigin,
   sendUserStatusNotifYToUser,
@@ -43,6 +45,7 @@ import {
   TChangeEmailPayload,
   TInvitePlatformUserPayload,
   TNearbyShopsQuery,
+  TPayVendorPayload,
   TSetSecurityCodePayload,
   TUpdateDeliveryLocationPayload,
   TUpdateLocationPayload,
@@ -59,7 +62,7 @@ const getAllUsersFromDB = async (
 ) => {
   const usersQuery = new QueryBuilder(
     User.find({ isDeleted: false, role: { $ne: USER_ROLE.admin } }).select(
-      '_id id name email profileAvatar role address deliveryAddress deliveryZone status isProfileSetUp createdAt'
+      '_id id name email profileAvatar role address deliveryAddress balance status isProfileSetUp createdAt'
     ),
     query
   )
@@ -698,6 +701,71 @@ const applyReferralCodeToUser = async (
   }
 };
 
+/** Admin pays a vendor from shop balance and notifies them. */
+const payVendor = async (
+  traceId: string,
+  vendorId: string,
+  adminId: string,
+  payload: TPayVendorPayload
+) => {
+  const vendor = await getActiveVendorOrThrow(traceId, vendorId);
+  const amount = Number(payload.amount.toFixed(2));
+  const previousBalance = Number((vendor.balance ?? 0).toFixed(2));
+
+  if (previousBalance < amount) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Vendor balance is not enough for this payout',
+      traceId
+    );
+  }
+
+  const updatedVendor = await User.findOneAndUpdate(
+    {
+      _id: vendorId,
+      role: USER_ROLE.vendor,
+      isDeleted: false,
+      balance: { $gte: amount },
+    },
+    { $inc: { balance: -amount } },
+    { new: true }
+  ).select('_id id name email fcmToken balance status role');
+
+  if (!updatedVendor) {
+    throw new ApiError(
+      HttpStatusCode.Conflict,
+      'Vendor balance changed. Please retry the payout',
+      traceId
+    );
+  }
+
+  const remainingBalance = Number((updatedVendor.balance ?? 0).toFixed(2));
+  const admin = await User.findById(adminId).select('name email').lean();
+
+  await notifyVendorPayoutCompleted({
+    vendor: updatedVendor,
+    amount,
+    previousBalance,
+    remainingBalance,
+    note: payload.note ?? null,
+    paidBy: admin?.name ?? admin?.email ?? 'Admin',
+  });
+
+  return {
+    vendor: {
+      _id: updatedVendor._id,
+      id: updatedVendor.id,
+      name: updatedVendor.name,
+      email: updatedVendor.email,
+    },
+    amount,
+    previousBalance,
+    remainingBalance,
+    note: payload.note ?? null,
+    paidAt: new Date(),
+  };
+};
+
 export const UserService = {
   getAllUsersFromDB,
   getSingleUser,
@@ -714,6 +782,7 @@ export const UserService = {
   inviteVendor,
   inviteAgent,
   applyReferralCodeToUser,
+  payVendor,
   deleteUserProfile,
 };
 

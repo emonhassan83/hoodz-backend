@@ -134,13 +134,24 @@ export type TAdminMetaPayload = {
   recentOrders: TAdminRecentOrder[];
 };
 
-export type TVendorOrderAnalysisItem = {
+export type TVendorOrderEarningAnalysisItem = {
+  month: string;
+  amount: number;
+};
+
+export type TVendorOrderCountAnalysisItem = {
   month: string;
   count: number;
-  amount: number;
+};
+
+export type TVendorMetaQuery = {
+  ordersEarninigFilter?: unknown;
+  ordersCountFilter?: unknown;
+  year?: unknown;
 };
 
 export type TVendorMetaPayload = {
   stats: TAdminMetaStats;
-  orderAnalysis: TVendorOrderAnalysisItem[];
+  orderEarningAnalysis: TVendorOrderEarningAnalysisItem[];
+  orderCountAnalysis: TVendorOrderCountAnalysisItem[];
 };

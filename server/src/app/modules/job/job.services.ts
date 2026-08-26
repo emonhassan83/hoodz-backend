@@ -658,7 +658,7 @@ const getAJobDetails = async (
   const riderId = String((job.rider as any)?._id ?? job.rider ?? '');
   const hasCustomerChat = await hasSingleChatBetweenUsers(customerId, riderId);
 
-  return { ...job, hasCustomerChat };
+  return { ...job, hasCustomerChat, jobSteper: getJobSteper(job.status) };
 };
 
 /** Returns order's delivery job after access check. */

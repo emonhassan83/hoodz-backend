@@ -55,6 +55,18 @@ export const MetaValidation = {
   getVendorMetaValidationSchema: z.object({
     query: z
       .object({
+        ordersEarninigFilter: z.coerce
+          .number()
+          .int()
+          .min(2000)
+          .max(2100)
+          .optional(),
+        ordersCountFilter: z.coerce
+          .number()
+          .int()
+          .min(2000)
+          .max(2100)
+          .optional(),
         year: z.coerce.number().int().min(2000).max(2100).optional(),
       })
       .passthrough(),

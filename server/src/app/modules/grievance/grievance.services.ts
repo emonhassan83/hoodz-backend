@@ -11,7 +11,10 @@ import {
   assertGrievanceExists,
   assertGrievanceStatusTransition,
   assertResolutionPayload,
+  formatGrievanceDetails,
+  formatGrievanceListItem,
   getUserOrderForGrievanceOrThrow,
+  notifyGrievanceStatusChanged,
 } from '@/app/modules/grievance/grievance.helpers';
 import { Grievance } from '@/app/modules/grievance/grievance.model';
 import {
@@ -21,9 +24,18 @@ import {
 } from '@/app/modules/grievance/grievance.types';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 
-const grievancePopulate = [
-  { path: 'user', select: 'name email phone profileAvatar walletBalance balance' },
-  { path: 'order', select: 'id amount deliveryCharge totalAmount status paymentStatus billingDetails author' },
+const grievanceListPopulate = [
+  { path: 'user', select: 'name' },
+  { path: 'order', select: 'id' },
+];
+
+const grievanceDetailPopulate = [
+  { path: 'user', select: 'name email phone profileAvatar' },
+  {
+    path: 'order',
+    select:
+      'id amount deliveryCharge totalAmount status paymentStatus billingDetails author',
+  },
 ];
 
 /** Creates a grievance from a user's own order. */
@@ -57,9 +69,12 @@ const createGrievance = async (
     status: GRIEVANCE_STATUS.under_review,
   });
 
-  return Grievance.findById(grievance._id)
-    .populate(grievancePopulate)
-    .select('-__v');
+  const created = await Grievance.findById(grievance._id)
+    .populate(grievanceDetailPopulate)
+    .select('-__v')
+    .lean();
+
+  return formatGrievanceDetails(created as Record<string, any>);
 };
 
 /** Returns paginated grievances; users see own, support sees all. */
@@ -71,7 +86,10 @@ const getAllGrievances = async (
     requester.role === USER_ROLE.user ? { user: requester.userId } : {};
 
   const grievanceQuery = new QueryBuilder(
-    Grievance.find(filter).populate(grievancePopulate).select('-__v').lean(),
+    Grievance.find(filter)
+      .populate(grievanceListPopulate)
+      .select('_id user order issueType description files status createdAt')
+      .lean(),
     query
   )
     .filter()
@@ -84,7 +102,10 @@ const getAllGrievances = async (
     grievanceQuery.countTotal(),
   ]);
 
-  return { meta, data };
+  return {
+    meta,
+    data: (data as Record<string, any>[]).map(formatGrievanceListItem),
+  };
 };
 
 /** Returns one grievance after access verification. */
@@ -94,15 +115,16 @@ const getAGrievance = async (
   requester: TGrievanceRequester
 ) => {
   const grievance = await Grievance.findById(grievanceId)
-    .populate(grievancePopulate)
-    .select('-__v');
+    .populate(grievanceDetailPopulate)
+    .select('-__v')
+    .lean();
   assertGrievanceExists(grievance, traceId);
-  assertGrievanceAccess(traceId, grievance!, requester);
+  assertGrievanceAccess(traceId, grievance as any, requester);
 
-  return grievance;
+  return formatGrievanceDetails(grievance as Record<string, any>);
 };
 
-/** Updates grievance review/resolution. */
+/** Updates grievance review/resolution and notifies the owner. */
 const resolveGrievance = async (
   traceId: string,
   grievanceId: string,
@@ -131,10 +153,14 @@ const resolveGrievance = async (
   }
 
   await grievance!.save();
+  await notifyGrievanceStatusChanged(grievance!);
 
-  return Grievance.findById(grievanceId)
-    .populate(grievancePopulate)
-    .select('-__v');
+  const updated = await Grievance.findById(grievanceId)
+    .populate(grievanceDetailPopulate)
+    .select('-__v')
+    .lean();
+
+  return formatGrievanceDetails(updated as Record<string, any>);
 };
 
 /** Permanently deletes a grievance after access verification. */

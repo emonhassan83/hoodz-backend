@@ -326,6 +326,35 @@ export const paymentPopulate = [
   { path: 'savedCard', select: 'maskedPan last4 cardBrand cardSubType isDefault' },
 ];
 
+/** Formats one payment row for user transaction list responses. */
+export const formatPaymentTransaction = (payment: Record<string, any>) => {
+  const order =
+    payment.order && typeof payment.order === 'object' && payment.order._id
+      ? {
+          _id: payment.order._id,
+          id: payment.order.id ?? null,
+        }
+      : payment.order
+        ? { _id: payment.order, id: null }
+        : null;
+
+  return {
+    _id: payment._id,
+    order,
+    transactionId: payment.transactionId ?? null,
+    paymentIntentId: payment.paymentIntentId ?? null,
+    subtotalAmount: payment.subtotalAmount,
+    coinDiscount: payment.coinDiscount ?? 0,
+    deliveryCharge: payment.deliveryCharge ?? 0,
+    amount: payment.amount,
+    status: payment.status,
+    paymentMethod: payment.paymentMethod,
+    isPaid: Boolean(payment.isPaid),
+    id: payment.id,
+    createdAt: payment.createdAt,
+  };
+};
+
 export const getPayableOrdersOrThrow = async (
   traceId: string,
   userId: string,

@@ -86,4 +86,9 @@ export type TPlatformInviteEmailPayload = {
   password: string;
 };
 
+export type TPayVendorPayload = {
+  amount: number;
+  note?: string | null;
+};
+
 

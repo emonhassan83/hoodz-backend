@@ -8,6 +8,7 @@ export const NOTIFICATION_MODEL_TYPE = {
   Job: 'Job',
   Deposit: 'Deposit',
   Withdraw: 'Withdraw',
+  Grievance: 'Grievance',
 } as const
 
 

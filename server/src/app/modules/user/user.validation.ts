@@ -151,6 +151,16 @@ const shopDetailsValidationSchema = z.object({
     ),
 });
 
+const payVendorValidationSchema = z.object({
+  params: z.object({
+    vendorId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid vendor id'),
+  }),
+  body: z.object({
+    amount: z.number().positive('Amount must be greater than 0'),
+    note: z.string().trim().min(1).nullable().optional(),
+  }),
+});
+
 export const UserValidation = {
   updateUserValidationSchema,
   changeStatusValidationSchema,
@@ -164,6 +174,7 @@ export const UserValidation = {
   changeEmailZodSchema,
   nearbyShopsValidationSchema,
   shopDetailsValidationSchema,
+  payVendorValidationSchema,
 };
 
 
