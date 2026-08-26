@@ -4,8 +4,10 @@ import mongoose from 'mongoose';
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import { getRiderMoneySummary } from '@/app/modules/deposit/deposit.helpers';
+import { formatKycWallet } from '@/app/modules/kyc/kyc.helpers';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
+import { WalletAccount } from '@/app/modules/wallet/wallet.model';
 import {
   WALLET_TRANSACTION_DIRECTION,
   WALLET_TRANSACTION_REFERENCE_TYPE,
@@ -120,13 +122,15 @@ const getAWithdraw = async (
 ) => {
   const withdraw = await Withdraw.findOne({ _id: withdrawId, isDeleted: false })
     .populate(withdrawPopulate)
-    .select('-__v');
+    .select('-__v')
+    .lean();
   assertWithdrawExists(withdraw, traceId);
 
-  if (
-    requester.role !== USER_ROLE.admin &&
-    withdraw!.author._id.toString() !== requester.userId
-  ) {
+  const authorId = String(
+    (withdraw!.author as any)?._id ?? withdraw!.author ?? ''
+  );
+
+  if (requester.role !== USER_ROLE.admin && authorId !== requester.userId) {
     throw new ApiError(
       HttpStatusCode.Forbidden,
       'You are not allowed to view this withdraw request',
@@ -134,7 +138,14 @@ const getAWithdraw = async (
     );
   }
 
-  return withdraw;
+  const wallets = await WalletAccount.find({ user: authorId })
+    .select('-__v -user')
+    .lean();
+
+  return {
+    ...withdraw,
+    riderWallet: (wallets as Record<string, any>[]).map(formatKycWallet),
+  };
 };
 
 /** Admin completes/rejects a pending withdraw with balance-safe deduction. */
