@@ -14,9 +14,11 @@ import {
 } from '@/app/modules/follow/follow.helpers';
 import { JOB_STATUS } from '@/app/modules/job/job.constant';
 import { Job } from '@/app/modules/job/job.model';
+import { formatKycWallet } from '@/app/modules/kyc/kyc.helpers';
 import { Kyc } from '@/app/modules/kyc/kyc.model';
 import { getUserSupportFlags } from '@/app/modules/chat/chat.helpers';
 import { SettingService } from '@/app/modules/settings/settings.services';
+import { WalletAccount } from '@/app/modules/wallet/wallet.model';
 import {
   deleteShopFromTypesense,
   upsertShopToTypesense,
@@ -99,19 +101,27 @@ const getSingleUser = async (traceId: string, userId: string) => {
     return { ...user, coins: coinSummary.balance, ...supportFlags };
   }
 
-  const [kyc, completedDeliveries, coinSummary, supportFlags, riderSecurity] =
-    await Promise.all([
-      Kyc.findOne({ user: user._id })
-        .select('-user -rejectedReason -updatedAt -__v')
-        .lean(),
-      Job.countDocuments({
-        rider: user._id,
-        status: JOB_STATUS.delivered,
-      }),
-      CoinService.getSummary(userId),
-      getUserSupportFlags(userId),
-      User.findById(userId).select('+securityCode').lean(),
-    ]);
+  const [
+    kyc,
+    wallets,
+    completedDeliveries,
+    coinSummary,
+    supportFlags,
+    riderSecurity,
+  ] = await Promise.all([
+    Kyc.findOne({ user: user._id })
+      .select('-user -rejectedReason -updatedAt -__v')
+      .lean(),
+    WalletAccount.find({ user: user._id }).select('-__v -user').lean(),
+    Job.countDocuments({
+      rider: user._id,
+      status: JOB_STATUS.delivered,
+    }),
+    CoinService.getSummary(userId),
+    getUserSupportFlags(userId),
+    User.findById(userId).select('+securityCode').lean(),
+  ]);
+
   return {
     ...user,
     hasSetSecurityCode: Boolean(riderSecurity?.securityCode),
@@ -119,6 +129,7 @@ const getSingleUser = async (traceId: string, userId: string) => {
     completedDeliveries,
     coins: coinSummary.balance,
     kyc,
+    wallets: (wallets as Record<string, any>[]).map(formatKycWallet),
   };
 };
 
