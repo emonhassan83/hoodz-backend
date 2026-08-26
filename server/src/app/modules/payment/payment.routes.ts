@@ -38,6 +38,14 @@ router
   .get(auth(...AUTHENTICATED_ROLES), PaymentController.getUserTransactionHistory);
 
 router
+  .route('/:paymentId')
+  .get(
+    auth(...AUTHENTICATED_ROLES),
+    validateRequest(PaymentValidation.paymentIdParamValidationSchema),
+    PaymentController.getAPayment
+  );
+
+router
   .route('/')
   .get(auth(...AUTHENTICATED_ROLES), PaymentController.getAllPayments);
 

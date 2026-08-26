@@ -53,6 +53,23 @@ const getAllPayments = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const getAPayment = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await PaymentService.getAPayment(
+    traceId,
+    req.params.paymentId as string,
+    req.user
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Payment fetched successfully',
+    data,
+    traceId,
+  });
+});
+
 const getUserTransactionHistory = asyncHandler(
   async (req: Request, res: Response) => {
     const traceId = getTraceId();
@@ -100,6 +117,7 @@ export const PaymentController = {
   paymobWebhook,
   paymobReturnPage,
   getAllPayments,
+  getAPayment,
   getUserTransactionHistory,
 };
 

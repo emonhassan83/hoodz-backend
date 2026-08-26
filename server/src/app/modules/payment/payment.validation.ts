@@ -42,8 +42,15 @@ const confirmPaymentValidationSchema = z.object({
   }),
 });
 
+const paymentIdParamValidationSchema = z.object({
+  params: z.object({
+    paymentId: objectIdSchema,
+  }),
+});
+
 export const PaymentValidation = {
   initiatePaymentValidationSchema,
   confirmPaymentValidationSchema,
+  paymentIdParamValidationSchema,
 };
 

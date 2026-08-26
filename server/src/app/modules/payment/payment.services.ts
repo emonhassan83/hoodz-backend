@@ -235,6 +235,40 @@ const getAllPayments = async (
   return { meta, data: payments };
 };
 
+const getAPayment = async (
+  traceId: string,
+  paymentId: string,
+  requester: { userId: string; role: string }
+) => {
+  const payment = await Payment.findOne({
+    _id: paymentId,
+    isDeleted: false,
+  })
+    .populate(paymentPopulate)
+    .select('-__v')
+    .lean();
+
+  if (!payment) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Payment not found', traceId);
+  }
+
+  const canViewAny =
+    requester.role === USER_ROLE.admin || requester.role === USER_ROLE.agent;
+  const paymentAccountId = String(
+    (payment.account as any)?._id ?? payment.account ?? ''
+  );
+
+  if (!canViewAny && paymentAccountId !== requester.userId) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'You are not allowed to access this payment',
+      traceId
+    );
+  }
+
+  return payment;
+};
+
 /** Returns wallet balance and paginated payments for the logged-in user. */
 const getUserTransactionHistory = async (
   userId: string,
@@ -276,5 +310,6 @@ export const PaymentService = {
   confirmPayment,
   confirmPaymentByWebhook,
   getAllPayments,
+  getAPayment,
   getUserTransactionHistory,
 };
