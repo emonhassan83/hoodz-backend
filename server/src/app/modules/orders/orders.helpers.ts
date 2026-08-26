@@ -802,6 +802,69 @@ export const getOrderAssignedRiderCard = async (orderId: string) => {
   };
 };
 
+/** Delivery job card for order details after a rider is assigned. */
+export const getOrderDeliveryJobCard = async (orderId: string) => {
+  const job = await Job.findOne({
+    order: orderId,
+    rider: { $ne: null },
+  })
+    .select('_id id deliveryType destination distance pickup createdAt')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  if (!job) return null;
+
+  return {
+    _id: job._id,
+    deliveryType: job.deliveryType,
+    destination: job.destination,
+    distance: job.distance ?? null,
+    id: job.id,
+    pickup: job.pickup,
+    createdAt: job.createdAt,
+  };
+};
+
+/**
+ * Restricts orders by whether a delivery rider is already assigned.
+ * hasRiderAssigned=false → orders agents can still assign a rider to.
+ */
+export const applyHasRiderAssignedFilter = async (
+  base: Record<string, unknown>,
+  query: Record<string, unknown>
+) => {
+  const raw = query.hasRiderAssigned;
+  if (raw === undefined || raw === null || raw === '') return base;
+
+  const hasRiderAssigned =
+    raw === true || raw === 'true' || raw === '1'
+      ? true
+      : raw === false || raw === 'false' || raw === '0'
+        ? false
+        : undefined;
+
+  if (hasRiderAssigned === undefined) return base;
+
+  const assignedOrderIds = await Job.distinct('order', {
+    rider: { $ne: null },
+  });
+
+  return {
+    ...base,
+    _id: hasRiderAssigned
+      ? { $in: assignedOrderIds }
+      : { $nin: assignedOrderIds },
+  };
+};
+
+export const stripAdminOrderListQueryParams = (
+  query: Record<string, unknown>
+) => {
+  const restQuery = { ...query };
+  delete restQuery.hasRiderAssigned;
+  return restQuery;
+};
+
 export const invalidateOrderCaches = async () => {
   await Promise.all([
     deleteCachePattern('order:*'),

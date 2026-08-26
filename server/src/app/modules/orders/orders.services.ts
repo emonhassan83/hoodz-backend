@@ -15,6 +15,7 @@ import {
 } from '@/app/modules/orders/orders.constant';
 import {
   assertOrderAccess,
+  applyHasRiderAssignedFilter,
   applyMyOrdersListFilter,
   attachHasGrievanceIssued,
   buildCheckoutQuote,
@@ -22,6 +23,7 @@ import {
   consumeCheckoutVoucher,
   createOrderItems,
   getOrderAssignedRiderCard,
+  getOrderDeliveryJobCard,
   getOrderSteper,
   getOrderStatusTimestampUpdate,
   invalidateOrderCaches,
@@ -31,6 +33,7 @@ import {
   orderListCardSelect,
   orderPopulate,
   removeCheckedOutItemsFromCart,
+  stripAdminOrderListQueryParams,
   stripOrderListQueryParams,
 } from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
@@ -160,10 +163,13 @@ const createOrders = async (
 };
 
 const getAllOrders = async (query: Record<string, unknown>) => {
-  const filter = await buildVisibleOrdersFilter();
+  const filter = await applyHasRiderAssignedFilter(
+    await buildVisibleOrdersFilter(),
+    query
+  );
   const ordersQuery = new QueryBuilder(
     Orders.find(filter).select(orderListCardSelect).lean(),
-    query
+    stripAdminOrderListQueryParams(query)
   )
     .filter()
     .sort()
@@ -248,13 +254,14 @@ const getOrdersById = async (
   assertOrderAccess(traceId, order, requester);
   const customerId = String((order.user as any)?._id ?? order.user ?? '');
 
-  const [items, hasOrderSupports, rider] = await Promise.all([
+  const [items, hasOrderSupports, rider, deliveryJob] = await Promise.all([
     Items.find({ order: orderId })
       .populate([{ path: 'product', select: 'title banner price discountPrice' }])
       .select('-__v')
       .lean(),
     hasOrderSupportChat(orderId),
     getOrderAssignedRiderCard(orderId),
+    getOrderDeliveryJobCard(orderId),
   ]);
 
   const totalOrderItems = items.reduce(
@@ -270,6 +277,7 @@ const getOrdersById = async (
     items,
     totalOrderItems,
     rider,
+    deliveryJob,
     hasOrderSupports,
     hasRiderChat,
     orderSteper: getOrderSteper(order.status),

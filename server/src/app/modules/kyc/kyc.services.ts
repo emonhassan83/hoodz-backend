@@ -7,6 +7,7 @@ import {
   assertKycBelongsToRequester,
   assertRiderCanSubmitKyc,
   buildKycStatusNotification,
+  formatKycDetails,
   sendKycStatusEmail,
   sendKycStatusNotification,
 } from '@/app/modules/kyc/kyc.helpers';
@@ -19,6 +20,9 @@ import {
 } from '@/app/modules/kyc/kyc.types';
 import { USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
+import { WalletAccount } from '@/app/modules/wallet/wallet.model';
+
+const kycUserPopulate = 'name email countryCode phone status profileAvatar';
 
 /** Creates or replaces a rider KYC request in pending state. */
 const addKycRequest = async (
@@ -73,8 +77,9 @@ const getAll = async (query: Record<string, unknown>) => {
 /** Returns one KYC request after requester ownership/access check. */
 const getA = async (traceId: string, kycId: string, requester: TKycRequester) => {
   const kyc = await Kyc.findById(kycId)
-    .populate('user', 'name email countryCode phone status profileAvatar')
-    .select('-__v');
+    .populate('user', kycUserPopulate)
+    .select('-__v')
+    .lean();
 
   if (!kyc) {
     throw new ApiError(HttpStatusCode.NotFound, 'KYC not found', traceId);
@@ -82,7 +87,12 @@ const getA = async (traceId: string, kycId: string, requester: TKycRequester) =>
 
   assertKycBelongsToRequester(kyc, requester, traceId);
 
-  return kyc;
+  const riderId = String((kyc.user as any)?._id ?? kyc.user);
+  const wallets = await WalletAccount.find({ user: riderId })
+    .select('-__v')
+    .lean();
+
+  return formatKycDetails(kyc as Record<string, any>, wallets as Record<string, any>[]);
 };
 
 /** Lets riders update their own approved/rejected/pending KYC and resubmit for admin review. */

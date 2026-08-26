@@ -23,7 +23,7 @@ router
     validateRequest(OrdersValidation.createOrderValidationSchema),
     OrdersController.createOrders
   )
-  .get(auth(USER_ROLE.admin), OrdersController.getAllOrders);
+  .get(auth(USER_ROLE.admin, USER_ROLE.agent), OrdersController.getAllOrders);
 
 router
   .route('/my-orders')

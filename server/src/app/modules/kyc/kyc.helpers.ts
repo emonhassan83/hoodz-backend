@@ -91,4 +91,58 @@ export const sendKycStatusNotification = async (
   );
 };
 
+/** Formats rider user info for KYC detail responses. */
+export const formatKycUser = (user: Record<string, any>) => ({
+  _id: user._id,
+  name: user.name ?? '',
+  email: user.email ?? null,
+  profileAvatar: user.profileAvatar ?? null,
+  countryCode: user.countryCode ?? null,
+  phone: user.phone ?? null,
+  status: user.status,
+});
+
+/** Formats one rider payout wallet for KYC detail responses. */
+export const formatKycWallet = (wallet: Record<string, any>) => ({
+  _id: wallet._id,
+  type: wallet.type,
+  details: wallet.details ?? {},
+  createdAt: wallet.createdAt,
+  updatedAt: wallet.updatedAt,
+});
+
+/** Formats one KYC detail response with rider wallets. */
+export const formatKycDetails = (
+  kyc: Record<string, any>,
+  wallets: Record<string, any>[] = []
+) => {
+  const user =
+    kyc.user && typeof kyc.user === 'object' && kyc.user._id
+      ? formatKycUser(kyc.user)
+      : kyc.user
+        ? {
+            _id: kyc.user,
+            name: '',
+            email: null,
+            profileAvatar: null,
+            countryCode: null,
+            phone: null,
+            status: null,
+          }
+        : null;
+
+  return {
+    _id: kyc._id,
+    user,
+    createdAt: kyc.createdAt,
+    license: kyc.license ?? [],
+    nationalId: kyc.nationalId ?? [],
+    rejectedReason: kyc.rejectedReason ?? null,
+    status: kyc.status,
+    updatedAt: kyc.updatedAt,
+    vehicle: kyc.vehicle,
+    wallets: wallets.map(formatKycWallet),
+  };
+};
+
 
