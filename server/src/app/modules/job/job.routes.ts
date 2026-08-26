@@ -9,6 +9,13 @@ import validateRequest from '@/app/utils/validateRequest';
 const router = Router();
 
 router.get(
+  '/',
+  auth(USER_ROLE.admin, USER_ROLE.agent),
+  validateRequest(JobValidation.getAllJobsQueryValidationSchema),
+  JobController.getAllJobs
+);
+
+router.get(
   '/my-requests',
   auth(USER_ROLE.rider),
   validateRequest(JobValidation.myRequestJobsQueryValidationSchema),

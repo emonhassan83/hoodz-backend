@@ -49,6 +49,20 @@ const getRiderJobs = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const getAllJobs = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const result = await JobService.getAllJobs(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Jobs fetched successfully',
+    meta: result.meta,
+    data: result.data,
+    traceId,
+  });
+});
+
 const getJobByOrderId = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await JobService.getJobByOrderId(
@@ -87,6 +101,7 @@ export const JobController = {
   myRequestJobs,
   getMyJobs,
   getRiderJobs,
+  getAllJobs,
   getJobByOrderId,
   getAJobDetails,
 };

@@ -50,6 +50,10 @@ const getMyJobsQueryValidationSchema = z.object({
   query: jobListQuerySchema,
 });
 
+const getAllJobsQueryValidationSchema = z.object({
+  query: jobListQuerySchema.passthrough(),
+});
+
 const myRequestJobsQueryValidationSchema = z.object({
   query: jobListQuerySchema,
 });
@@ -72,6 +76,7 @@ export const JobValidation = {
   orderIdParamValidationSchema,
   riderIdParamValidationSchema,
   getMyJobsQueryValidationSchema,
+  getAllJobsQueryValidationSchema,
   getRiderJobsQueryValidationSchema,
   myRequestJobsQueryValidationSchema,
 };

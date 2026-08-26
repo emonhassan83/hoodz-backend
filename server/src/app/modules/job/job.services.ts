@@ -638,6 +638,25 @@ const getRiderJobs = async (riderId: string, query: Record<string, unknown>) => 
   return { meta, data: await mapJobsToListCards(jobs) };
 };
 
+/** Returns all jobs for admin/agent review with list filters. */
+const getAllJobs = async (query: Record<string, unknown>) => {
+  const filter = applyJobListQueryFilters({}, query);
+  const jobQuery = new QueryBuilder(
+    Job.find(filter).select(jobListCardSelect).lean(),
+    stripJobListQueryParams(query)
+  )
+    .filter()
+    .sort()
+    .paginate();
+
+  const [jobs, meta] = await Promise.all([
+    jobQuery.modelQuery,
+    jobQuery.countTotal(),
+  ]);
+
+  return { meta, data: await mapJobsToListCards(jobs) };
+};
+
 /** Returns one job after role-based access check. */
 const getAJobDetails = async (
   traceId: string,
@@ -798,6 +817,7 @@ export const JobService = {
   myRequestJobs,
   getMyJobs,
   getRiderJobs,
+  getAllJobs,
   getAJobDetails,
   getJobByOrderId,
   startJobMatching,
