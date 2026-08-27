@@ -529,7 +529,7 @@ export const mapOrdersToListCards = async (
 
   const items = await Items.find(itemFilter)
     .populate({ path: 'product', select: '_id title banner' })
-    .select('_id order product color quantity')
+    .select('_id order product size color quantity')
     .lean();
 
   const itemsByOrder = new Map<string, typeof items>();
@@ -557,6 +557,7 @@ export const mapOrdersToListCards = async (
                 banner: product.banner ?? null,
               }
             : null,
+          size: item.size ?? null,
           color: item.color ?? null,
         };
       }),
