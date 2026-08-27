@@ -80,7 +80,7 @@ router
 router
   .route('/:productId')
   .get(optionalAuth, ProductController.getProductById)
-  .patch(
+  .put(
     auth(USER_ROLE.vendor, USER_ROLE.admin),
     validateRequest(ProductValidation.updateProductValidationSchema),
     ProductController.updateProduct
