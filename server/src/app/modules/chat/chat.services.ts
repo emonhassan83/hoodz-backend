@@ -9,13 +9,12 @@ import {
   assertOrderSupportAccess,
   assertStaffSupportCreateAccess,
   attachLastMessagesToChats,
-  attachParticipantsToChat,
+  buildChatDetail,
   chatPopulate,
   createAgentSupportChat,
   createAiAssistantChat,
   createOrderSupportChat,
   createSingleChat,
-  formatChatDetail,
   formatChatListCard,
   getChatOrderOrThrow,
   getPayloadParticipantId,
@@ -180,7 +179,7 @@ const getChatId = async (
   }
 
   await assertChatAccess(traceId, chat._id.toString(), requester);
-  return formatChatDetail(await attachParticipantsToChat(chat));
+  return buildChatDetail(chat);
 };
 
 const getChatOrderById = async (
@@ -203,7 +202,7 @@ const getChatOrderById = async (
   }
 
   await assertChatAccess(traceId, chat._id.toString(), requester);
-  return formatChatDetail(await attachParticipantsToChat(chat));
+  return buildChatDetail(chat);
 };
 
 const getChatByUserId = async (
@@ -246,7 +245,7 @@ const getChatByUserId = async (
     throw new ApiError(HttpStatusCode.NotFound, 'Chat not found', traceId);
   }
 
-  return formatChatDetail(await attachParticipantsToChat(chat));
+  return buildChatDetail(chat);
 };
 
 export const ChatService = {

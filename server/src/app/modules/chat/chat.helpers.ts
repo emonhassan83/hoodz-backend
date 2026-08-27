@@ -353,7 +353,15 @@ export const formatChatListCard = (
 export const formatChatDetail = (chat: any) => ({
   ...formatChatListCard(chat),
   participants: formatChatParticipants(chat.participants),
+  lastMessage: chat.lastMessage ?? null,
 });
+
+/** Participants + lastMessage, then detail shape for GET chat endpoints. */
+export const buildChatDetail = async (chat: any) => {
+  const withParticipants = await attachParticipantsToChat(chat);
+  const [withLastMessage] = await attachLastMessagesToChats([withParticipants]);
+  return formatChatDetail(withLastMessage);
+};
 
 export const getExistingUserChatByType = async (
   userId: string,
