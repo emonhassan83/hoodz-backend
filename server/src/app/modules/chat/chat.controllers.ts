@@ -19,13 +19,14 @@ const createChat = asyncHandler(async (req: Request, res: Response) => {
 
 const getMyChatList = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await ChatService.getMyChatList(req.user);
+  const result = await ChatService.getMyChatList(req.user, req.query);
 
   sendResponse(res, {
     success: true,
     statusCode: 200,
     message: 'Chat list fetched successfully',
-    data,
+    meta: result.meta,
+    data: result.data,
     traceId,
   });
 });
@@ -66,10 +67,13 @@ const getChatOrderById = asyncHandler(async (req: Request, res: Response) => {
 
 const getChatByUserId = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
+  const participantId = String(
+    req.params.participantId ?? req.params.userId ?? ''
+  );
   const data = await ChatService.getChatByUserId(
     traceId,
     req.user,
-    req.params.userId as string
+    participantId
   );
 
   sendResponse(res, {

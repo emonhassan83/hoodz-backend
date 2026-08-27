@@ -1,5 +1,6 @@
 import { HttpStatusCode } from 'axios';
 
+import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import { CHAT_TYPES, IChatType } from '@/app/modules/chat/chat.constant';
 import {
@@ -7,6 +8,7 @@ import {
   assertChatUserExists,
   assertOrderSupportAccess,
   assertStaffSupportCreateAccess,
+  attachLastMessagesToChats,
   attachParticipantsToChat,
   chatPopulate,
   createAgentSupportChat,
@@ -21,6 +23,7 @@ import {
 import { Chat } from '@/app/modules/chat/chat.model';
 import { TChatRequester, TCreateChatPayload } from '@/app/modules/chat/chat.types';
 import {
+  attachParticipantsToChats,
   getMyParticipantChatIds,
   getSharedChatIds,
 } from '@/app/modules/participant/participant.helpers';
@@ -92,35 +95,72 @@ const resolveChatIdForSend = async (
   return String(chat._id);
 };
 
-const getMyChatList = async (requester: TChatRequester) => {
-  const chatIds = await getMyParticipantChatIds(requester.userId);
-  const chats = await Chat.find({
-    _id: { $in: chatIds },
-    type: {
-      $nin: [CHAT_TYPES.ai_assistant, CHAT_TYPES.single_chat],
-    },
-  })
-    .populate(chatPopulate)
-    .sort({ updatedAt: -1 })
-    .select('_id type order createdAt')
-    .lean();
+const getMyChatList = async (
+  requester: TChatRequester,
+  query: Record<string, unknown> = {}
+) => {
+  const typeFilter =
+    typeof query.type === 'string' && query.type ? query.type : null;
 
-  const ofType = (type: IChatType) =>
-    chats.filter((chat) => chat.type === type).map(formatChatListCard);
-  const oldestOne = (type: IChatType) => {
-    const items = chats
-      .filter((chat) => chat.type === type)
-      .sort(
-        (left, right) =>
-          new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
-      );
-    return items[0] ? formatChatListCard(items[0]) : null;
+  const chatIds = await getMyParticipantChatIds(requester.userId);
+  const baseFilter: Record<string, unknown> = {
+    _id: { $in: chatIds },
+  };
+  if (!typeFilter) {
+    baseFilter.type = {
+      $nin: [CHAT_TYPES.ai_assistant, CHAT_TYPES.single_chat],
+    };
+  }
+
+  const queryForBuilder = {
+    ...query,
+    sort: (query.sort as string) || '-updatedAt',
   };
 
+  const chatQuery = new QueryBuilder(
+    Chat.find(baseFilter)
+      .populate(chatPopulate)
+      .select('_id type order createdAt updatedAt')
+      .lean(),
+    queryForBuilder
+  )
+    .filter()
+    .sort()
+    .paginate();
+
+  const [chats, meta] = await Promise.all([
+    chatQuery.modelQuery,
+    chatQuery.countTotal(),
+  ]);
+
+  const chatsWithParticipants = await attachParticipantsToChats(chats);
+  const chatsWithLastMessage = await attachLastMessagesToChats(
+    chatsWithParticipants
+  );
+  const listOptions = { excludeUserId: requester.userId };
+
+  const ofType = (type: IChatType) =>
+    chatsWithLastMessage
+      .filter((chat) => chat.type === type)
+      .map((chat) => formatChatListCard(chat, listOptions));
+
+  if (typeFilter) {
+    return {
+      meta,
+      data: {
+        type: typeFilter,
+        chats: ofType(typeFilter as IChatType),
+      },
+    };
+  }
+
   return {
-    customer_support: oldestOne(CHAT_TYPES.customer_support),
-    staff_support: oldestOne(CHAT_TYPES.staff_support),
-    order_support: ofType(CHAT_TYPES.order_support),
+    meta,
+    data: {
+      customer_support: ofType(CHAT_TYPES.customer_support),
+      staff_support: ofType(CHAT_TYPES.staff_support),
+      order_support: ofType(CHAT_TYPES.order_support),
+    },
   };
 };
 

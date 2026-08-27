@@ -53,11 +53,36 @@ const userIdParamValidationSchema = z.object({
   }),
 });
 
+const participantIdParamValidationSchema = z.object({
+  params: z.object({
+    participantId: objectIdSchema,
+  }),
+});
+
+const getMyChatListQueryValidationSchema = z.object({
+  query: z
+    .object({
+      type: z
+        .enum([
+          CHAT_TYPES.customer_support,
+          CHAT_TYPES.order_support,
+          CHAT_TYPES.staff_support,
+        ])
+        .optional(),
+      page: z.string().optional(),
+      limit: z.string().optional(),
+      sort: z.string().optional(),
+    })
+    .passthrough(),
+});
+
 export const ChatValidation = {
   createChatValidationSchema,
   chatIdParamValidationSchema,
   orderIdParamValidationSchema,
   userIdParamValidationSchema,
+  participantIdParamValidationSchema,
+  getMyChatListQueryValidationSchema,
 };
 
 

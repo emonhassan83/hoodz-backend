@@ -6,18 +6,22 @@ import eventHandler from '@/app/socket/utils/eventHandler';
 
 export const myChatListHandler = eventHandler(
   async (socket: TSocket, _payload, callback) => {
-    const data = await ChatService.getMyChatList({
-      userId: socket.auth._id.toString(),
-      role: socket.auth.role || 'user',
-    });
+    const result = await ChatService.getMyChatList(
+      {
+        userId: socket.auth._id.toString(),
+        role: socket.auth.role || 'user',
+      },
+      { page: '1', limit: '200' }
+    );
 
-    socket.emit(SOCKET_EMIT.chatList, data);
+    socket.emit(SOCKET_EMIT.chatList, result.data);
 
     sendAck(callback, {
       success: true,
       status: 200,
       message: 'Chat list fetched successfully',
-      data,
+      data: result.data,
+      meta: result.meta,
     });
   }
 );

@@ -79,8 +79,13 @@ const auth = (...requiredRoles: IUserRole[]) => {
         );
       }
 
-      // Resolve /user/me and enforce ownership for user-specific routes.
+      // Only /users/:userId is account ownership. /chat/user/:id is a peer participant.
       if (req.params.userId) {
+        const originalUrl = req.originalUrl.split('?')[0];
+        const isUserAccountRoute =
+          /\/users(?:\/|$)/.test(req.baseUrl) ||
+          /\/users\/(?:me|[0-9a-fA-F]{24})(?:\/|$)/.test(originalUrl);
+
         const authenticatedUserId = user._id.toString();
         const isOwnResource =
           req.params.userId === 'me' ||
@@ -94,7 +99,11 @@ const auth = (...requiredRoles: IUserRole[]) => {
             delete req.body.role;
             delete req.body.isDeleted;
           }
-        } else if (user.role !== USER_ROLE.admin) {
+        } else if (
+          isUserAccountRoute &&
+          user.role !== USER_ROLE.admin &&
+          user.role !== USER_ROLE.agent
+        ) {
           throw new ApiError(
             HttpStatusCode.Forbidden,
             'You can only access your own account',

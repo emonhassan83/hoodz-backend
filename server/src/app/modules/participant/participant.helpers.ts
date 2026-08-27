@@ -87,7 +87,7 @@ export const getParticipantsByChatIds = async (chatIds: string[]) => {
     chat: { $in: chatIds },
     status: PARTICIPANT_STATUS.active,
   })
-    .populate([{ path: 'user', select: 'name profileAvatar' }])
+    .populate([{ path: 'user', select: 'name profileAvatar role' }])
     .select('chat user')
     .lean();
 

@@ -1,4 +1,5 @@
 import { HttpStatusCode } from 'axios';
+import { Types } from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
 import {
@@ -8,6 +9,7 @@ import {
 } from '@/app/modules/chat/chat.constant';
 import { Chat } from '@/app/modules/chat/chat.model';
 import { TChatRequester } from '@/app/modules/chat/chat.types';
+import { Messages } from '@/app/modules/messages/messages.model';
 import { IOrders } from '@/app/modules/orders/orders.interface';
 import { Orders } from '@/app/modules/orders/orders.model';
 import {
@@ -224,30 +226,133 @@ const formatChatOrder = (order: any) => {
   return { _id: order._id, id: order.id };
 };
 
+/** Formats chat participants with user role for inbox/detail responses. */
+export const formatChatParticipants = (
+  participants: any[] = [],
+  options?: { excludeUserId?: string }
+) =>
+  participants
+    .map((participant: any) => {
+      const user = participant?.user;
+      if (user && typeof user === 'object') {
+        return {
+          user: {
+            _id: user._id,
+            name: user.name ?? null,
+            profileAvatar: user.profileAvatar ?? null,
+            role: user.role ?? null,
+          },
+        };
+      }
+      return {
+        user: {
+          _id: user,
+          name: null,
+          profileAvatar: null,
+          role: null,
+        },
+      };
+    })
+    .filter((participant) => {
+      if (!options?.excludeUserId) return true;
+      return String(participant.user?._id) !== String(options.excludeUserId);
+    });
+
+/** Slim last-message preview for inbox cards. */
+export const formatChatListLastMessage = (message: any) => {
+  if (!message) return null;
+
+  const sender = message.sender;
+  return {
+    _id: message._id,
+    text: message.text ?? null,
+    files: message.files ?? [],
+    seen: Boolean(message.seen),
+    isEdited: Boolean(message.isEdited),
+    sender:
+      sender && typeof sender === 'object'
+        ? {
+            _id: sender._id,
+            name: sender.name ?? null,
+            profileAvatar: sender.profileAvatar ?? null,
+          }
+        : sender
+          ? { _id: sender, name: null, profileAvatar: null }
+          : null,
+    createdAt: message.createdAt,
+  };
+};
+
+/** Loads the newest message per chat and returns a chatId → message map. */
+export const getLastMessagesByChatIds = async (chatIds: string[]) => {
+  const map = new Map<string, ReturnType<typeof formatChatListLastMessage>>();
+  if (!chatIds.length) return map;
+
+  const objectIds = chatIds
+    .filter((id) => Types.ObjectId.isValid(id))
+    .map((id) => new Types.ObjectId(id));
+  if (!objectIds.length) return map;
+
+  const grouped = await Messages.aggregate([
+    { $match: { chat: { $in: objectIds } } },
+    { $sort: { createdAt: -1 } },
+    { $group: { _id: '$chat', messageId: { $first: '$_id' } } },
+  ]);
+
+  if (!grouped.length) return map;
+
+  const messages = await Messages.find({
+    _id: { $in: grouped.map((row) => row.messageId) },
+  })
+    .populate({ path: 'sender', select: 'name profileAvatar' })
+    .select('_id text files seen isEdited sender chat createdAt')
+    .lean();
+
+  for (const message of messages) {
+    map.set(String(message.chat), formatChatListLastMessage(message));
+  }
+
+  return map;
+};
+
+/** Attaches lastMessage onto each chat document. */
+export const attachLastMessagesToChats = async <T extends { _id: unknown }>(
+  chats: T[]
+) => {
+  const lastByChatId = await getLastMessagesByChatIds(
+    chats.map((chat) => String(chat._id))
+  );
+
+  return chats.map((chat) => ({
+    ...chat,
+    lastMessage: lastByChatId.get(String(chat._id)) ?? null,
+  }));
+};
+
 /** Slim chat card used by the grouped inbox list. */
-export const formatChatListCard = (chat: any) => ({
-  _id: chat._id,
-  type: chat.type,
-  order: formatChatOrder(chat.order),
-  createdAt: chat.createdAt,
-});
+export const formatChatListCard = (
+  chat: any,
+  options?: { excludeUserId?: string }
+) => {
+  const card: Record<string, unknown> = {
+    _id: chat._id,
+    type: chat.type,
+    order: formatChatOrder(chat.order),
+    createdAt: chat.createdAt,
+    participants: formatChatParticipants(chat.participants, options),
+  };
+
+  if ('lastMessage' in chat) {
+    card.lastMessage = chat.lastMessage ?? null;
+  }
+
+  return card;
+};
 
 /** Chat detail with populated order and participant users. */
 export const formatChatDetail = (chat: any) => ({
   ...formatChatListCard(chat),
-  participants: (chat.participants ?? []).map((participant: any) => {
-    const user = participant?.user;
-    if (user && typeof user === 'object') {
-      return {
-        user: {
-          _id: user._id,
-          name: user.name ?? null,
-          profileAvatar: user.profileAvatar ?? null,
-        },
-      };
-    }
-    return { user: { _id: user, name: null, profileAvatar: null } };
-  }),
+  participants: formatChatParticipants(chat.participants),
 });
 
 export const getExistingUserChatByType = async (

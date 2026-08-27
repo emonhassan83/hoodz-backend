@@ -56,8 +56,13 @@ export const assertSocketChatAccess = async (
 export const getSocketMessageById = getPopulatedMessageById;
 
 /** Returns chats where socket requester participates. */
-export const getSocketMyChatList = async (requester: TSocketRequester) =>
-  ChatService.getMyChatList(requester);
+export const getSocketMyChatList = async (requester: TSocketRequester) => {
+  const result = await ChatService.getMyChatList(requester, {
+    page: '1',
+    limit: '200',
+  });
+  return result.data;
+};
 
 /** Emits the latest chat list to every participant room. */
 export const emitChatListsToParticipants = async (participantIds: string[]) => {
@@ -71,11 +76,14 @@ export const emitChatListsToParticipants = async (participantIds: string[]) => {
 
   await Promise.all(
     participantIds.map(async (participantId) => {
-      const data = await ChatService.getMyChatList({
-        userId: participantId,
-        role: roleById.get(participantId) || 'user',
-      });
-      io.to(participantId).emit(SOCKET_EMIT.chatList, data);
+      const result = await ChatService.getMyChatList(
+        {
+          userId: participantId,
+          role: roleById.get(participantId) || 'user',
+        },
+        { page: '1', limit: '200' }
+      );
+      io.to(participantId).emit(SOCKET_EMIT.chatList, result.data);
     })
   );
 };

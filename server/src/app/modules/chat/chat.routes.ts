@@ -15,7 +15,11 @@ router
     validateRequest(ChatValidation.createChatValidationSchema),
     ChatController.createChat
   )
-  .get(auth(...AUTHENTICATED_ROLES), ChatController.getMyChatList);
+  .get(
+    auth(...AUTHENTICATED_ROLES),
+    validateRequest(ChatValidation.getMyChatListQueryValidationSchema),
+    ChatController.getMyChatList
+  );
 
 router
   .route('/order/:orderId')
@@ -26,10 +30,10 @@ router
   );
 
 router
-  .route('/user/:userId')
+  .route('/user/:participantId')
   .get(
     auth(...AUTHENTICATED_ROLES),
-    validateRequest(ChatValidation.userIdParamValidationSchema),
+    validateRequest(ChatValidation.participantIdParamValidationSchema),
     ChatController.getChatByUserId
   );
 
