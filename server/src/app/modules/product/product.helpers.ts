@@ -591,6 +591,20 @@ export const formatProductListItems = (
   wishlistIds: Set<string>
 ) => products.map((product) => formatProductListItem(product, wishlistIds));
 
+/** Shapes vendor my-products cards including variants. */
+export const formatMyProductListItem = (
+  product: Record<string, any>,
+  wishlistIds: Set<string>
+) => ({
+  ...formatProductListItem(product, wishlistIds),
+  variants: product.variants ?? [],
+});
+
+export const formatMyProductListItems = (
+  products: Record<string, any>[],
+  wishlistIds: Set<string>
+) => products.map((product) => formatMyProductListItem(product, wishlistIds));
+
 /** Notifies stock subscribers when a previously unavailable product is restocked. */
 export const notifyProductRestockedSubscribers = async (
   productId: string,
@@ -645,6 +659,9 @@ export const productPopulate = [
 
 export const productListSelect =
   '_id category vendor title inventoryType collectionType brand brandType banner price discount discountPrice stock avgRating ratingCount sold createdAt';
+
+export const productMyListSelect =
+  '_id category vendor title inventoryType collectionType brand brandType banner price discount discountPrice stock avgRating ratingCount sold variants createdAt';
 
 export const getProductActorKey = (actor: TProductActor) => {
   if (actor.userId) return `user:${actor.userId}`;

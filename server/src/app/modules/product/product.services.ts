@@ -20,6 +20,7 @@ import {
   formatProductDetails,
   formatProductListItem,
   formatProductListItems,
+  formatMyProductListItems,
   formatProductVendor,
   generateUniqueSku,
   getActorCartProductIds,
@@ -39,6 +40,7 @@ import {
   invalidateProductCaches,
   notifyProductRestockedSubscribers,
   productListSelect,
+  productMyListSelect,
   productPopulate,
   toNumber,
 } from '@/app/modules/product/product.helpers';
@@ -703,7 +705,7 @@ const getMyProducts = async (
   query: Record<string, unknown>
 ) => {
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `my:${vendorId}:dashboard:v2:${JSON.stringify(query)}`
+    `my:${vendorId}:dashboard:v3:${JSON.stringify(query)}`
   );
   const cached = await getCache<TMyProductsResponse>(cacheKey);
   if (cached) return cached;
@@ -711,7 +713,7 @@ const getMyProducts = async (
   const productQuery = new QueryBuilder(
     Product.find({ vendor: vendorId, isDeleted: false })
       .populate(productPopulate)
-      .select(productListSelect)
+      .select(productMyListSelect)
       .lean(),
     query
   )
@@ -734,7 +736,7 @@ const getMyProducts = async (
     meta,
     data: {
       stats: buildVendorProductStats(statsProducts),
-      products: formatProductListItems(products, wishlistIds),
+      products: formatMyProductListItems(products, wishlistIds),
     },
   };
 
