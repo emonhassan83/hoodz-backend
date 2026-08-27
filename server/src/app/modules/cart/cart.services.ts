@@ -11,6 +11,7 @@ import {
   findCartItem,
   findProductVariantOrThrow,
   getCartActorCacheKey,
+  getCartItemProductId,
   getCartItemsOrEmpty,
   getCartRecommendedProducts,
   isSameCartItem,
@@ -80,17 +81,15 @@ const add = async (
   return getCart(actor);
 };
 
-/** Updates the quantity of an existing cart item. */
+/** Updates size, color, and quantity of an existing cart item. */
 const update = async (
   traceId: string,
   actor: TCartActor,
   payload: TUpdateCartItemPayload
 ) => {
   assertCartActorExists(traceId, actor);
-  const identity = {
-    ...payload,
-    productId: await resolveCartProductId(payload.productId),
-  };
+  const productId = await resolveCartProductId(payload.productId);
+  const identity = { ...payload, productId };
   const ownerFilter = buildCartActorFilter(actor);
   const cart = await Cart.findOne(ownerFilter);
   const item = findCartItem(cart?.items ?? [], identity);
@@ -102,11 +101,59 @@ const update = async (
     traceId,
     item.productId.toString(),
     {
-      size: item.size,
-      color: item.color,
+      size: payload.size,
+      color: payload.color,
     }
   );
   assertVariantStock(traceId, variant.quantity, payload.quantity);
+
+  const nextItem = buildCartItem(
+    item.productId.toString(),
+    variant,
+    payload.quantity
+  );
+  const nextIdentity = {
+    productId: item.productId.toString(),
+    size: nextItem.size,
+    color: nextItem.color,
+  };
+  const isVariantUnchanged = isSameCartItem(item, nextIdentity);
+
+  if (!isVariantUnchanged) {
+    const existingTarget = (cart?.items ?? []).find(
+      (cartItem) =>
+        getCartItemProductId(cartItem.productId) ===
+          getCartItemProductId(item.productId) &&
+        isSameCartItem(cartItem, nextIdentity) &&
+        !isSameCartItem(cartItem, {
+          productId: item.productId.toString(),
+          size: item.size,
+          color: item.color,
+        })
+    );
+
+    if (existingTarget) {
+      const mergedQuantity =
+        (existingTarget.quantity ?? 0) + payload.quantity;
+      assertVariantStock(traceId, variant.quantity, mergedQuantity);
+
+      await Cart.updateOne(
+        {
+          ...ownerFilter,
+          items: {
+            $elemMatch: buildCartItemMatchFromItem(existingTarget),
+          },
+        },
+        { $inc: { 'items.$.quantity': payload.quantity } }
+      );
+      await Cart.updateOne(ownerFilter, {
+        $pull: { items: buildCartItemMatchFromItem(item) },
+      });
+
+      await syncCartCacheFromMongo(actor);
+      return getCart(actor);
+    }
+  }
 
   await Cart.updateOne(
     {
@@ -115,7 +162,13 @@ const update = async (
         $elemMatch: buildCartItemMatchFromItem(item),
       },
     },
-    { $set: { 'items.$.quantity': payload.quantity } }
+    {
+      $set: {
+        'items.$.quantity': payload.quantity,
+        'items.$.size': nextItem.size,
+        'items.$.color': nextItem.color,
+      },
+    }
   );
 
   await syncCartCacheFromMongo(actor);

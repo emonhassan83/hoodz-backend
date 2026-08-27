@@ -51,6 +51,16 @@ export const getCartActorCacheKey = (actor: TCartActor) => {
   return 'anonymous';
 };
 
+const normalizeCartSize = (size?: string | null) => {
+  const value = size?.trim();
+  return value ? value.toLowerCase() : null;
+};
+
+const normalizeCartColorCode = (code?: string | null) => {
+  const value = code?.trim().toLowerCase().replace(/^#/, '');
+  return value ? value : null;
+};
+
 /** Finds a product variant by size and color or throws a traceable API error. */
 export const findProductVariantOrThrow = async (
   traceId: string,
@@ -93,10 +103,17 @@ export const findProductVariantOrThrow = async (
 
   const variant = product.variants.find((item) => {
     if (product.inventoryType === PRODUCT_INVENTORY_TYPE.colorOnly) {
-      return item.color?.code === payload.color?.code;
+      return (
+        normalizeCartColorCode(item.color?.code) ===
+        normalizeCartColorCode(payload.color?.code)
+      );
     }
 
-    return item.size === payload.size && item.color?.code === payload.color?.code;
+    return (
+      normalizeCartSize(item.size) === normalizeCartSize(payload.size) &&
+      normalizeCartColorCode(item.color?.code) ===
+        normalizeCartColorCode(payload.color?.code)
+    );
   });
   if (!variant) {
     throw new ApiError(HttpStatusCode.NotFound, 'Product option not found', traceId);
@@ -120,18 +137,10 @@ export const assertVariantStock = (
   }
 };
 
-const normalizeCartSize = (size?: string | null) => {
-  const value = size?.trim();
-  return value ? value.toLowerCase() : null;
-};
-
-const normalizeCartColorCode = (code?: string | null) => {
-  const value = code?.trim().toLowerCase().replace(/^#/, '');
-  return value ? value : null;
-};
-
 const getCartItemProductId = (productId: TCartItem['productId'] | string) =>
   productId?.toString?.() ?? String(productId);
+
+export { getCartItemProductId };
 
 /** Builds the MongoDB cart item payload from a resolved product variant. */
 export const buildCartItem = (
