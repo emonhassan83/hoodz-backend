@@ -662,13 +662,14 @@ export const assertOrderAccess = (
   requester: { userId: string; role: string },
   allowAuthor = true
 ) => {
-  const isAdmin = requester.role === USER_ROLE.admin;
+  const isStaff =
+    requester.role === USER_ROLE.admin || requester.role === USER_ROLE.agent;
   const userId = order.user?._id?.toString() ?? order.user?.toString();
   const authorId = order.author?._id?.toString() ?? order.author?.toString();
   const isOwner = userId === requester.userId;
   const isAuthor = authorId === requester.userId;
 
-  if (!isAdmin && !isOwner && !(allowAuthor && isAuthor)) {
+  if (!isStaff && !isOwner && !(allowAuthor && isAuthor)) {
     throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this order', traceId);
   }
 };

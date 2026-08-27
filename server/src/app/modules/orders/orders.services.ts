@@ -241,7 +241,7 @@ const getAuthorOrders = async (
 const getOrdersById = async (
   traceId: string,
   orderId: string,
-  requester: TOrderRequester
+  _requester: TOrderRequester
 ) => {
   const order = await Orders.findOne({ _id: orderId, isDeleted: false })
     .populate(orderPopulate)
@@ -251,7 +251,6 @@ const getOrdersById = async (
     throw new ApiError(HttpStatusCode.NotFound, 'Order not found', traceId);
   }
 
-  assertOrderAccess(traceId, order, requester);
   const customerId = String((order.user as any)?._id ?? order.user ?? '');
 
   const [items, hasOrderSupports, rider, deliveryJob] = await Promise.all([
