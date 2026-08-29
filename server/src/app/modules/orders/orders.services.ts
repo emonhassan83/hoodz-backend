@@ -16,6 +16,7 @@ import {
 import {
   assertOrderAccess,
   applyHasRiderAssignedFilter,
+  applyAdminOrderListFilters,
   applyMyOrdersListFilter,
   attachHasGrievanceIssued,
   buildCheckoutQuote,
@@ -164,7 +165,7 @@ const createOrders = async (
 
 const getAllOrders = async (query: Record<string, unknown>) => {
   const filter = await applyHasRiderAssignedFilter(
-    await buildVisibleOrdersFilter(),
+    applyAdminOrderListFilters(await buildVisibleOrdersFilter(), query),
     query
   );
   const ordersQuery = new QueryBuilder(

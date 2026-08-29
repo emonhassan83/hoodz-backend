@@ -650,6 +650,34 @@ export const stripOrderListQueryParams = (query: Record<string, unknown>) => {
   return restQuery;
 };
 
+const escapeOrderSearchRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Matches admin order list search by generated id, Mongo _id, or transaction id. */
+export const applyAdminOrderListFilters = (
+  base: Record<string, unknown>,
+  query: Record<string, unknown>
+) => {
+  const raw =
+    (typeof query.id === 'string' && query.id.trim()) ||
+    (typeof query.searchTerm === 'string' && query.searchTerm.trim()) ||
+    '';
+
+  if (!raw) return base;
+
+  const term = raw.trim();
+  const or: Record<string, unknown>[] = [
+    { id: { $regex: escapeOrderSearchRegex(term), $options: 'i' } },
+    { transactionId: { $regex: escapeOrderSearchRegex(term), $options: 'i' } },
+  ];
+
+  if (Types.ObjectId.isValid(term)) {
+    or.push({ _id: new Types.ObjectId(term) });
+  }
+
+  return { $and: [base, { $or: or }] };
+};
+
 /** Adds hasGrievanceIssued for the current user's orders. */
 export const attachHasGrievanceIssued = async <
   T extends { _id: Types.ObjectId | string }
@@ -884,6 +912,8 @@ export const stripAdminOrderListQueryParams = (
 ) => {
   const restQuery = { ...query };
   delete restQuery.hasRiderAssigned;
+  delete restQuery.id;
+  delete restQuery.searchTerm;
   return restQuery;
 };
 
