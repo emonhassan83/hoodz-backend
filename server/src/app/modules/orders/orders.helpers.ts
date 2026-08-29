@@ -678,8 +678,31 @@ export const applyAdminOrderListFilters = (
   return { $and: [base, { $or: or }] };
 };
 
-/** Adds hasGrievanceIssued for the current user's orders. */
-export const attachHasGrievanceIssued = async <
+/** Returns order ids that have at least one grievance. */
+export const getOrderGrievanceFlags = async (
+  orderIds: Array<string | Types.ObjectId>,
+  userId?: string
+) => {
+  if (!orderIds.length) return new Set<string>();
+
+  const grievances = await Grievance.find({
+    order: { $in: orderIds },
+    ...(userId ? { user: userId } : {}),
+  })
+    .select('order')
+    .lean();
+
+  return new Set(grievances.map((grievance) => grievance.order.toString()));
+};
+
+/** Checks whether an order has a grievance. */
+export const hasOrderGrievance = async (orderId: string, userId?: string) => {
+  const flags = await getOrderGrievanceFlags([orderId], userId);
+  return flags.has(orderId);
+};
+
+/** Adds hasGrievance for order list cards. */
+export const attachHasGrievance = async <
   T extends { _id: Types.ObjectId | string }
 >(
   userId: string,
@@ -687,19 +710,14 @@ export const attachHasGrievanceIssued = async <
 ) => {
   if (!cards.length) return [];
 
-  const grievances = await Grievance.find({
-    user: userId,
-    order: { $in: cards.map((card) => card._id) },
-  })
-    .select('order')
-    .lean();
-  const issuedOrderIds = new Set(
-    grievances.map((grievance) => grievance.order.toString())
+  const grievanceOrderIds = await getOrderGrievanceFlags(
+    cards.map((card) => card._id),
+    userId
   );
 
   return cards.map((card) => ({
     ...card,
-    hasGrievanceIssued: issuedOrderIds.has(String(card._id)),
+    hasGrievance: grievanceOrderIds.has(String(card._id)),
   }));
 };
 

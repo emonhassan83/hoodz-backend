@@ -18,7 +18,7 @@ import {
   applyHasRiderAssignedFilter,
   applyAdminOrderListFilters,
   applyMyOrdersListFilter,
-  attachHasGrievanceIssued,
+  attachHasGrievance,
   buildCheckoutQuote,
   buildVisibleOrdersFilter,
   consumeCheckoutVoucher,
@@ -27,6 +27,7 @@ import {
   getOrderDeliveryJobCard,
   getOrderSteper,
   getOrderStatusTimestampUpdate,
+  hasOrderGrievance,
   invalidateOrderCaches,
   mapOrdersToListCards,
   normalizeBillingDeliveryLocation,
@@ -208,7 +209,7 @@ const getMyOrders = async (userId: string, query: Record<string, unknown>) => {
 
   return {
     meta,
-    orders: await attachHasGrievanceIssued(
+    orders: await attachHasGrievance(
       userId,
       await mapOrdersToListCards(orders)
     ),
@@ -254,7 +255,8 @@ const getOrdersById = async (
 
   const customerId = String((order.user as any)?._id ?? order.user ?? '');
 
-  const [items, hasOrderSupports, rider, deliveryJob] = await Promise.all([
+  const [items, hasOrderSupports, rider, deliveryJob, hasGrievance] =
+    await Promise.all([
     Items.find({ order: orderId })
       .populate([{ path: 'product', select: 'title banner price discountPrice' }])
       .select('-__v')
@@ -262,6 +264,7 @@ const getOrdersById = async (
     hasOrderSupportChat(orderId),
     getOrderAssignedRiderCard(orderId),
     getOrderDeliveryJobCard(orderId),
+    hasOrderGrievance(orderId),
   ]);
 
   const totalOrderItems = items.reduce(
@@ -280,6 +283,7 @@ const getOrdersById = async (
     deliveryJob,
     hasOrderSupports,
     hasRiderChat,
+    hasGrievance,
     orderSteper: getOrderSteper(order.status),
   };
 };
