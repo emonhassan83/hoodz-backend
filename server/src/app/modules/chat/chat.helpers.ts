@@ -43,6 +43,29 @@ export const getActiveAgentIds = async () => {
   return agents.map((agent) => agent._id.toString());
 };
 
+let chatIndexesReady = false;
+
+/** Drops legacy chat indexes that block multiple support chats per type. */
+export const ensureChatIndexes = async () => {
+  if (chatIndexesReady) return;
+
+  const indexes = await Chat.collection.indexes();
+  const legacyIndexes = indexes.filter((index) => {
+    const keys = Object.keys(index.key ?? {});
+    return keys.includes('user');
+  });
+
+  await Promise.all(
+    legacyIndexes
+      .map((index) => index.name)
+      .filter(Boolean)
+      .map((name) => Chat.collection.dropIndex(name as string).catch(() => undefined))
+  );
+
+  await Chat.syncIndexes();
+  chatIndexesReady = true;
+};
+
 /** Loads an order or throws when it does not exist. */
 export const getChatOrderOrThrow = async (traceId: string, orderId: string) => {
   const order = await Orders.findOne({ _id: orderId, isDeleted: false });
@@ -356,8 +379,10 @@ export const getPopulatedChatById = async (chatId: unknown) => {
   return Chat.findById(chatId).populate(chatPopulate).select('-__v');
 };
 
-export const upsertOrderChat = async (orderId: string, type: IChatType) =>
-  Chat.findOneAndUpdate(
+export const upsertOrderChat = async (orderId: string, type: IChatType) => {
+  await ensureChatIndexes();
+
+  return Chat.findOneAndUpdate(
     { order: orderId, type },
     {
       type,
@@ -366,8 +391,11 @@ export const upsertOrderChat = async (orderId: string, type: IChatType) =>
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   ).populate(chatPopulate);
+};
 
 export const createAiAssistantChat = async (userId: string) => {
+  await ensureChatIndexes();
+
   const existingChat = await getExistingUserChatByType(
     userId,
     CHAT_TYPES.ai_assistant
@@ -386,6 +414,8 @@ export const createAiAssistantChat = async (userId: string) => {
 };
 
 export const createAgentSupportChat = async (userId: string, type: IChatType) => {
+  await ensureChatIndexes();
+
   const existingChat = await getExistingUserChatByType(userId, type);
   const chat =
     existingChat ||
@@ -430,6 +460,7 @@ export const createSingleChat = async (
   participantId: string
 ) => {
   await assertSingleChatUsers(traceId, requester, participantId);
+  await ensureChatIndexes();
 
   const sharedChatIds = await getSharedChatIds(requester.userId, participantId);
   const existingChat =

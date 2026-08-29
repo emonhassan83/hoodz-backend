@@ -18,7 +18,7 @@ import { USER_ROLE } from '@/app/modules/user/user.constant';
 
 type TMessageRequester = { userId: string; role: string };
 
-/** Returns paginated messages for a chat from newest page order to oldest. */
+/** Returns paginated messages for a chat, oldest first. */
 const getMessagesByChatId = async (
   traceId: string,
   user: TMessageRequester,
@@ -51,7 +51,7 @@ const getMessagesByChatId = async (
     messageQuery.countTotal(),
   ]);
 
-  return { meta, data: [...messages].reverse() };
+  return { meta, data: messages };
 };
 
 /** Returns paginated user and AI messages from the requester's single AI chat. */
