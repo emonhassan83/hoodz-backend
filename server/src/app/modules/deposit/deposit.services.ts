@@ -7,6 +7,7 @@ import {
   assertDepositAccess,
   depositListPopulate,
   depositPopulate,
+  ensureDepositIndexes,
   getDepositOrThrow,
   getDepositableJobsOrThrow,
   getRiderMoneySummary,
@@ -40,6 +41,8 @@ const submitDeposit = async (
       traceId
     );
   }
+
+  await ensureDepositIndexes();
 
   const deposit = await Deposit.create({
     author: riderId,

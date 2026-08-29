@@ -19,6 +19,29 @@ import {
   sendBothNotificationViaQueue,
 } from '@/app/utils/notification-queue.service';
 
+let depositIndexesReady = false;
+
+/** Drops legacy deposit indexes from the old singular `job` field schema. */
+export const ensureDepositIndexes = async () => {
+  if (depositIndexesReady) return;
+
+  const indexes = await Deposit.collection.indexes();
+  const legacyIndexes = indexes.filter((index) => {
+    const keys = Object.keys(index.key ?? {});
+    return keys.includes('job') && !keys.includes('jobIds');
+  });
+
+  await Promise.all(
+    legacyIndexes
+      .map((index) => index.name)
+      .filter(Boolean)
+      .map((name) => Deposit.collection.dropIndex(name as string).catch(() => undefined))
+  );
+
+  await Deposit.syncIndexes();
+  depositIndexesReady = true;
+};
+
 export const depositPopulate = [
   { path: 'author', select: 'name email phone profileAvatar' },
   { path: 'jobIds', select: 'id status collectedMoney earning order rider paymentMethod' },
