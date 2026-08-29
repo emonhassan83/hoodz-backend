@@ -28,6 +28,7 @@ import { SettingsRoutes } from '@/app/modules/settings/settings.routes';
 import { TopUpRoutes } from '@/app/modules/topUp/topUp.routes';
 import { UploadRoutes } from '@/app/modules/upload/upload.routes';
 import { UserRoutes } from '@/app/modules/user/user.routes';
+import { VendorTransctionRoutes } from '@/app/modules/vendorTransction/vendorTransction.routes';
 import { VoucherRoutes } from '@/app/modules/voucher/voucher.routes';
 import { WalletRoutes } from '@/app/modules/wallet/wallet.routes';
 import { WalletTransactionRoutes } from '@/app/modules/walletTransaction/walletTransaction.routes';
@@ -51,6 +52,10 @@ const apiRoutes = [
   {
     path: '/users',
     route: UserRoutes,
+  },
+  {
+    path: '/vendor-transactions',
+    route: VendorTransctionRoutes,
   },
   {
     path: '/kyc',

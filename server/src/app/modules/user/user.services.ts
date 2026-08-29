@@ -19,6 +19,7 @@ import { Kyc } from '@/app/modules/kyc/kyc.model';
 import { getUserSupportFlags } from '@/app/modules/chat/chat.helpers';
 import { SettingService } from '@/app/modules/settings/settings.services';
 import { WalletAccount } from '@/app/modules/wallet/wallet.model';
+import { VendorTransctionService } from '@/app/modules/vendorTransction/vendorTransction.services';
 import {
   deleteShopFromTypesense,
   upsertShopToTypesense,
@@ -731,50 +732,77 @@ const payVendor = async (
     );
   }
 
-  const updatedVendor = await User.findOneAndUpdate(
-    {
-      _id: vendorId,
-      role: USER_ROLE.vendor,
-      isDeleted: false,
-      balance: { $gte: amount },
-    },
-    { $inc: { balance: -amount } },
-    { new: true }
-  ).select('_id id name email fcmToken balance status role');
+  const session = await mongoose.startSession();
 
-  if (!updatedVendor) {
-    throw new ApiError(
-      HttpStatusCode.Conflict,
-      'Vendor balance changed. Please retry the payout',
-      traceId
-    );
+  try {
+    session.startTransaction();
+
+    const updatedVendor = await User.findOneAndUpdate(
+      {
+        _id: vendorId,
+        role: USER_ROLE.vendor,
+        isDeleted: false,
+        balance: { $gte: amount },
+      },
+      { $inc: { balance: -amount } },
+      { new: true, session }
+    ).select('_id id name email fcmToken balance status role');
+
+    if (!updatedVendor) {
+      throw new ApiError(
+        HttpStatusCode.Conflict,
+        'Vendor balance changed. Please retry the payout',
+        traceId
+      );
+    }
+
+    const transaction = await VendorTransctionService.createVendorTransction({
+      vendorId,
+      amount,
+      note: payload.note ?? null,
+      paidBy: adminId,
+      session,
+    });
+
+    await session.commitTransaction();
+
+    const remainingBalance = Number((updatedVendor.balance ?? 0).toFixed(2));
+    const admin = await User.findById(adminId).select('name email').lean();
+
+    await notifyVendorPayoutCompleted({
+      vendor: updatedVendor,
+      amount,
+      previousBalance,
+      remainingBalance,
+      note: payload.note ?? null,
+      paidBy: admin?.name ?? admin?.email ?? 'Admin',
+    });
+
+    return {
+      vendor: {
+        _id: updatedVendor._id,
+        id: updatedVendor.id,
+        name: updatedVendor.name,
+        email: updatedVendor.email,
+      },
+      transaction: {
+        _id: transaction._id,
+        id: transaction.id,
+        vendor: updatedVendor._id,
+        amount,
+      },
+      amount,
+      previousBalance,
+      remainingBalance,
+      note: payload.note ?? null,
+      paidAt: new Date(),
+    };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    await session.endSession();
   }
-
-  const remainingBalance = Number((updatedVendor.balance ?? 0).toFixed(2));
-  const admin = await User.findById(adminId).select('name email').lean();
-
-  await notifyVendorPayoutCompleted({
-    vendor: updatedVendor,
-    amount,
-    previousBalance,
-    remainingBalance,
-    note: payload.note ?? null,
-    paidBy: admin?.name ?? admin?.email ?? 'Admin',
-  });
-
-  return {
-    vendor: {
-      _id: updatedVendor._id,
-      id: updatedVendor.id,
-      name: updatedVendor.name,
-      email: updatedVendor.email,
-    },
-    amount,
-    previousBalance,
-    remainingBalance,
-    note: payload.note ?? null,
-    paidAt: new Date(),
-  };
 };
 
 export const UserService = {

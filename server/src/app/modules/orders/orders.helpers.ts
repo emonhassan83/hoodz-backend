@@ -518,7 +518,8 @@ const ORDER_LIST_CARD_FIELDS =
 /** Maps paginated orders into list-card payloads with order-wise items. */
 export const mapOrdersToListCards = async (
   orders: Array<Record<string, any>>,
-  authorId?: string
+  authorId?: string,
+  options?: { includeHasRiderAssigned?: boolean }
 ) => {
   if (!orders.length) return [];
 
@@ -527,10 +528,24 @@ export const mapOrdersToListCards = async (
   };
   if (authorId) itemFilter.author = authorId;
 
-  const items = await Items.find(itemFilter)
-    .populate({ path: 'product', select: '_id title banner' })
-    .select('_id order product size color quantity')
-    .lean();
+  const orderIds = orders.map((order) => order._id);
+
+  const [items, assignedOrderIds] = await Promise.all([
+    Items.find(itemFilter)
+      .populate({ path: 'product', select: '_id title banner' })
+      .select('_id order product size color quantity')
+      .lean(),
+    options?.includeHasRiderAssigned
+      ? Job.distinct('order', {
+          order: { $in: orderIds },
+          rider: { $ne: null },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const assignedOrderIdSet = new Set(
+    assignedOrderIds.map((orderId) => orderId.toString())
+  );
 
   const itemsByOrder = new Map<string, typeof items>();
   for (const item of items) {
@@ -574,6 +589,11 @@ export const mapOrdersToListCards = async (
       isDeleted: order.isDeleted,
       id: order.id,
       createdAt: order.createdAt,
+      ...(options?.includeHasRiderAssigned
+        ? {
+            hasRiderAssigned: assignedOrderIdSet.has(order._id.toString()),
+          }
+        : {}),
     };
   });
 };

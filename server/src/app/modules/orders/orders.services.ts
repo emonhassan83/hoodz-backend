@@ -181,7 +181,7 @@ const getAllOrders = async (query: Record<string, unknown>) => {
     ordersQuery.countTotal(),
   ]);
 
-  return { meta, orders: await mapOrdersToListCards(orders) };
+  return { meta, orders: await mapOrdersToListCards(orders, undefined, { includeHasRiderAssigned: true }) };
 };
 
 const getMyOrders = async (userId: string, query: Record<string, unknown>) => {
