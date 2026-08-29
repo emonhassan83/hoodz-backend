@@ -3,6 +3,7 @@ import { HttpStatusCode } from 'axios';
 import ApiError from '@/app/errors/ApiError';
 import { Category } from '@/app/modules/category/category.model';
 import { Product } from '@/app/modules/product/product.model';
+import { Search } from '@/app/modules/search/search.model';
 import { FILTER_PAGE_GENDERS, FILTER_PAGE_SIZES } from '@/app/constant';
 import { TSearchActor } from '@/app/modules/search/search.types';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
@@ -74,6 +75,35 @@ export const assertSearchActorExists = (
 /** Builds a Mongo filter scoped to the current user or guest identity. */
 export const buildSearchActorFilter = (actor: TSearchActor) =>
   actor.userId ? { userId: actor.userId } : { guestId: actor.guestId };
+
+let searchIndexesReady = false;
+
+/** Drops legacy search indexes that block multiple history rows per user. */
+export const ensureSearchIndexes = async () => {
+  if (searchIndexesReady) return;
+
+  const indexes = await Search.collection.indexes();
+  const legacyIndexes = indexes.filter((index) => {
+    const keys = Object.keys(index.key ?? {});
+    return (
+      keys.includes('modelType') ||
+      keys.includes('refId') ||
+      (Boolean(index.unique) &&
+        keys.length === 1 &&
+        (keys[0] === 'userId' || keys[0] === 'guestId'))
+    );
+  });
+
+  await Promise.all(
+    legacyIndexes
+      .map((index) => index.name)
+      .filter(Boolean)
+      .map((name) => Search.collection.dropIndex(name as string).catch(() => undefined))
+  );
+
+  await Search.syncIndexes();
+  searchIndexesReady = true;
+};
 
 /** Clears cached search data for a single search actor. */
 export const invalidateSearchActorCache = async (actor: TSearchActor) => {

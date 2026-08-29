@@ -7,6 +7,7 @@ import {
   assertSearchActorExists,
   buildProductSuggestions,
   buildSearchActorFilter,
+  ensureSearchIndexes,
   escapeRegex,
   getFeaturedSearchVendors,
   getFilterPageData,
@@ -216,6 +217,7 @@ const insertIntoDB = async (
   actor: TSearchActor
 ) => {
   assertSearchActorExists(traceId, actor);
+  await ensureSearchIndexes();
 
   const query = normalizeSearchTerm(traceId, payload.query);
   const normalizedQuery = normalizeSearchQuery(query);
@@ -360,6 +362,8 @@ const deleteAIntoDB = async (
 /** Merges guest search history into the authenticated user's history. */
 const mergeGuestSearchHistory = async (guestId: string | undefined, userId: string) => {
   if (!guestId?.trim() || !userId) return { merged: 0 };
+
+  await ensureSearchIndexes();
 
   const guestHistory = await Search.find({ guestId: guestId.trim() }).lean();
   if (!guestHistory.length) return { merged: 0 };

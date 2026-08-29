@@ -66,7 +66,6 @@ const getMyChatListQueryValidationSchema = z.object({
         .enum([
           CHAT_TYPES.customer_support,
           CHAT_TYPES.order_support,
-          CHAT_TYPES.staff_support,
         ])
         .optional(),
       page: z.string().optional(),

@@ -74,25 +74,6 @@ export const assertOrderSupportAccess = (
   }
 };
 
-/** Staff support is a singleton inbox for vendor/rider <-> agents. */
-export const assertStaffSupportCreateAccess = (
-  traceId: string,
-  requester: TChatRequester
-) => {
-  const canCreate =
-    requester.role === USER_ROLE.vendor ||
-    requester.role === USER_ROLE.rider ||
-    requester.role === USER_ROLE.admin;
-
-  if (!canCreate) {
-    throw new ApiError(
-      HttpStatusCode.Forbidden,
-      'Only vendor or rider can open staff support chat',
-      traceId
-    );
-  }
-};
-
 const DIRECT_CHAT_ROLES = [
   USER_ROLE.user,
   USER_ROLE.rider,
@@ -146,27 +127,22 @@ export const assertSingleChatUsers = async (
   }
 };
 
-/** Returns whether the user already has singleton support chats. */
+/** Returns whether the user already has a customer support chat. */
 export const getUserSupportFlags = async (userId: string) => {
   const chatIds = await getMyParticipantChatIds(userId);
   if (chatIds.length === 0) {
-    return { hasCustomerSupport: false, hasStaffSupport: false };
+    return { hasCustomerSupport: false };
   }
 
-  const chats = await Chat.find({
-    _id: { $in: chatIds },
-    type: { $in: [CHAT_TYPES.customer_support, CHAT_TYPES.staff_support] },
-    order: null,
-  })
-    .select('type')
-    .lean();
+  const hasCustomerSupport = Boolean(
+    await Chat.exists({
+      _id: { $in: chatIds },
+      type: CHAT_TYPES.customer_support,
+      order: null,
+    })
+  );
 
-  return {
-    hasCustomerSupport: chats.some(
-      (chat) => chat.type === CHAT_TYPES.customer_support
-    ),
-    hasStaffSupport: chats.some((chat) => chat.type === CHAT_TYPES.staff_support),
-  };
+  return { hasCustomerSupport };
 };
 
 /** Returns whether an order already has an order_support chat. */

@@ -2,7 +2,6 @@ export const CHAT_TYPES = {
   ai_assistant: 'ai_assistant',
   customer_support: 'customer_support',
   order_support: 'order_support',
-  staff_support: 'staff_support',
   single_chat: 'single_chat',
 } as const;
 

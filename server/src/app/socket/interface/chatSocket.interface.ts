@@ -5,7 +5,7 @@ export type TSocketRequester = {
 
 export type TSendMessagePayload = {
   chatId?: string;
-  type?: 'customer_support' | 'staff_support' | 'order_support' | 'single_chat';
+  type?: 'customer_support' | 'order_support' | 'single_chat';
   order?: string;
   participant?: string;
   participent?: string;

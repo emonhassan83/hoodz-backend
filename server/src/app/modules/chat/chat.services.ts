@@ -7,7 +7,6 @@ import {
   assertChatAccess,
   assertChatUserExists,
   assertOrderSupportAccess,
-  assertStaffSupportCreateAccess,
   attachLastMessagesToChats,
   buildChatDetail,
   chatPopulate,
@@ -40,11 +39,6 @@ const createChat = async (
 
   if (payload.type === CHAT_TYPES.customer_support) {
     return createAgentSupportChat(requester.userId, CHAT_TYPES.customer_support);
-  }
-
-  if (payload.type === CHAT_TYPES.staff_support) {
-    assertStaffSupportCreateAccess(traceId, requester);
-    return createAgentSupportChat(requester.userId, CHAT_TYPES.staff_support);
   }
 
   if (payload.type === CHAT_TYPES.single_chat) {
@@ -157,7 +151,6 @@ const getMyChatList = async (
     meta,
     data: {
       customer_support: ofType(CHAT_TYPES.customer_support),
-      staff_support: ofType(CHAT_TYPES.staff_support),
       order_support: ofType(CHAT_TYPES.order_support),
     },
   };

@@ -18,7 +18,7 @@ import { USER_ROLE } from '@/app/modules/user/user.constant';
 
 type TMessageRequester = { userId: string; role: string };
 
-/** Returns paginated messages for a chat, oldest first. */
+/** Returns paginated messages for a chat from newest page order to oldest. */
 const getMessagesByChatId = async (
   traceId: string,
   user: TMessageRequester,
@@ -37,13 +37,12 @@ const getMessagesByChatId = async (
   }
 
   const messageQuery = new QueryBuilder(
-    Messages.find({ chat: chat._id }).select(
-      'text files seen isEdited sender senderType metadata createdAt'
-    ),
-    { ...query, sort: (query.sort as string) || 'createdAt' }
+    Messages.find({ chat: chat._id })
+      .select('text files seen isEdited sender senderType metadata createdAt')
+      .sort({ createdAt: 1 }),
+    query
   )
     .filter()
-    .sort()
     .paginate()
     .fields();
 
@@ -52,7 +51,7 @@ const getMessagesByChatId = async (
     messageQuery.countTotal(),
   ]);
 
-  return { meta, data: messages };
+  return { meta, data: [...messages].reverse() };
 };
 
 /** Returns paginated user and AI messages from the requester's single AI chat. */
