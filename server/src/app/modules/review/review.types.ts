@@ -10,3 +10,17 @@ export type TCreateReviewPayload = {
   files?: string[];
   rating: number;
 };
+
+export type TReviewCard = {
+  _id: unknown;
+  user: {
+    _id: unknown;
+    name: string;
+    profileAvatar: string | null;
+  };
+  modelType: TReviewModelType;
+  review: string;
+  files: string[];
+  rating: number;
+  createdAt: Date;
+};

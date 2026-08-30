@@ -10,7 +10,7 @@ import {
   REVIEW_MODEL_TYPE,
   REVIEW_SORT,
 } from '@/app/modules/review/review.constant';
-import { TCreateReviewPayload } from '@/app/modules/review/review.types';
+import { TCreateReviewPayload, TReviewCard } from '@/app/modules/review/review.types';
 
 /** Loads a delivered job by mongo id or public job id. */
 export const getDeliveredJobForReviewOrThrow = async (
@@ -64,3 +64,27 @@ export const resolveReviewAuthorOrThrow = async (
 /** Maps `latest|highest|lowest` to a mongoose sort string. */
 export const resolveReviewSort = (sort?: unknown) =>
   REVIEW_SORT_MAP[sort as string] || REVIEW_SORT_MAP[REVIEW_SORT.latest];
+
+export const reviewListPopulate = [
+  { path: 'user', select: 'name profileAvatar' },
+];
+
+export const reviewListSelect = '_id user modelType review files rating createdAt';
+
+/** Shapes review list cards for author and product endpoints. */
+export const toReviewCards = (
+  reviews: Array<Record<string, any>> = []
+): TReviewCard[] =>
+  reviews.map((item) => ({
+    _id: item._id,
+    user: {
+      _id: item.user?._id ?? item.user,
+      name: item.user?.name ?? '',
+      profileAvatar: item.user?.profileAvatar ?? null,
+    },
+    modelType: item.modelType,
+    review: item.review,
+    files: item.files ?? [],
+    rating: item.rating,
+    createdAt: item.createdAt,
+  }));

@@ -11,6 +11,9 @@ import {
   getDeliveredJobForReviewOrThrow,
   resolveReviewAuthorOrThrow,
   resolveReviewSort,
+  reviewListPopulate,
+  reviewListSelect,
+  toReviewCards,
 } from '@/app/modules/review/review.helpers';
 import { Review } from '@/app/modules/review/review.model';
 import { TCreateReviewPayload } from '@/app/modules/review/review.types';
@@ -141,8 +144,8 @@ const getReviewByAuthor = async (
 
   const reviewQuery = new QueryBuilder(
     Review.find({ author: authorId })
-      .populate(reviewPopulate)
-      .select('-__v')
+      .populate(reviewListPopulate)
+      .select(reviewListSelect)
       .lean(),
     {
       ...restQuery,
@@ -154,12 +157,12 @@ const getReviewByAuthor = async (
     .paginate()
     .fields();
 
-  const [data, meta] = await Promise.all([
+  const [reviews, meta] = await Promise.all([
     reviewQuery.modelQuery,
     reviewQuery.countTotal(),
   ]);
 
-  return { meta, data };
+  return { meta, data: toReviewCards(reviews as Array<Record<string, any>>) };
 };
 
 /** Returns product review summary, rating breakdown, and a paginated review list. */
@@ -172,8 +175,8 @@ const getReviewByProduct = async (
 
   const reviewQuery = new QueryBuilder(
     Review.find({ modelType: REVIEW_MODEL_TYPE.Product, reference: productId })
-      .populate(reviewPopulate)
-      .select('-__v')
+      .populate(reviewListPopulate)
+      .select(reviewListSelect)
       .lean(),
     {
       ...restQuery,
@@ -242,7 +245,7 @@ const getReviewByProduct = async (
         fair: stats?.fair ?? 0,
         poor: stats?.poor ?? 0,
       },
-      reviews,
+      reviews: toReviewCards(reviews as Array<Record<string, any>>),
     },
   };
 };
