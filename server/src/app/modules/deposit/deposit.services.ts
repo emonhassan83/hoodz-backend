@@ -4,13 +4,14 @@ import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import { DEPOSIT_STATUS } from '@/app/modules/deposit/deposit.constant';
 import {
-  assertDepositAccess,
+  assertCanViewDeposit,
   depositListPopulate,
   depositPopulate,
   ensureDepositIndexes,
   getDepositOrThrow,
   getDepositableJobsOrThrow,
   getRiderMoneySummary,
+  isDepositStaff,
   mapDepositsToListCards,
   notifyAgentsDepositSubmitted,
   notifyRiderDepositVerified,
@@ -163,7 +164,8 @@ const getMyDeposits = async (riderId: string, query: Record<string, unknown>) =>
 const getById = async (
   traceId: string,
   requester: TDepositRequester,
-  depositId: string
+  depositId: string,
+  email?: string
 ) => {
   const deposit = await Deposit.findById(depositId)
     .populate(depositPopulate)
@@ -173,7 +175,11 @@ const getById = async (
     throw new ApiError(HttpStatusCode.NotFound, 'Deposit not found', traceId);
   }
 
-  assertDepositAccess(traceId, deposit, requester);
+  if (isDepositStaff(requester.role)) {
+    return deposit;
+  }
+
+  await assertCanViewDeposit(traceId, deposit, requester, email);
   return deposit;
 };
 

@@ -70,8 +70,9 @@ const getById = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await DepositService.getById(
     traceId,
-    req.user,
-    req.params.depositId as string
+    { userId: req.user.userId, role: req.user.role },
+    req.params.depositId as string,
+    req.user.email
   );
 
   sendResponse(res, {

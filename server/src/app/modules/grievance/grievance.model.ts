@@ -68,7 +68,6 @@ const grievanceSchema = new Schema<IGrievance, IGrievanceModel>(
 
 grievanceSchema.index({ user: 1, createdAt: -1 });
 grievanceSchema.index({ order: 1, status: 1 });
-grievanceSchema.index({ status: 1 });
 
 export const Grievance = model<IGrievance, IGrievanceModel>(
   'Grievance',

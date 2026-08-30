@@ -28,6 +28,7 @@ export type TMetaProductCard = {
   _id: unknown;
   title: string;
   collectionType: string;
+  banner: string | null;
   price: number;
   discountPrice: number;
   avgRating: number;

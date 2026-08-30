@@ -52,7 +52,7 @@ const auth = (...requiredRoles: IUserRole[]) => {
         );
       }
 
-      const { role, email } = decoded;
+      const { email } = decoded;
 
       const user = await User.isUserExistsByEmail(email);
       if (!user || user?.isDeleted) {
@@ -71,7 +71,7 @@ const auth = (...requiredRoles: IUserRole[]) => {
         );
       }
 
-      if (requiredRoles.length && !requiredRoles.includes(role)) {
+      if (requiredRoles.length && !requiredRoles.includes(user.role as IUserRole)) {
         throw new ApiError(
           HttpStatusCode.Unauthorized,
           'You are not authorized!',

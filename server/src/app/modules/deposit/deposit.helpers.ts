@@ -51,6 +51,22 @@ export const depositListPopulate = [
   { path: 'author', select: 'name profileAvatar' },
 ];
 
+const DEPOSIT_STAFF_ROLES = [USER_ROLE.admin, USER_ROLE.agent] as const;
+
+export const isDepositStaff = (role?: string) => {
+  const normalized = String(role ?? '').trim().toLowerCase();
+  return (DEPOSIT_STAFF_ROLES as readonly string[]).includes(normalized);
+};
+
+export const toDepositRequester = (user: {
+  userId?: string;
+  _id?: string | { toString(): string };
+  role?: string;
+}): TDepositRequester => ({
+  userId: String(user.userId ?? user._id ?? ''),
+  role: String(user.role ?? ''),
+});
+
 const toIdString = (value: unknown) => String((value as any)?._id ?? value ?? '');
 
 export const mapDepositsToListCards = (deposits: Array<Record<string, any>>) =>
@@ -143,6 +159,39 @@ export const notifyRiderDepositVerified = async (deposit: {
   });
 };
 
+/** Loads requester from DB and checks deposit view access. */
+export const assertCanViewDeposit = async (
+  traceId: string,
+  deposit: { author?: { _id?: unknown } | unknown },
+  requester: TDepositRequester,
+  email?: string
+) => {
+  // Auth middleware already resolves role from DB for this request.
+  if (isDepositStaff(requester.role)) return;
+
+  let user =
+    requester.userId && mongoose.Types.ObjectId.isValid(requester.userId)
+      ? await User.findById(requester.userId).select('role _id').lean()
+      : null;
+
+  if (!user && email) {
+    user = await User.findOne({ email, isDeleted: false })
+      .select('role _id')
+      .lean();
+  }
+
+  if (!user) {
+    throw new ApiError(HttpStatusCode.Unauthorized, 'User not found', traceId);
+  }
+
+  if (isDepositStaff(user.role)) return;
+
+  const authorId = String((deposit.author as any)?._id ?? deposit.author ?? '');
+  if (authorId === String(user._id)) return;
+
+  throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this deposit', traceId);
+};
+
 export const assertDepositAccess = (
   traceId: string,
   deposit: { author?: { _id?: unknown } | unknown },
@@ -150,7 +199,8 @@ export const assertDepositAccess = (
 ) => {
   const authorId = String((deposit.author as any)?._id ?? deposit.author ?? '');
   const canAccess =
-    requester.role === USER_ROLE.admin || authorId === requester.userId;
+    isDepositStaff(requester.role) || authorId === requester.userId;
+
   if (!canAccess) {
     throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this deposit', traceId);
   }

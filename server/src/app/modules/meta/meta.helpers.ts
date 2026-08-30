@@ -191,7 +191,7 @@ export const getLastPaidActiveOrder = async (
   if (!order) return null;
 
   const items = await Items.find({ order: order._id })
-    .populate([{ path: 'product', select: 'title images price discountPrice' }])
+    .populate([{ path: 'product', select: 'title banner price discountPrice' }])
     .select('-__v')
     .lean();
 
@@ -212,6 +212,7 @@ export const toHomeProductCards = (
     _id: product._id,
     title: product.title,
     collectionType: product.collectionType,
+    banner: product.banner ?? null,
     price: product.price ?? 0,
     discountPrice: product.discountPrice ?? product.price ?? 0,
     avgRating: product.avgRating ?? 0,
