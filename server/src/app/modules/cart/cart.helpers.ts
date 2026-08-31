@@ -61,6 +61,39 @@ const normalizeCartColorCode = (code?: string | null) => {
   return value ? value : null;
 };
 
+export const formatCartProduct = (product: {
+  _id: unknown;
+  vendor: unknown;
+  title: string;
+  banner?: string | null;
+  inventoryType: string;
+  price: number;
+  discount: number;
+  discountPrice: number;
+  stock: number;
+  colors?: TCartColor[];
+  sizes?: string[];
+  variants?: Array<{
+    _id?: unknown;
+    size?: string | null;
+    color?: TCartColor | null;
+    quantity: number;
+  }>;
+}) => ({
+  _id: product._id,
+  vendor: product.vendor,
+  title: product.title,
+  banner: product.banner ?? null,
+  inventoryType: product.inventoryType,
+  price: product.price,
+  discount: product.discount,
+  discountPrice: product.discountPrice,
+  stock: product.stock,
+  colors: product.colors ?? [],
+  sizes: product.sizes ?? [],
+  variants: product.variants ?? [],
+});
+
 /** Finds a product variant by size and color or throws a traceable API error. */
 export const findProductVariantOrThrow = async (
   traceId: string,
