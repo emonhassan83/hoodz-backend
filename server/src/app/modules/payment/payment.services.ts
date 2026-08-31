@@ -7,6 +7,7 @@ import {
 } from '@/app/modules/orders/orders.constant';
 import { CoinService } from '@/app/modules/coin/coin.services';
 import { notifyOrdersPaid } from '@/app/modules/orders/orders.helpers';
+import { emitOrdersPaidUpdated } from '@/app/modules/orders/orders.socket';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { PAYMENT_METHOD, PAYMENT_STATUS } from '@/app/modules/payment/payment.constant';
 import {
@@ -108,6 +109,7 @@ const confirmPayment = async (
   if (status === PAYMENT_STATUS.paid && !alreadyPaid) {
     await CoinService.processPaidOrderRewards([payment.order]);
     await notifyOrdersPaid([payment.order]);
+    await emitOrdersPaidUpdated([payment.order]);
   }
 
   return payment.populate(paymentPopulate);
@@ -200,6 +202,7 @@ const confirmPaymentByWebhook = async (
       unpaidPayments.map((payment) => payment.order)
     );
     await notifyOrdersPaid(unpaidPayments.map((payment) => payment.order));
+    await emitOrdersPaidUpdated(unpaidPayments.map((payment) => payment.order));
   }
 
   return {

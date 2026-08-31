@@ -11,6 +11,7 @@ export type TAddWithdrawPayload = {
 export type TChangeWithdrawStatusPayload = {
   status: TWithdrawStatus;
   note?: string;
+  files?: string[];
 };
 
 export type TWithdrawRequester = {

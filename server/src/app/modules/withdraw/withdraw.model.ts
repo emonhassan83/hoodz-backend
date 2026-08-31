@@ -33,6 +33,10 @@ const withdrawSchema = new Schema<IWithdraw, IWithdrawModel>(
       default: null,
       trim: true,
     },
+    files: {
+      type: [String],
+      default: [],
+    },
     completedAt: {
       type: Date,
       default: null,

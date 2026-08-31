@@ -16,6 +16,7 @@ type TCreateVendorTransctionPayload = {
   vendorId: string;
   amount: number;
   note?: string | null;
+  files?: string[];
   paidBy?: string;
   session?: ClientSession;
 };
@@ -28,6 +29,7 @@ const createVendorTransction = async (payload: TCreateVendorTransctionPayload) =
         vendor: payload.vendorId,
         amount: payload.amount,
         note: payload.note ?? null,
+        files: payload.files ?? [],
         paidBy: payload.paidBy ?? null,
       },
     ],
@@ -46,7 +48,7 @@ const getVendorTransctions = async (
   const transactionQuery = new QueryBuilder(
     VendorTransction.find({ vendor: vendorId })
       .populate(vendorTransctionPopulate)
-      .select('_id id vendor amount note paidBy createdAt')
+      .select('_id id vendor amount note files paidBy createdAt')
       .lean(),
     listQuery
   )

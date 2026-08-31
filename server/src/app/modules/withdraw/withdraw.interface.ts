@@ -9,6 +9,7 @@ export interface IWithdraw {
   amount: number;
   status: TWithdrawStatus;
   note?: string | null;
+  files?: string[];
   completedAt?: Date | null;
   rejectedAt?: Date | null;
   processedBy?: Types.ObjectId | null;

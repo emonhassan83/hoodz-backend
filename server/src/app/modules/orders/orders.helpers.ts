@@ -2,6 +2,10 @@ import { HttpStatusCode } from 'axios';
 import { ClientSession, Types } from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
+import {
+  hasOrderSupportChat,
+  hasSingleChatBetweenUsers,
+} from '@/app/modules/chat/chat.helpers';
 import { buildCartItemMatch } from '@/app/modules/cart/cart.helpers';
 import { TEnrichedCartItem } from '@/app/modules/cart/cart.types';
 import { Cart } from '@/app/modules/cart/cart.model';
@@ -18,7 +22,6 @@ import { PAYMENT_METHOD } from '@/app/modules/payment/payment.constant';
 import { Payment } from '@/app/modules/payment/payment.model';
 import { User } from '@/app/modules/user/user.model';
 import { sendNotificationViaQueue } from '@/app/utils/notification-queue.service';
-import { getEmailQueueInstance } from '@/app/utils/queueHelper';
 import {
   TCheckoutVoucherQuote,
   TCreateOrderPayload,
@@ -600,6 +603,19 @@ export const mapOrdersToListCards = async (
 
 export const orderListCardSelect = ORDER_LIST_CARD_FIELDS;
 
+/** Single admin order list card (same shape as getAllOrders items). */
+export const getOrderListCardById = async (orderId: string) => {
+  const order = await Orders.findOne({ _id: orderId, isDeleted: false })
+    .select(orderListCardSelect)
+    .lean();
+  if (!order) return null;
+
+  const [orderCard] = await mapOrdersToListCards([order], undefined, {
+    includeHasRiderAssigned: true,
+  });
+  return orderCard ?? null;
+};
+
 /**
  * Hides abandoned unpaid pending checkouts and failed payments,
  * but always keeps COD unpaid orders visible.
@@ -786,7 +802,7 @@ const orderNoticeCopy: Record<
   },
 };
 
-/** Emails and notifies the buyer about payment or order status changes. */
+/** Notifies the buyer about payment or order status changes (push + in-app). */
 export const notifyOrderUser = async (
   order: Pick<IOrders, '_id' | 'id' | 'user' | 'billingDetails'> | Record<string, any>,
   notice: TOrderUserNotice
@@ -799,9 +815,7 @@ export const notifyOrderUser = async (
   const title = copy.title;
   const body = copy.body(orderId);
 
-  const user = await User.findById(userId).select('name email fcmToken').lean();
-  const email = order.billingDetails?.email || user?.email;
-  const name = order.billingDetails?.name || user?.name || 'there';
+  const user = await User.findById(userId).select('fcmToken').lean();
 
   await sendNotificationViaQueue({
     userId,
@@ -817,23 +831,6 @@ export const notifyOrderUser = async (
   }).catch((error) => {
     console.warn('[Order] Failed to queue order notification', error);
   });
-
-  if (!email) return;
-
-  const emailQueue = await getEmailQueueInstance();
-  await emailQueue
-    .add(
-      'send-order-status-email',
-      { email, name, orderId, title, body },
-      {
-        priority: 1,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 2000 },
-      }
-    )
-    .catch((error) => {
-      console.warn('[Order] Failed to queue order email', error);
-    });
 };
 
 export const orderPopulate = [
@@ -890,6 +887,51 @@ export const getOrderDeliveryJobCard = async (orderId: string) => {
     id: job.id,
     pickup: job.pickup,
     createdAt: job.createdAt,
+  };
+};
+
+/** Full order detail payload (same shape as getOrdersById). */
+export const buildOrderDetailById = async (orderId: string) => {
+  const order = await Orders.findOne({ _id: orderId, isDeleted: false })
+    .populate(orderPopulate)
+    .select('-__v')
+    .lean();
+  if (!order) return null;
+
+  const customerId = String((order.user as any)?._id ?? order.user ?? '');
+
+  const [items, hasOrderSupports, rider, deliveryJob, hasGrievance] =
+    await Promise.all([
+      Items.find({ order: orderId })
+        .populate([
+          { path: 'product', select: 'title banner price discountPrice' },
+        ])
+        .select('-__v')
+        .lean(),
+      hasOrderSupportChat(orderId),
+      getOrderAssignedRiderCard(orderId),
+      getOrderDeliveryJobCard(orderId),
+      hasOrderGrievance(orderId),
+    ]);
+
+  const totalOrderItems = items.reduce(
+    (total: number, item: { quantity?: number }) => total + (item.quantity ?? 0),
+    0
+  );
+  const hasRiderChat = rider
+    ? await hasSingleChatBetweenUsers(customerId, String(rider._id))
+    : false;
+
+  return {
+    ...order,
+    items,
+    totalOrderItems,
+    rider,
+    deliveryJob,
+    hasOrderSupports,
+    hasRiderChat,
+    hasGrievance,
+    orderSteper: getOrderSteper(order.status),
   };
 };
 

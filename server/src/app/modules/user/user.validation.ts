@@ -158,6 +158,7 @@ const payVendorValidationSchema = z.object({
   body: z.object({
     amount: z.number().positive('Amount must be greater than 0'),
     note: z.string().trim().min(1).nullable().optional(),
+    files: z.array(z.string().trim().min(1)).optional().default([]),
   }),
 });
 

@@ -186,6 +186,27 @@ export const buildProductListFilter = async (
   return filter;
 };
 
+const parseBooleanQuery = (value: unknown, defaultValue: boolean) => {
+  if (value === undefined || value === null || value === '') return defaultValue;
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (['true', '1', 'yes'].includes(normalized)) return true;
+  if (['false', '0', 'no'].includes(normalized)) return false;
+  return defaultValue;
+};
+
+/** Excludes stock-out products when excludeStockOut query is enabled. */
+export const applyExcludeStockOutFilter = (
+  filter: Record<string, unknown>,
+  query: Record<string, unknown>,
+  defaultExclude = true
+) => {
+  if (parseBooleanQuery(query.excludeStockOut, defaultExclude)) {
+    filter.stock = { $gt: 0 };
+  }
+  return filter;
+};
+
 export const getUserOrigin = async (
   traceId: string,
   userId?: string,

@@ -18,6 +18,7 @@ const changeWithdrawStatusValidationSchema = z.object({
   body: z.object({
     status: z.enum(Object.values(WITHDRAW_STATUS) as [string, ...string[]]),
     note: z.string().trim().optional(),
+    files: z.array(z.string().trim().min(1)).optional().default([]),
   }),
 });
 

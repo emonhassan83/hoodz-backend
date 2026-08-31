@@ -69,6 +69,7 @@ import {
   creditShopBalanceForPaidOrders,
 } from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
+import { emitOrderUpdated } from '@/app/modules/orders/orders.socket';
 import { PAYMENT_METHOD, PAYMENT_STATUS } from '@/app/modules/payment/payment.constant';
 import { Payment } from '@/app/modules/payment/payment.model';
 import { User } from '@/app/modules/user/user.model';
@@ -222,6 +223,7 @@ const assignJob = async (
   await notifyJobAssignedToRider(assignedJob, payload.riderId);
   await notifyJobRiderAssigned(assignedJob);
   await notifyOrderUser(assignedJob?.order as any, 'rider_assigned');
+  await emitOrderUpdated(payload.orderId, 'rider_assigned');
 
   return assignedJob;
 };
@@ -286,6 +288,7 @@ const acceptJob = async (
   await notifyOtherRidersJobTaken(acceptedJob, leftoverRiders);
   await notifyJobRiderAssigned(acceptedJob, leftoverRiders);
   await notifyOrderUser(acceptedJob?.order as any, 'rider_assigned');
+  await emitOrderUpdated(claimed.order, 'rider_assigned');
 
   return acceptedJob;
 };
@@ -329,19 +332,7 @@ const rejectJob = async (
   }
 
   const remaining = await Job.findById(job._id).populate(jobPopulate);
-  const remainingIds = (remaining?.requestedRider ?? []).map((rider: any) =>
-    String(rider?._id ?? rider)
-  );
-  if (
-    remaining?.matchingEnabled &&
-    remaining.status === JOB_STATUS.matching &&
-    !remaining.rider &&
-    !remainingIds.length
-  ) {
-    await applyMatchRound(traceId, job._id.toString());
-    return Job.findById(job._id).populate(jobPopulate);
-  }
-
+  // Next match round runs on schedule (nextMatchAt) via cron — not on reject.
   return remaining;
 };
 
@@ -367,6 +358,7 @@ const pickupJob = async (traceId: string, riderId: string, payload: TJobIdPayloa
   });
   const pickedUpJob = await Job.findById(job._id).populate(jobPopulate);
   await notifyOrderUser(pickedUpJob?.order as any, 'picked_up');
+  await emitOrderUpdated(job.order, 'picked_up');
   return pickedUpJob;
 };
 
@@ -386,6 +378,7 @@ const onTheWay = async (traceId: string, riderId: string, payload: TJobIdPayload
   });
   const onTheWayJob = await Job.findById(job._id).populate(jobPopulate);
   await notifyOrderUser(onTheWayJob?.order as any, 'on_the_way');
+  await emitOrderUpdated(job.order, 'on_the_way');
   return onTheWayJob;
 };
 
@@ -530,6 +523,7 @@ const deliveredJob = async (
 
     const delivered = await Job.findById(job._id).populate(jobPopulate);
     await notifyOrderUser(delivered?.order as any, 'delivered');
+    await emitOrderUpdated(order._id, 'delivered');
     return delivered;
   } catch (error) {
     await session.abortTransaction();
@@ -784,7 +778,7 @@ const rematchDueJobs = async (traceId = 'cron') => {
     rider: null,
     status: { $in: [JOB_STATUS.matching, JOB_STATUS.assigned] },
     nextMatchAt: { $lte: new Date() },
-  }).select('_id matchAttemptCount order');
+  }).select('_id matchAttemptCount order nextMatchAt');
 
   let rematched = 0;
   let exhausted = 0;
@@ -795,11 +789,14 @@ const rematchDueJobs = async (traceId = 'cron') => {
       exhausted += 1;
       continue;
     }
+
+    // All match rounds used — wait out the last interval, then notify staff.
     if ((job.matchAttemptCount ?? 0) >= settings.maxAttempts) {
       await exhaustMatching(job._id.toString());
       exhausted += 1;
       continue;
     }
+
     await applyMatchRound(traceId, job._id.toString());
     rematched += 1;
   }

@@ -177,6 +177,7 @@ const changedWithdrawStatus = async (
   if (payload.status === WITHDRAW_STATUS.rejected) {
     withdraw!.status = WITHDRAW_STATUS.rejected;
     withdraw!.note = payload.note ?? withdraw!.note ?? null;
+    withdraw!.files = payload.files ?? [];
     withdraw!.processedBy = new mongoose.Types.ObjectId(adminId);
     withdraw!.rejectedAt = new Date();
     await withdraw!.save();
@@ -221,6 +222,7 @@ const changedWithdrawStatus = async (
 
     currentWithdraw!.status = WITHDRAW_STATUS.completed;
     currentWithdraw!.note = payload.note ?? currentWithdraw!.note ?? null;
+    currentWithdraw!.files = payload.files ?? [];
     currentWithdraw!.processedBy = new mongoose.Types.ObjectId(adminId);
     currentWithdraw!.completedAt = new Date();
     await currentWithdraw!.save({ session });

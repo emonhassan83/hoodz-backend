@@ -30,6 +30,10 @@ const vendorTransctionSchema = new Schema<IVendorTransction, IVendorTransctionMo
       default: null,
       trim: true,
     },
+    files: {
+      type: [String],
+      default: [],
+    },
     paidBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',

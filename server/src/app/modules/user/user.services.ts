@@ -760,6 +760,7 @@ const payVendor = async (
       vendorId,
       amount,
       note: payload.note ?? null,
+      files: payload.files ?? [],
       paidBy: adminId,
       session,
     });
@@ -790,11 +791,13 @@ const payVendor = async (
         id: transaction.id,
         vendor: updatedVendor._id,
         amount,
+        files: transaction.files ?? [],
       },
       amount,
       previousBalance,
       remainingBalance,
       note: payload.note ?? null,
+      files: payload.files ?? [],
       paidAt: new Date(),
     };
   } catch (error) {

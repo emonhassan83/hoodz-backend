@@ -5,6 +5,7 @@ export interface IVendorTransction {
   vendor: Types.ObjectId;
   amount: number;
   note?: string | null;
+  files?: string[];
   paidBy?: Types.ObjectId | null;
   createdAt?: Date;
   updatedAt?: Date;

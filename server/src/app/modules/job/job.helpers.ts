@@ -20,6 +20,7 @@ import {
 } from '@/app/modules/job/job.constant';
 import { IJob } from '@/app/modules/job/job.interface';
 import { Job } from '@/app/modules/job/job.model';
+import { buildOrderDetailById } from '@/app/modules/orders/orders.helpers';
 import { ORDER_STATUS } from '@/app/modules/orders/orders.constant';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { Payment } from '@/app/modules/payment/payment.model';
@@ -569,31 +570,26 @@ export const notifyJobRiderAssigned = async (job: any, _extraRiderIds: string[] 
 
 /** Notifies connected agents/admins that auto-matching stopped. */
 export const notifyMatchingExhausted = async (job: any) => {
-  const plain =
-    typeof job?.toObject === 'function'
-      ? job.toObject({ virtuals: true })
-      : job;
-  const payload = {
-    _id: plain?._id,
-    id: plain?.id,
-    order: plain?.order,
-    user: plain?.user,
-    rider: plain?.rider ?? null,
-    status: plain?.status,
-    deliveryType: plain?.deliveryType,
-    pickup: plain?.pickup,
-    destination: plain?.destination,
-    distance: plain?.distance ?? null,
-    earning: plain?.earning ?? 0,
-    collectedMoney: plain?.collectedMoney ?? 0,
-    paymentMethod: plain?.paymentMethod,
-    assignmentType: plain?.assignmentType,
-    matchAttemptCount: plain?.matchAttemptCount ?? 0,
-    matchingEnabled: false,
-    createdAt: plain?.createdAt,
-  };
+  const jobId = toIdString(job?._id ?? job?.id);
+  const orderId = toIdString(job?.order?._id ?? job?.order);
+  if (!jobId || !orderId) return;
 
   try {
+    const [orderDetail, jobDetail] = await Promise.all([
+      buildOrderDetailById(orderId),
+      Job.findById(jobId).populate(jobPopulate).select('-__v').lean(),
+    ]);
+    if (!orderDetail || !jobDetail) return;
+
+    const payload = {
+      ...orderDetail,
+      job: {
+        ...jobDetail,
+        matchingEnabled: false,
+        jobSteper: getJobSteper(jobDetail.status),
+      },
+    };
+
     const event = SOCKET_EMIT.jobMatchingExhausted;
 
     emitToRoles([USER_ROLE.agent, USER_ROLE.admin], event, payload);
@@ -608,7 +604,7 @@ export const notifyMatchingExhausted = async (job: any) => {
     emitToUserIds(staffIds, event, payload);
 
     console.log(
-      `[Job] Emitted ${event} to agents/admins (staff=${staffIds.length}) job=${payload._id}`
+      `[Job] Emitted ${event} to agents/admins (staff=${staffIds.length}) order=${orderId} job=${jobId}`
     );
 
     if (staffIds.length) {
@@ -619,9 +615,9 @@ export const notifyMatchingExhausted = async (job: any) => {
         message: 'No rider accepted this job. Assign a rider manually.',
         data: {
           modelType: NOTIFICATION_MODEL_TYPE.Job,
-          reference: String(payload._id ?? ''),
-          jobId: String(payload._id ?? ''),
-          orderId: toIdString(plain?.order),
+          reference: jobId,
+          jobId,
+          orderId,
           notice: 'matching-exhausted',
         },
       }).catch((error) => {
@@ -846,11 +842,7 @@ export const applyMatchRound = async (traceId: string, jobId: string) => {
     maxAttempts: settings.maxAttempts,
   });
 
-  // Last attempt done — stop matching immediately so agents get the socket event now
-  if (nextAttempt >= settings.maxAttempts) {
-    return exhaustMatching(jobId);
-  }
-
+  // After the last attempt, wait until nextMatchAt elapses; rematchDueJobs will exhaust then.
   return updated;
 };
 

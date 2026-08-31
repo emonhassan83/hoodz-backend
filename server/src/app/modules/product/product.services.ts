@@ -13,6 +13,7 @@ import {
   assertProductExists,
   assertSkuAvailable,
   assertVendorExists,
+  applyExcludeStockOutFilter,
   buildProductListFilter,
   buildProductWritePayload,
   buildVendorProductStats,
@@ -375,12 +376,13 @@ const getAllProduct = async (
 ) => {
   const productQuery = query as TProductFilterQuery;
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `all:${userId ?? 'anonymous'}:cards:v7:${JSON.stringify(query)}`
+    `all:${userId ?? 'anonymous'}:cards:v8:${JSON.stringify(query)}`
   );
   const cached = await getCache<TProductListResponse>(cacheKey);
   if (cached) return cached;
 
   const filter = await buildProductListFilter(productQuery);
+  applyExcludeStockOutFilter(filter, query, true);
   const maxDistanceKm = toNumber(
     productQuery.maxDistanceKm ?? productQuery.maxDistance
   );
@@ -530,7 +532,7 @@ const getShopProducts = async (
 ) => {
   await assertVendorExists(traceId, vendorId);
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `shop:${vendorId}:${userId ?? 'anonymous'}:cards:v4:${JSON.stringify(query)}`
+    `shop:${vendorId}:${userId ?? 'anonymous'}:cards:v5:${JSON.stringify(query)}`
   );
   const cached = await getCache<{
     meta: TProductPaginationMeta;
@@ -544,6 +546,7 @@ const getShopProducts = async (
   const listFilter = await buildProductListFilter(query as TProductFilterQuery);
   listFilter.vendor = vendorId;
   listFilter.isDeleted = false;
+  applyExcludeStockOutFilter(listFilter, query, true);
 
   const allProductsQuery = new QueryBuilder(
     Product.find(listFilter)
@@ -705,13 +708,19 @@ const getMyProducts = async (
   query: Record<string, unknown>
 ) => {
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `my:${vendorId}:dashboard:v3:${JSON.stringify(query)}`
+    `my:${vendorId}:dashboard:v4:${JSON.stringify(query)}`
   );
   const cached = await getCache<TMyProductsResponse>(cacheKey);
   if (cached) return cached;
 
+  const baseFilter: Record<string, unknown> = {
+    vendor: vendorId,
+    isDeleted: false,
+  };
+  applyExcludeStockOutFilter(baseFilter, query, false);
+
   const productQuery = new QueryBuilder(
-    Product.find({ vendor: vendorId, isDeleted: false })
+    Product.find(baseFilter)
       .populate(productPopulate)
       .select(productMyListSelect)
       .lean(),

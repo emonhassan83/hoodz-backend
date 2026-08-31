@@ -5,7 +5,6 @@ import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import { COIN_REFERENCE_TYPE } from '@/app/modules/coin/coin.constant';
 import { CoinService } from '@/app/modules/coin/coin.services';
-import { hasOrderSupportChat, hasSingleChatBetweenUsers } from '@/app/modules/chat/chat.helpers';
 import { Items } from '@/app/modules/items/items.model';
 import { JobService } from '@/app/modules/job/job.services';
 import { stopJobMatchingForOrder } from '@/app/modules/job/job.helpers';
@@ -20,14 +19,11 @@ import {
   applyMyOrdersListFilter,
   attachHasGrievance,
   buildCheckoutQuote,
+  buildOrderDetailById,
   buildVisibleOrdersFilter,
   consumeCheckoutVoucher,
   createOrderItems,
-  getOrderAssignedRiderCard,
-  getOrderDeliveryJobCard,
-  getOrderSteper,
   getOrderStatusTimestampUpdate,
-  hasOrderGrievance,
   invalidateOrderCaches,
   mapOrdersToListCards,
   normalizeBillingDeliveryLocation,
@@ -45,6 +41,10 @@ import {
   TCreateOrderPayload,
   TOrderRequester,
 } from '@/app/modules/orders/orders.types';
+import {
+  emitOrderUpdated,
+  resolveOrderSocketNotice,
+} from '@/app/modules/orders/orders.socket';
 
 const getOrderSummary = async (
   traceId: string,
@@ -155,6 +155,10 @@ const createOrders = async (
     await removeCheckedOutItemsFromCart(userId, payload.items);
     await invalidateOrderCaches();
 
+    await Promise.all(
+      orders.map((order) => emitOrderUpdated(order._id, 'created'))
+    );
+
     return orders;
   } catch (error) {
     await session.abortTransaction();
@@ -245,47 +249,12 @@ const getOrdersById = async (
   orderId: string,
   _requester: TOrderRequester
 ) => {
-  const order = await Orders.findOne({ _id: orderId, isDeleted: false })
-    .populate(orderPopulate)
-    .select('-__v')
-    .lean();
+  const order = await buildOrderDetailById(orderId);
   if (!order) {
     throw new ApiError(HttpStatusCode.NotFound, 'Order not found', traceId);
   }
 
-  const customerId = String((order.user as any)?._id ?? order.user ?? '');
-
-  const [items, hasOrderSupports, rider, deliveryJob, hasGrievance] =
-    await Promise.all([
-    Items.find({ order: orderId })
-      .populate([{ path: 'product', select: 'title banner price discountPrice' }])
-      .select('-__v')
-      .lean(),
-    hasOrderSupportChat(orderId),
-    getOrderAssignedRiderCard(orderId),
-    getOrderDeliveryJobCard(orderId),
-    hasOrderGrievance(orderId),
-  ]);
-
-  const totalOrderItems = items.reduce(
-    (total: number, item: { quantity?: number }) => total + (item.quantity ?? 0),
-    0
-  );
-  const hasRiderChat = rider
-    ? await hasSingleChatBetweenUsers(customerId, String(rider._id))
-    : false;
-
-  return {
-    ...order,
-    items,
-    totalOrderItems,
-    rider,
-    deliveryJob,
-    hasOrderSupports,
-    hasRiderChat,
-    hasGrievance,
-    orderSteper: getOrderSteper(order.status),
-  };
+  return order;
 };
 
 const changeOrderStatus = async (
@@ -301,6 +270,7 @@ const changeOrderStatus = async (
 
   assertOrderAccess(traceId, order, requester);
 
+  const previousStatus = order.status;
   const shouldAwardPurchaseCoins =
     payload.paymentStatus === PAYMENT_STATUS.paid &&
     order.paymentStatus !== PAYMENT_STATUS.paid;
@@ -326,6 +296,17 @@ const changeOrderStatus = async (
 
   if (payload.status === ORDER_STATUS.cancelled) {
     await stopJobMatchingForOrder(orderId);
+  }
+
+  if (payload.status && payload.status !== previousStatus) {
+    await emitOrderUpdated(orderId, resolveOrderSocketNotice(payload.status), {
+      previousStatus,
+    });
+  } else if (
+    payload.paymentStatus === PAYMENT_STATUS.paid &&
+    order.paymentStatus !== PAYMENT_STATUS.paid
+  ) {
+    await emitOrderUpdated(orderId, 'paid', { previousStatus });
   }
 
   return updatedOrder;
@@ -371,6 +352,10 @@ const confirmOrder = async (
     .select('-__v')
     .lean();
 
+  await emitOrderUpdated(orderId, 'confirmed', {
+    previousStatus: ORDER_STATUS.pending,
+  });
+
   return confirmedOrder;
 };
 
@@ -406,6 +391,10 @@ const processOrder = async (
     .populate(orderPopulate)
     .select('-__v')
     .lean();
+
+  await emitOrderUpdated(orderId, 'processing', {
+    previousStatus: ORDER_STATUS.confirmed,
+  });
 
   return { order: processedOrder, job };
 };

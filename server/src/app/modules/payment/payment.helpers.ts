@@ -13,6 +13,7 @@ import {
   applyOrderInventoryOrThrow,
   notifyOrdersPaid,
 } from '@/app/modules/orders/orders.helpers';
+import { emitOrdersPaidUpdated } from '@/app/modules/orders/orders.socket';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { PAYMENT_METHOD, PAYMENT_STATUS } from '@/app/modules/payment/payment.constant';
 import { Payment } from '@/app/modules/payment/payment.model';
@@ -591,6 +592,7 @@ export const initiateWalletPayment = async (
 
   await CoinService.processPaidOrderRewards(orderIds);
   await notifyOrdersPaid(orderIds);
+  await emitOrdersPaidUpdated(orderIds);
   await Promise.all(
     orders.map((order) =>
       WalletTransactionService.createWalletTransaction({

@@ -89,6 +89,7 @@ export type TPlatformInviteEmailPayload = {
 export type TPayVendorPayload = {
   amount: number;
   note?: string | null;
+  files?: string[];
 };
 
 

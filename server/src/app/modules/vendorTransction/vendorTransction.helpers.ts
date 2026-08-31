@@ -36,6 +36,7 @@ export const mapVendorTransctionsToCards = (
           : transaction.vendor,
       amount: Number((transaction.amount ?? 0).toFixed(2)),
       note: transaction.note ?? null,
+      files: transaction.files ?? [],
       paidBy:
         paidBy && typeof paidBy === 'object'
           ? {
