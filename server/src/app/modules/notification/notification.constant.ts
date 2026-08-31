@@ -9,6 +9,7 @@ export const NOTIFICATION_MODEL_TYPE = {
   Deposit: 'Deposit',
   Withdraw: 'Withdraw',
   Grievance: 'Grievance',
+  Promosional: 'Promosional',
 } as const
 
 

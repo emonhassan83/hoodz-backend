@@ -3,18 +3,20 @@ import { HttpStatusCode } from 'axios';
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
 import { INotification } from '@/app/modules/notification/notification.interface';
+import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { getActiveUserCursorForPromotional } from '@/app/modules/notification/notification.helpers';
 import { Notification } from '@/app/modules/notification/notification.model';
-import { User } from '@/app/modules/user/user.model';
+import { TPromosionalNotificationPayload } from '@/app/modules/notification/notification.types';
 import {
   decrementUnreadCount,
   setUnreadCountInRedis,
 } from '@/app/redis/helpers/notification';
 import {
-  sendBatchNotificationViaQueue,
   sendNotificationViaQueue,
+  sendPromosionalNotificationViaQueue,
 } from '@/app/utils/notification-queue.service';
 
-const GENERAL_NOTIFICATION_BATCH_SIZE = 500;
+const PROMOTIONAL_NOTIFICATION_BATCH_SIZE = 500;
 
 // ─── Create ────────────────────────────────────────────────────────────────
 
@@ -36,26 +38,12 @@ const createNotificationIntoDB = async (
   return { queued: true, traceId };
 };
 
-const sendGeneralNotificationIntoDB = async (
+const sendPromosionalNotificationIntoDB = async (
   traceId: string,
-  payload: INotification & { roles?: string[]; role?: string }
+  payload: TPromosionalNotificationPayload
 ) => {
-  const {
-    message,
-    description,
-    receiver: _originalReceiver,
-    roles,
-    role,
-    ...rest
-  } = payload;
-  const targetRoles = roles?.length ? roles : role ? [role] : ['user'];
-  const userCursor = User.find({
-    role: { $in: targetRoles as any },
-    isDeleted: false,
-  })
-    .select('_id')
-    .lean()
-    .cursor();
+  const { body, description, reference = null } = payload;
+  const userCursor = getActiveUserCursorForPromotional();
 
   let totalUsers = 0;
   let totalJobs = 0;
@@ -64,14 +52,14 @@ const sendGeneralNotificationIntoDB = async (
   const flushBatch = async () => {
     if (batch.length === 0) return;
 
-    await sendBatchNotificationViaQueue({
+    await sendPromosionalNotificationViaQueue({
       userIds: batch,
       channel: 'both',
-      title: message,
+      title: body,
       message: description,
       data: {
-        modelType: rest.modelType,
-        reference: rest.reference,
+        modelType: NOTIFICATION_MODEL_TYPE.Promosional,
+        reference,
       },
     });
 
@@ -82,18 +70,26 @@ const sendGeneralNotificationIntoDB = async (
 
   for await (const user of userCursor) {
     batch.push(user._id.toString());
-    if (batch.length >= GENERAL_NOTIFICATION_BATCH_SIZE) {
+    if (batch.length >= PROMOTIONAL_NOTIFICATION_BATCH_SIZE) {
       await flushBatch();
     }
   }
   await flushBatch();
 
+  if (totalUsers === 0) {
+    throw new ApiError(
+      HttpStatusCode.NotFound,
+      'No active users found to send promotional notification',
+      traceId
+    );
+  }
+
   return {
     queued: true,
-    roles: targetRoles,
+    modelType: NOTIFICATION_MODEL_TYPE.Promosional,
     totalUsers,
     totalJobs,
-    batchSize: GENERAL_NOTIFICATION_BATCH_SIZE,
+    batchSize: PROMOTIONAL_NOTIFICATION_BATCH_SIZE,
     traceId,
   };
 };
@@ -185,7 +181,7 @@ const deleteAllNotificationsFromDB = async (
 
 export const NotificationService = {
   createNotificationIntoDB,
-  sendGeneralNotificationIntoDB,
+  sendPromosionalNotificationIntoDB,
   getAllNotificationFromDB,
   markAsDoneFromDB,
   deleteANotificationFromDB,

@@ -2,6 +2,7 @@ import { Schema, model } from 'mongoose';
 
 import {
   BANNER_STATUS,
+  BANNER_TYPE,
   SECTION_TYPE,
 } from '@/app/modules/banner/banner.constant';
 import { IBanner, IBannerModel } from '@/app/modules/banner/banner.interface';
@@ -17,6 +18,12 @@ const bannerSchema = new Schema<IBanner, IBannerModel>(
       type: String,
       default: null,
       trim: true,
+    },
+    type: {
+      type: String,
+      enum: Object.values(BANNER_TYPE),
+      default: BANNER_TYPE.product,
+      index: true,
     },
     section: {
       type: String,

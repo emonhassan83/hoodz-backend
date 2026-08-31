@@ -4,6 +4,7 @@ import { AiAssistantRoutes } from '@/app/modules/aiAssistant/aiAssistant.routes'
 import { AnalysisRoutes } from '@/app/modules/analysis/analysis.routes';
 import { AuthRoutes } from '@/app/modules/auth/auth.routes';
 import { BannerRoutes } from '@/app/modules/banner/banner.routes';
+import { CampainRoutes } from '@/app/modules/campain/campain.routes';
 import { CartRoutes } from '@/app/modules/cart/cart.routes';
 import { CategoryRoutes } from '@/app/modules/category/category.routes';
 import { ChatRoutes } from '@/app/modules/chat/chat.routes';
@@ -84,6 +85,10 @@ const apiRoutes = [
   {
     path: '/banner',
     route: BannerRoutes,
+  },
+  {
+    path: '/campain',
+    route: CampainRoutes,
   },
   {
     path: '/meta',

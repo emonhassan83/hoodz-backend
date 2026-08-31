@@ -1,6 +1,8 @@
 import { INotification } from '@/app/modules/notification/notification.interface';
+import { User } from '@/app/modules/user/user.model';
+import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 
-// DRY: both createNotification and sendGeneralNotification emit the same socket event
+// DRY: notification worker emits the same socket event after DB save
 export const emitSocketNotification = (
   traceId: string,
   payload: Partial<INotification>
@@ -16,5 +18,16 @@ export const emitSocketNotification = (
     console.error(`[${traceId}] Socket emit failed:`, err);
   }
 };
+
+/** Returns a cursor of active customer accounts for promotional pushes. */
+export const getActiveUserCursorForPromotional = () =>
+  User.find({
+    role: USER_ROLE.user,
+    status: USER_STATUS.active,
+    isDeleted: false,
+  })
+    .select('_id')
+    .lean()
+    .cursor();
 
 

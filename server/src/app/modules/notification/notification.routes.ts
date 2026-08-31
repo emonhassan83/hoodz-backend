@@ -12,11 +12,11 @@ import validateRequest from '@/app/utils/validateRequest';
 const router = Router();
 
 router
-  .route('/general')
+  .route('/promotional')
   .post(
     auth(USER_ROLE.admin),
-    validateRequest(NotificationValidation.generalNotificationSchema),
-    NotificationControllers.sentGeneralNotification
+    validateRequest(NotificationValidation.promosionalNotificationSchema),
+    NotificationControllers.sentPromosionalNotification
   );
 
 router

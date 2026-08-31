@@ -69,7 +69,10 @@ export const initializeNotificationWorker = () => {
               );
             }
           }
-        } else if (job.name === 'send-batch-notification') {
+        } else if (
+          job.name === 'send-batch-notification' ||
+          job.name === 'send-promotional-notification'
+        ) {
           const { userIds, fcmTokens } = job.data;
 
           // 1. Batch Socket notification

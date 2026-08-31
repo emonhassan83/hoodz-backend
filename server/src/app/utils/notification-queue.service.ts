@@ -35,6 +35,42 @@ export const sendNotificationViaQueue = async (payload: INotificationPayload) =>
   return { success: true, message: 'Notification queued successfully' };
 };
 
+export const sendPromosionalNotificationViaQueue = async (
+  payload: IBatchNotificationPayload
+) => {
+  const traceId = getTraceId();
+  const queue = getNotificationQueue();
+  const fcmTokens =
+    payload.fcmTokens ??
+    (
+      await User.find({
+        _id: { $in: payload.userIds },
+        fcmToken: { $exists: true, $ne: null },
+      })
+        .select('fcmToken')
+        .lean()
+    )
+      .map((user) => user.fcmToken)
+      .filter(Boolean);
+
+  const jobData = {
+    traceId,
+    ...payload,
+    fcmTokens,
+  };
+
+  await queue.add('send-promotional-notification', jobData, {
+    priority: 1,
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 2000,
+    },
+  });
+
+  return { success: true, message: 'Promotional notification queued successfully' };
+};
+
 /**
  * Send Batch Notification via Queue
  * Single Responsibility: Enqueue batch notification jobs for async processing

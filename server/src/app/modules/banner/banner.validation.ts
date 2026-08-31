@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
   BANNER_STATUS,
+  BANNER_TYPE,
   SECTION_TYPE,
 } from '@/app/modules/banner/banner.constant';
 
@@ -10,12 +11,18 @@ const bannerStatusSchema = z.enum([
   BANNER_STATUS.active,
   BANNER_STATUS.inactive,
 ]);
+const bannerTypeSchema = z.enum([
+  BANNER_TYPE.product,
+  BANNER_TYPE.shop,
+  BANNER_TYPE.campain,
+]);
 const sectionTypeSchema = z.enum([SECTION_TYPE.first, SECTION_TYPE.second]);
 
 const addBannerValidationSchema = z.object({
   body: z.object({
     banner: z.string().trim().min(1, 'Banner is required'),
     reference: z.string().trim().min(1).nullable().optional(),
+    type: bannerTypeSchema.optional(),
     section: sectionTypeSchema,
     status: bannerStatusSchema.optional(),
   }),
@@ -29,6 +36,7 @@ const updateBannerValidationSchema = z.object({
     .object({
       banner: z.string().trim().min(1).optional(),
       reference: z.string().trim().min(1).nullable().optional(),
+      type: bannerTypeSchema.optional(),
       section: sectionTypeSchema.optional(),
       status: bannerStatusSchema.optional(),
     })

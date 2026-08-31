@@ -18,9 +18,9 @@ const createNotification = asyncHandler(async (req, res) => {
   });
 });
 
-const sentGeneralNotification = asyncHandler(async (req, res) => {
+const sentPromosionalNotification = asyncHandler(async (req, res) => {
   const traceId = getTraceId();
-  const result = await NotificationService.sendGeneralNotificationIntoDB(
+  const result = await NotificationService.sendPromosionalNotificationIntoDB(
     traceId,
     req.body
   );
@@ -28,7 +28,7 @@ const sentGeneralNotification = asyncHandler(async (req, res) => {
   sendResponse(res, {
     success: true,
     statusCode: 200,
-    message: 'General notification create successfully!',
+    message: 'Promotional notification queued successfully',
     data: result,
     traceId,
   });
@@ -105,7 +105,7 @@ const deleteAllNotifications = asyncHandler(async (req, res) => {
 
 export const NotificationControllers = {
   createNotification,
-  sentGeneralNotification,
+  sentPromosionalNotification,
   getAllNotifications,
   markAsDoneNotification,
   deleteANotification,
