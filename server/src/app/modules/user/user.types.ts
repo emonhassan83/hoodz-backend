@@ -20,6 +20,13 @@ export type TInvitePlatformUserPayload = {
   phone: string;
 };
 
+export type TInviteAgentPayload = TInvitePlatformUserPayload & {
+  agentSchedule?: {
+    startTime: string;
+    endTime: string;
+  } | null;
+};
+
 export type TNearbyShopsQuery = {
   latitude: number;
   longitude: number;
@@ -91,5 +98,10 @@ export type TPayVendorPayload = {
   note?: string | null;
   files?: string[];
 };
+
+export type TUpdateAgentSchedulePayload = {
+  startTime: string;
+  endTime: string;
+} | null;
 
 

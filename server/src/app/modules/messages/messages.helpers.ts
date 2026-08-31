@@ -4,6 +4,10 @@ import ApiError from '@/app/errors/ApiError';
 import { Chat } from '@/app/modules/chat/chat.model';
 import { Messages } from '@/app/modules/messages/messages.model';
 import { isChatParticipant } from '@/app/modules/participant/participant.helpers';
+import {
+  assertAgentAssignedToCustomer,
+  getCustomerIdForChat,
+} from '@/app/modules/supportAssignment/supportAssignment.helpers';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 
 type TMessageRequester = { userId: string; role?: string };
@@ -20,8 +24,19 @@ export const assertMessageChatAccess = async (
   }
 
   const isAdmin = user.role === USER_ROLE.admin;
+  if (isAdmin) return chat;
+
+  if (user.role === USER_ROLE.agent) {
+    const customerId = await getCustomerIdForChat(chatId);
+    if (!customerId) {
+      throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this chat', traceId);
+    }
+    await assertAgentAssignedToCustomer(traceId, user.userId, customerId);
+    return chat;
+  }
+
   const isParticipant = await isChatParticipant(chatId, user.userId);
-  if (!isAdmin && !isParticipant) {
+  if (!isParticipant) {
     throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this chat', traceId);
   }
 

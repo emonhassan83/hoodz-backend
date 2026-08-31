@@ -17,9 +17,15 @@ import {
   getMyParticipantChatIds,
   getSharedChatIds,
   isChatParticipant,
+  pruneChatParticipantsExcept,
   syncChatParticipants,
 } from '@/app/modules/participant/participant.helpers';
-import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
+import {
+  assertAgentAssignedToCustomer,
+  getCustomerIdForChat,
+  resolveOrAssignAgentForCustomer,
+} from '@/app/modules/supportAssignment/supportAssignment.helpers';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 
 /** Throws when a chat participant does not exist. */
@@ -28,19 +34,6 @@ export const assertChatUserExists = async (traceId: string, userId: string) => {
   if (!user) {
     throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
   }
-};
-
-/** Returns active agent ids for support conversations. */
-export const getActiveAgentIds = async () => {
-  const agents = await User.find({
-    role: USER_ROLE.agent,
-    status: USER_STATUS.active,
-    isDeleted: false,
-  })
-    .select('_id')
-    .lean();
-
-  return agents.map((agent) => agent._id.toString());
 };
 
 let chatIndexesReady = false;
@@ -76,25 +69,34 @@ export const getChatOrderOrThrow = async (traceId: string, orderId: string) => {
   return order;
 };
 
-/** Customer order chat is buyer <-> agents only. */
-export const assertOrderSupportAccess = (
+/** Customer order chat is buyer <-> assigned agent only. */
+export const assertOrderSupportAccess = async (
   traceId: string,
   order: IOrders,
   requester: TChatRequester
 ) => {
-  const isBuyer = order.user?.toString() === requester.userId;
-  const canAccess =
-    requester.role === USER_ROLE.admin ||
-    requester.role === USER_ROLE.agent ||
-    isBuyer;
+  const buyerId = order.user?.toString();
+  const isBuyer = buyerId === requester.userId;
 
-  if (!canAccess) {
-    throw new ApiError(
-      HttpStatusCode.Forbidden,
-      'You cannot access this order support chat',
-      traceId
-    );
+  if (requester.role === USER_ROLE.admin || isBuyer) return;
+
+  if (requester.role === USER_ROLE.agent) {
+    if (!buyerId) {
+      throw new ApiError(
+        HttpStatusCode.BadRequest,
+        'Order has no customer',
+        traceId
+      );
+    }
+    await assertAgentAssignedToCustomer(traceId, requester.userId, buyerId);
+    return;
   }
+
+  throw new ApiError(
+    HttpStatusCode.Forbidden,
+    'You cannot access this order support chat',
+    traceId
+  );
 };
 
 const DIRECT_CHAT_ROLES = [
@@ -201,10 +203,19 @@ export const assertChatAccess = async (
   chatId: string,
   requester: TChatRequester
 ) => {
-  const isAdmin = requester.role === USER_ROLE.admin;
-  const isParticipant = await isChatParticipant(chatId, requester.userId);
+  if (requester.role === USER_ROLE.admin) return;
 
-  if (!isAdmin && !isParticipant) {
+  if (requester.role === USER_ROLE.agent) {
+    const customerId = await getCustomerIdForChat(chatId);
+    if (!customerId) {
+      throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this chat', traceId);
+    }
+    await assertAgentAssignedToCustomer(traceId, requester.userId, customerId);
+    return;
+  }
+
+  const isParticipant = await isChatParticipant(chatId, requester.userId);
+  if (!isParticipant) {
     throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this chat', traceId);
   }
 };
@@ -424,9 +435,12 @@ export const createAgentSupportChat = async (userId: string, type: IChatType) =>
       order: null,
       status: CHAT_STATUS.active,
     }));
-  const agentIds = await getActiveAgentIds();
 
-  await syncChatParticipants(chat._id, [userId, ...agentIds]);
+  const agentId = await resolveOrAssignAgentForCustomer(userId);
+  const participants = agentId ? [userId, agentId] : [userId];
+  await syncChatParticipants(chat._id, participants);
+  await pruneChatParticipantsExcept(chat._id, participants);
+
   const populatedChat = await getPopulatedChatById(chat._id);
   return attachParticipantsToChat(populatedChat);
 };
@@ -437,7 +451,7 @@ export const createOrderSupportChat = async (
   orderId: string
 ) => {
   const order = await getChatOrderOrThrow(traceId, orderId);
-  assertOrderSupportAccess(traceId, order, requester);
+  await assertOrderSupportAccess(traceId, order, requester);
 
   const buyerId = order.user?.toString();
   if (!buyerId) {
@@ -445,7 +459,10 @@ export const createOrderSupportChat = async (
   }
 
   const chat = await upsertOrderChat(orderId, CHAT_TYPES.order_support);
-  await syncChatParticipants(chat._id, [buyerId, ...(await getActiveAgentIds())]);
+  const agentId = await resolveOrAssignAgentForCustomer(buyerId);
+  const participants = agentId ? [buyerId, agentId] : [buyerId];
+  await syncChatParticipants(chat._id, participants);
+  await pruneChatParticipantsExcept(chat._id, participants);
   return attachParticipantsToChat(chat);
 };
 

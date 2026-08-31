@@ -85,12 +85,26 @@ const getChatByUserId = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const getAgentCustomers = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await ChatService.getAgentCustomers(traceId, req.user);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Agent customers fetched successfully',
+    data,
+    traceId,
+  });
+});
+
 export const ChatController = {
   createChat,
   getMyChatList,
   getChatId,
   getChatOrderById,
   getChatByUserId,
+  getAgentCustomers,
 };
 
 

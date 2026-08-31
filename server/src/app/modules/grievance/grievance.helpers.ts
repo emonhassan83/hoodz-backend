@@ -8,6 +8,7 @@ import {
 import { IGrievance } from '@/app/modules/grievance/grievance.interface';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
 import { Orders } from '@/app/modules/orders/orders.model';
+import { getAssignedCustomerIds } from '@/app/modules/supportAssignment/supportAssignment.helpers';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { sendNotificationViaQueue } from '@/app/utils/notification-queue.service';
 
@@ -40,19 +41,30 @@ export const getUserOrderForGrievanceOrThrow = async (
 };
 
 /** Checks whether requester can view/mutate a grievance. */
-export const assertGrievanceAccess = (
+export const assertGrievanceAccess = async (
   traceId: string,
   grievance: Pick<IGrievance, 'user'>,
   requester: { userId: string; role: string },
   mutate = false
 ) => {
-  const isSupport = [USER_ROLE.admin, USER_ROLE.agent].includes(
-    requester.role as any
-  );
-  const isOwner =
-    String((grievance.user as any)?._id ?? grievance.user) === requester.userId;
+  const customerId = String((grievance.user as any)?._id ?? grievance.user);
+  const isOwner = customerId === requester.userId;
 
-  if (isSupport || (!mutate && isOwner)) return;
+  if (requester.role === USER_ROLE.admin) return;
+
+  if (requester.role === USER_ROLE.agent) {
+    const assignedCustomers = await getAssignedCustomerIds(requester.userId);
+    if (!assignedCustomers.includes(customerId)) {
+      throw new ApiError(
+        HttpStatusCode.Forbidden,
+        'You are not allowed to access this grievance',
+        traceId
+      );
+    }
+    return;
+  }
+
+  if (!mutate && isOwner) return;
 
   throw new ApiError(
     HttpStatusCode.Forbidden,

@@ -21,6 +21,8 @@ import { Orders } from '@/app/modules/orders/orders.model';
 import { PAYMENT_METHOD } from '@/app/modules/payment/payment.constant';
 import { Payment } from '@/app/modules/payment/payment.model';
 import { User } from '@/app/modules/user/user.model';
+import { calculateDistanceKm } from '@/app/modules/user/user.helpers';
+import { getPickupToDestinationDistanceKm } from '@/app/modules/job/job.helpers';
 import { sendNotificationViaQueue } from '@/app/utils/notification-queue.service';
 import {
   TCheckoutVoucherQuote,
@@ -101,9 +103,117 @@ export const normalizeBillingDeliveryLocation = (
 };
 
 type TDeliveryChargeSetting = {
-  state: string;
-  regularDeliveryCharge: number;
-  instantDeliveryCharge: number;
+  regularDeliveryChargePerKm: number;
+  instantDeliveryChargePerKm: number;
+};
+
+const toDeliveryCoordinate = (
+  billingDetails: TCreateOrderPayload['orderData']['billingDetails']
+) => {
+  const location = billingDetails.deliveryLocation;
+  const latitude = location?.latitude;
+  const longitude = location?.longitude;
+  if (latitude === undefined || longitude === undefined) {
+    return null;
+  }
+  return { latitude, longitude };
+};
+
+/** Returns per-km delivery rates from admin settings. */
+export const getDeliveryChargeRatesFromSettingsOrThrow = async (
+  traceId: string
+) => {
+  const setting = await Setting.findOne({
+    key: 'deliveryCharge',
+    vendor: null,
+  }).lean();
+
+  const rates = setting?.value as TDeliveryChargeSetting | undefined;
+  if (
+    !rates ||
+    typeof rates.regularDeliveryChargePerKm !== 'number' ||
+    typeof rates.instantDeliveryChargePerKm !== 'number'
+  ) {
+    throw new ApiError(
+      HttpStatusCode.NotFound,
+      'Delivery charge settings are not configured',
+      traceId
+    );
+  }
+
+  return rates;
+};
+
+/** Calculates per-vendor delivery charges from shop location to delivery point. */
+export const getDeliveryChargesForCheckoutOrThrow = async (
+  traceId: string,
+  deliveryType: TCreateOrderPayload['orderData']['deliveryType'],
+  billingDetails: TCreateOrderPayload['orderData']['billingDetails'],
+  vendorIds: string[]
+) => {
+  const destination = toDeliveryCoordinate(billingDetails);
+  if (!destination) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Delivery location is required',
+      traceId
+    );
+  }
+
+  const rates = await getDeliveryChargeRatesFromSettingsOrThrow(traceId);
+  const perKmRate =
+    deliveryType === DELIVERY_TYPE.instant
+      ? rates.instantDeliveryChargePerKm
+      : rates.regularDeliveryChargePerKm;
+
+  const vendors = await User.find({
+    _id: { $in: vendorIds },
+    role: USER_ROLE.vendor,
+    isDeleted: false,
+  })
+    .select('_id location')
+    .lean();
+  const vendorById = new Map(vendors.map((vendor) => [vendor._id.toString(), vendor]));
+
+  return Promise.all(
+    vendorIds.map(async (vendorId) => {
+      const vendor = vendorById.get(vendorId);
+      if (!vendor) {
+        throw new ApiError(HttpStatusCode.NotFound, 'Vendor not found', traceId);
+      }
+
+      const shopCoordinates = vendor.location?.coordinates;
+      const [shopLongitude, shopLatitude] = shopCoordinates ?? [];
+      if (
+        shopLatitude === undefined ||
+        shopLongitude === undefined ||
+        (shopLatitude === 0 && shopLongitude === 0)
+      ) {
+        throw new ApiError(
+          HttpStatusCode.BadRequest,
+          'Vendor shop location is not configured',
+          traceId
+        );
+      }
+
+      const googleDistanceKm = await getPickupToDestinationDistanceKm(
+        vendor.location ?? undefined,
+        {
+          coordinates: [destination.longitude, destination.latitude],
+        }
+      );
+      const distanceKm =
+        googleDistanceKm ??
+        Number(
+          calculateDistanceKm(
+            { latitude: shopLatitude, longitude: shopLongitude },
+            destination
+          ).toFixed(2)
+        );
+
+      return Number((distanceKm * perKmRate).toFixed(2));
+    })
+  );
 };
 
 /** Groups cart items by product vendor/author for multi-vendor checkout. */
@@ -282,40 +392,6 @@ export const consumeCheckoutVoucher = async (
   await createVoucherLog(userId, quote.voucherId, session);
 };
 
-/** Returns delivery charge from admin settings by city/state and delivery type. */
-export const getDeliveryChargeFromSettingsOrThrow = async (
-  traceId: string,
-  city: string | null | undefined,
-  deliveryType: TCreateOrderPayload['orderData']['deliveryType']
-) => {
-  if (!city) {
-    throw new ApiError(HttpStatusCode.BadRequest, 'Billing city is required', traceId);
-  }
-
-  const setting = await Setting.findOne({
-    key: 'deliveryCharge',
-    vendor: null,
-  }).lean();
-
-  const deliveryCharges = Array.isArray(setting?.value)
-    ? (setting.value as TDeliveryChargeSetting[])
-    : [];
-  const matchedState = deliveryCharges.find(
-    (item) => item.state.toLowerCase() === city.toLowerCase()
-  );
-
-  if (!matchedState) {
-    throw new ApiError(
-      HttpStatusCode.NotFound,
-      'Delivery charge is not available for this city',
-      traceId
-    );
-  }
-
-  return deliveryType === DELIVERY_TYPE.instant
-    ? matchedState.instantDeliveryCharge
-    : matchedState.regularDeliveryCharge;
-};
 
 /** Resolves frontend checkout items into backend-priced, vendor-aware order items. */
 export const resolveCheckoutItemsOrThrow = async (
@@ -1043,14 +1119,14 @@ export const buildCheckoutQuote = async (
 ) => {
   const checkoutItems = await resolveCheckoutItemsOrThrow(traceId, payload.items);
   const groupedItems = [...groupCartItemsByAuthor(checkoutItems).entries()];
-  const deliveryCharge = await getDeliveryChargeFromSettingsOrThrow(
+  const deliveryCharges = await getDeliveryChargesForCheckoutOrThrow(
     traceId,
-    payload.orderData.billingDetails.city,
-    payload.orderData.deliveryType
+    payload.orderData.deliveryType,
+    payload.orderData.billingDetails,
+    groupedItems.map(([authorId]) => authorId)
   );
-  const deliveryCharges = distributeDeliveryCharge(
-    deliveryCharge,
-    groupedItems.length
+  const deliveryCharge = Number(
+    deliveryCharges.reduce((total, charge) => total + charge, 0).toFixed(2)
   );
   const amount = getBasketSubtotal(checkoutItems);
   const voucherQuote = await applyCheckoutVoucherOrThrow(
@@ -1071,16 +1147,20 @@ export const buildCheckoutQuote = async (
     amount,
     Math.min(getCoinEligibleSubtotal(checkoutItems), remainingAfterVoucher)
   );
+  const coinValueEgp =
+    redemption.redeemCoins > 0
+      ? redemption.coinDiscount / redemption.redeemCoins
+      : 0;
   const coinDiscounts = distributeCoinDiscount(
     redemption.redeemCoins,
     groupedItems
-  ).map((coinDiscount, index) => {
+  ).map((redeemedCoins, index) => {
     const orderAmount = Number(
       groupedItems[index][1].reduce((total, item) => total + item.totalPrice, 0).toFixed(2)
     );
     const voucherDiscount = voucherQuote.perOrderDiscounts[index] ?? 0;
     return Math.min(
-      coinDiscount,
+      Number((redeemedCoins * coinValueEgp).toFixed(2)),
       Math.max(0, Number((orderAmount - voucherDiscount).toFixed(2)))
     );
   });

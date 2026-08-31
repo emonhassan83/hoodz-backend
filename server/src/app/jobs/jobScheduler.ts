@@ -2,8 +2,10 @@ import { startCoinLifecycleJob } from '@/app/jobs/coinLifecycle.job';
 import { startHealthHeartbeatJob } from '@/app/jobs/healthHeartbeat.job';
 import { startRiderLocationPersistJob } from '@/app/jobs/riderLocationPersist.job';
 import { startRiderMatchJob } from '@/app/jobs/riderMatch.job';
+import { startSupportAssignmentJob } from '@/app/jobs/supportAssignment.job';
 
 let jobs: any[] = [];
+let supportBackfillDone = false;
 
 /** Imports and starts every cron job from this root scheduler. */
 export const startCronJobs = async () => {
@@ -16,6 +18,18 @@ export const startCronJobs = async () => {
     jobs.push(startCoinLifecycleJob(cron));
     jobs.push(startRiderMatchJob(cron));
     jobs.push(startRiderLocationPersistJob(cron));
+    jobs.push(startSupportAssignmentJob(cron));
+
+    if (!supportBackfillDone) {
+      const { backfillSupportAssignmentsFromChats } = await import(
+        '@/app/modules/supportAssignment/supportAssignment.helpers'
+      );
+      const result = await backfillSupportAssignmentsFromChats();
+      supportBackfillDone = true;
+      console.log(
+        `⏰ [Cron] Support assignment backfill processed=${result.processed}`
+      );
+    }
 
     console.log(`⏰ [Cron] ✓ ${jobs.length} cron schedules active`);
   } catch (error) {

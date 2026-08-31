@@ -1,13 +1,15 @@
 import crypto from 'node:crypto';
 
 import axios, { HttpStatusCode } from 'axios';
+import dayjs from 'dayjs';
+import timezone from 'dayjs/plugin/timezone';
+import utc from 'dayjs/plugin/utc';
 import mongoose from 'mongoose';
 
 import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
 import { Product } from '@/app/modules/product/product.model';
-import { Setting } from '@/app/modules/settings/settings.model';
 import { upsertShopToTypesense } from '@/app/modules/search/search.typesense';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import {
@@ -27,6 +29,9 @@ import {
 } from '@/app/modules/user/user.types';
 import { sendBothNotificationViaQueue } from '@/app/utils/notification-queue.service';
 import { getEmailQueueInstance } from '@/app/utils/queueHelper';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // ─── Lean lookups — no throw, callers decide ───────────────────────────────
 
@@ -173,34 +178,11 @@ export const getUserDeliveryCoordinates = (user?: {
   return null;
 };
 
-export const assertDeliveryCityAllowed = async (
-  traceId: string,
-  city: string
-) => {
-  const setting = await Setting.findOne({
-    key: 'deliveryCharge',
-    vendor: null,
-  }).lean();
-  const deliveryCharges = Array.isArray(setting?.value) ? setting.value : [];
-  const matched = deliveryCharges.some(
-    (item: { state?: string }) =>
-      item.state?.toLowerCase() === city.trim().toLowerCase()
-  );
-  if (!matched) {
-    throw new ApiError(
-      HttpStatusCode.BadRequest,
-      'Delivery is not available for this city',
-      traceId
-    );
-  }
-};
-
 export const normalizeDeliveryAddress = async (
-  traceId: string,
+  _traceId: string,
   payload: TUpdateDeliveryLocationPayload
 ): Promise<IUserDeliveryAddress> => {
   const [longitude, latitude] = payload.location.coordinates;
-  await assertDeliveryCityAllowed(traceId, payload.city);
 
   return {
     name: payload.name.trim(),
@@ -597,4 +579,37 @@ export const notifyVendorPayoutCompleted = async (payload: {
     });
 };
 
+const HH_MM_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+const parseScheduleMinutes = (time: string) => {
+  const match = time.match(HH_MM_PATTERN);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+};
+
+/** Returns whether an agent is inside their daily schedule window. */
+export const isAgentOnSchedule = (agent: {
+  agentSchedule?: { startTime?: string | null; endTime?: string | null } | null;
+  timeZone?: string | null;
+}) => {
+  const startTime = agent.agentSchedule?.startTime?.trim();
+  const endTime = agent.agentSchedule?.endTime?.trim();
+  if (!startTime || !endTime) return false;
+
+  const startMinutes = parseScheduleMinutes(startTime);
+  const endMinutes = parseScheduleMinutes(endTime);
+  if (startMinutes === null || endMinutes === null) return false;
+
+  const tz = agent.timeZone?.trim() || 'UTC';
+  const now = dayjs().tz(tz);
+  const currentMinutes = now.hour() * 60 + now.minute();
+
+  if (startMinutes === endMinutes) return false;
+
+  if (startMinutes < endMinutes) {
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  }
+
+  return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+};
 

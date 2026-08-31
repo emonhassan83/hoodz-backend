@@ -22,6 +22,7 @@ import {
   TGrievanceRequester,
   TResolveGrievancePayload,
 } from '@/app/modules/grievance/grievance.types';
+import { resolveOrAssignAgentForCustomer, getAssignedCustomerIds } from '@/app/modules/supportAssignment/supportAssignment.helpers';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 
 const grievanceListPopulate = [
@@ -69,6 +70,8 @@ const createGrievance = async (
     status: GRIEVANCE_STATUS.under_review,
   });
 
+  await resolveOrAssignAgentForCustomer(userId);
+
   const created = await Grievance.findById(grievance._id)
     .populate(grievanceDetailPopulate)
     .select('-__v')
@@ -82,8 +85,12 @@ const getAllGrievances = async (
   query: Record<string, unknown>,
   requester: TGrievanceRequester
 ) => {
-  const filter =
-    requester.role === USER_ROLE.user ? { user: requester.userId } : {};
+  const filter: Record<string, unknown> =
+    requester.role === USER_ROLE.user
+      ? { user: requester.userId }
+      : requester.role === USER_ROLE.agent
+        ? { user: { $in: await getAssignedCustomerIds(requester.userId) } }
+        : {};
 
   const grievanceQuery = new QueryBuilder(
     Grievance.find(filter)
@@ -119,7 +126,7 @@ const getAGrievance = async (
     .select('-__v')
     .lean();
   assertGrievanceExists(grievance, traceId);
-  assertGrievanceAccess(traceId, grievance as any, requester);
+  await assertGrievanceAccess(traceId, grievance as any, requester);
 
   return formatGrievanceDetails(grievance as Record<string, any>);
 };
@@ -133,7 +140,7 @@ const resolveGrievance = async (
 ) => {
   const grievance = await Grievance.findById(grievanceId);
   assertGrievanceExists(grievance, traceId);
-  assertGrievanceAccess(traceId, grievance!, requester, true);
+  await assertGrievanceAccess(traceId, grievance!, requester, true);
   assertGrievanceStatusTransition(traceId, grievance!.status, payload.status);
   assertResolutionPayload(traceId, payload);
 
@@ -171,7 +178,7 @@ const deleteGrievance = async (
 ) => {
   const grievance = await Grievance.findById(grievanceId);
   assertGrievanceExists(grievance, traceId);
-  assertGrievanceAccess(traceId, grievance!, requester, true);
+  await assertGrievanceAccess(traceId, grievance!, requester, true);
 
   return Grievance.findByIdAndDelete(grievanceId).select('-__v');
 };

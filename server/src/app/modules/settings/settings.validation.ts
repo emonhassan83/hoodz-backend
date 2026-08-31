@@ -40,15 +40,10 @@ const timeValueToMinutes = (value?: z.infer<typeof timeValueSchema>) => {
   return value.time * multipliers[value.unit];
 };
 
-const deliveryChargeSchema = z
-  .array(
-    z.object({
-      state: z.string().trim().min(1, 'State is required'),
-      regularDeliveryCharge: z.number().nonnegative(),
-      instantDeliveryCharge: z.number().nonnegative(),
-    })
-  )
-  .min(1, 'At least one delivery charge is required');
+const deliveryChargeSchema = z.object({
+  regularDeliveryChargePerKm: z.number().nonnegative(),
+  instantDeliveryChargePerKm: z.number().nonnegative(),
+});
 
 const fawryAccountSchema = z.object({
   fawryRefCode: z.string().trim().min(1),
@@ -144,6 +139,7 @@ export const updateGeneralsZodSchema = z.object({
       timezone: z.string().trim().min(1).optional(),
       riderMatchIntervalSeconds: z.coerce.number().int().positive().optional(),
       riderMatchMaxAttempts: z.coerce.number().int().positive().optional(),
+      coinsPerEgp: z.coerce.number().positive().optional(),
     })
     .refine((data) => Object.keys(data).length > 0, {
       message: 'At least one general setting value must be provided',

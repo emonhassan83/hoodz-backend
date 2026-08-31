@@ -83,6 +83,10 @@ const userSchema = new Schema<IUser, IUserModal>(
     // deliveryTime: { type: String, default: null },
     // deliveryZone: { type: [String], default: [] },
     timeZone: { type: String, default: 'UTC' },
+    agentSchedule: {
+      startTime: { type: String, default: null, trim: true },
+      endTime: { type: String, default: null, trim: true },
+    },
     role: {
       type: String,
       enum: Object.values(USER_ROLE),

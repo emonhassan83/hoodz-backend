@@ -103,16 +103,28 @@ const getSettingGenerals = async (traceId: string, vendorId: string) => {
 
   const cacheKey = REDIS_KEYS.SETTINGS_GENERALS(vendorId);
   const cached = await getCache<TGeneralSettings>(cacheKey);
-  if (hasAllKeys(cached, GENERAL_KEYS)) return cached;
+  if (hasAllKeys(cached, GENERAL_KEYS)) {
+    const platformSettings = await getAdminSettings();
+    return {
+      ...cached,
+      coinsPerEgp: platformSettings.coinsPerEgp ?? null,
+    };
+  }
 
-  const settings = await Setting.find({
-    key: { $in: GENERAL_KEYS },
-    vendor: vendorId,
-  })
-    .select('key value -_id')
-    .lean();
+  const [settings, platformSettings] = await Promise.all([
+    Setting.find({
+      key: { $in: GENERAL_KEYS },
+      vendor: vendorId,
+    })
+      .select('key value -_id')
+      .lean(),
+    getAdminSettings(),
+  ]);
 
-  const generalSettings = buildVendorGenerals(settings);
+  const generalSettings = {
+    ...buildVendorGenerals(settings),
+    coinsPerEgp: platformSettings.coinsPerEgp ?? null,
+  };
 
   await setCache(cacheKey, generalSettings);
   return generalSettings;

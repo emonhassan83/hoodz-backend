@@ -22,6 +22,24 @@ export const syncChatParticipants = async (
   );
 };
 
+/** Deactivates participants not in the allowed list for a chat. */
+export const pruneChatParticipantsExcept = async (
+  chatId: Types.ObjectId | string,
+  allowedUserIds: string[]
+) => {
+  const allowed = [...new Set(allowedUserIds.filter(Boolean))];
+  if (!allowed.length) return;
+
+  await Participant.updateMany(
+    {
+      chat: chatId,
+      user: { $nin: allowed },
+      status: PARTICIPANT_STATUS.active,
+    },
+    { status: PARTICIPANT_STATUS.blocked }
+  );
+};
+
 /** Returns chat ids where the user is an active participant. */
 export const getMyParticipantChatIds = async (userId: string) => {
   const participants = await Participant.find({

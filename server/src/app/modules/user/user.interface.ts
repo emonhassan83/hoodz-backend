@@ -17,6 +17,11 @@ export type IUserDeliveryAddress = {
   country: string;
 };
 
+export type IAgentSchedule = {
+  startTime: string;
+  endTime: string;
+};
+
 export interface IUser extends Document {
   _id: Types.ObjectId
   id: string
@@ -43,6 +48,7 @@ export interface IUser extends Document {
   lastAvailable?: IGeoLocation | null;
   lastAvailableAt?: Date | null;
   timeZone: string;
+  agentSchedule?: IAgentSchedule | null;
   role: IUserRole;
 
   registerWith: string

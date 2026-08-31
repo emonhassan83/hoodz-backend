@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 
 import { getTraceId } from '@/app/configs/requestContext.configs';
 import { UserService } from '@/app/modules/user/user.services';
+import { TUpdateAgentSchedulePayload } from '@/app/modules/user/user.types';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
 // ─── Read ──────────────────────────────────────────────────────────────────
@@ -120,6 +121,29 @@ const inviteAgent = asyncHandler(async (req: Request, res: Response) => {
     success: true,
     statusCode: 201,
     message: 'Agent invited successfully',
+    data,
+    traceId,
+  });
+});
+
+const updateAgentSchedule = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const body = req.body as { startTime: string | null; endTime: string | null };
+  const payload: TUpdateAgentSchedulePayload =
+    body.startTime === null && body.endTime === null
+      ? null
+      : { startTime: body.startTime as string, endTime: body.endTime as string };
+
+  const data = await UserService.updateAgentSchedule(
+    traceId,
+    req.params.agentId as string,
+    payload
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Agent schedule updated successfully',
     data,
     traceId,
   });
@@ -274,6 +298,7 @@ export const UserControllers = {
   getShopDetails,
   inviteVendor,
   inviteAgent,
+  updateAgentSchedule,
   applyReferralCodeToUser,
   payVendor,
   changedEmail,

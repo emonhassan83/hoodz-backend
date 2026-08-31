@@ -22,6 +22,7 @@ export const ADMIN_SETTING_KEYS = [
 export const PLATFORM_GENERAL_KEYS = [
   'riderMatchIntervalSeconds',
   'riderMatchMaxAttempts',
+  'coinsPerEgp',
 ] as const;
 
 export const GENERAL_KEYS = [

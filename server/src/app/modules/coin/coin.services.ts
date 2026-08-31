@@ -11,6 +11,7 @@ import {
   COIN_REDEMPTION_MIN_BASKET_SUBTOTAL_EGP,
   COIN_REVIEW_MONTHLY_CAP,
   COIN_REWARD_AMOUNT,
+  DEFAULT_COINS_PER_EGP,
 } from '@/app/constant';
 import ApiError from '@/app/errors/ApiError';
 import {
@@ -37,13 +38,23 @@ import { CoinAccount, CoinTransaction } from '@/app/modules/coin/coin.model';
 import { TCoinReferenceType, TReferenceId } from '@/app/modules/coin/coin.types';
 import { PAYMENT_STATUS } from '@/app/modules/orders/orders.constant';
 import { Orders } from '@/app/modules/orders/orders.model';
+import { SettingService } from '@/app/modules/settings/settings.services';
 import { User } from '@/app/modules/user/user.model';
+
+const getCoinsPerEgp = async () => {
+  const platformSettings = await SettingService.getAdminSettings();
+  const coinsPerEgp = Number(platformSettings.coinsPerEgp);
+  return Number.isFinite(coinsPerEgp) && coinsPerEgp > 0
+    ? coinsPerEgp
+    : DEFAULT_COINS_PER_EGP;
+};
 
 const getSummary = async (userId: string) => {
   await expireOldCoins(userId);
-  const [account, stats] = await Promise.all([
+  const [account, stats, coinsPerEgp] = await Promise.all([
     getOrCreateAccount(userId),
     getActiveCoinStats(userId),
+    getCoinsPerEgp(),
   ]);
 
   if (account && account.balance !== stats.balance) {
@@ -57,7 +68,8 @@ const getSummary = async (userId: string) => {
     nextExpiryAt: stats.nextExpiryAt,
     expiringCoins: stats.expiringCoins,
     redemption: {
-      coinValueEgp: 1,
+      coinsPerEgp,
+      coinValueEgp: Number((1 / coinsPerEgp).toFixed(4)),
       minBalance: COIN_REDEMPTION_MIN_BALANCE,
       minBasketSubtotal: COIN_REDEMPTION_MIN_BASKET_SUBTOTAL_EGP,
       maxCheckoutPercent: COIN_REDEMPTION_MAX_SUBTOTAL_PERCENT,
@@ -205,12 +217,16 @@ const getRedemptionPreview = async (
   }
 
   await expireOldCoins(userId);
-  const stats = await getActiveCoinStats(userId);
+  const [stats, coinsPerEgp] = await Promise.all([
+    getActiveCoinStats(userId),
+    getCoinsPerEgp(),
+  ]);
   const availableCoins = stats.balance;
+  const coinValueEgp = 1 / coinsPerEgp;
   const maxCoinsByBasket = Math.floor(
-    (basketSubtotal * COIN_REDEMPTION_MAX_SUBTOTAL_PERCENT) / 100
+    (basketSubtotal * COIN_REDEMPTION_MAX_SUBTOTAL_PERCENT) / 100 / coinValueEgp
   );
-  const maxCoinsByEligibleSubtotal = Math.floor(eligibleSubtotal);
+  const maxCoinsByEligibleSubtotal = Math.floor(eligibleSubtotal / coinValueEgp);
   const maxRedeemableCoins = Math.min(
     availableCoins,
     maxCoinsByBasket,
@@ -259,7 +275,7 @@ const getRedemptionPreview = async (
 
   return {
     redeemCoins: requestedCoins,
-    coinDiscount: requestedCoins,
+    coinDiscount: Number((requestedCoins * coinValueEgp).toFixed(2)),
   };
 };
 

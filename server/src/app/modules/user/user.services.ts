@@ -47,9 +47,11 @@ import { User } from '@/app/modules/user/user.model';
 import {
   TChangeEmailPayload,
   TInvitePlatformUserPayload,
+  TInviteAgentPayload,
   TNearbyShopsQuery,
   TPayVendorPayload,
   TSetSecurityCodePayload,
+  TUpdateAgentSchedulePayload,
   TUpdateDeliveryLocationPayload,
   TUpdateLocationPayload,
   TUpdateUserStatusPayload,
@@ -594,16 +596,25 @@ const inviteVendor = async (
   );
 
 /** Invites an agent with the agent-specific email template. */
-const inviteAgent = async (
-  traceId: string,
-  payload: TInvitePlatformUserPayload
-) =>
-  createInvitedPlatformUser(
+const inviteAgent = async (traceId: string, payload: TInviteAgentPayload) => {
+  const { agentSchedule, ...invitePayload } = payload;
+  const user = await createInvitedPlatformUser(
     traceId,
-    payload,
+    invitePayload,
     USER_ROLE.agent,
     'send-agent-invite-email'
   );
+
+  if (agentSchedule) {
+    user.agentSchedule = {
+      startTime: agentSchedule.startTime,
+      endTime: agentSchedule.endTime,
+    };
+    await user.save();
+  }
+
+  return user;
+};
 
 // ─── Delete ────────────────────────────────────────────────────────────────
 
@@ -808,6 +819,34 @@ const payVendor = async (
   }
 };
 
+/** Admin sets or clears an agent's daily support schedule. */
+const updateAgentSchedule = async (
+  traceId: string,
+  agentId: string,
+  payload: TUpdateAgentSchedulePayload
+) => {
+  const agent = await User.findOne({
+    _id: agentId,
+    role: USER_ROLE.agent,
+    isDeleted: false,
+  });
+  if (!agent) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Agent not found', traceId);
+  }
+
+  if (payload === null || (payload.startTime === null && payload.endTime === null)) {
+    agent.agentSchedule = null;
+  } else {
+    agent.agentSchedule = {
+      startTime: payload.startTime,
+      endTime: payload.endTime,
+    };
+  }
+
+  await agent.save();
+  return agent.toObject();
+};
+
 export const UserService = {
   getAllUsersFromDB,
   getSingleUser,
@@ -823,6 +862,7 @@ export const UserService = {
   verifySecurityCode,
   inviteVendor,
   inviteAgent,
+  updateAgentSchedule,
   applyReferralCodeToUser,
   payVendor,
   deleteUserProfile,

@@ -87,6 +87,11 @@ const verifySecurityCodeValidationSchema = z.object({
   }),
 });
 
+const timeStringSchema = z
+  .string()
+  .trim()
+  .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Time must be HH:mm (24h)');
+
 const invitePlatformUserValidationSchema = z.object({
   body: z.object({
     name: z.string().min(1, { message: 'Name is required.' }),
@@ -96,6 +101,17 @@ const invitePlatformUserValidationSchema = z.object({
   }),
 });
 
+const inviteAgentValidationSchema = z.object({
+  body: invitePlatformUserValidationSchema.shape.body.extend({
+    agentSchedule: z
+      .object({
+        startTime: timeStringSchema,
+        endTime: timeStringSchema,
+      })
+      .nullable()
+      .optional(),
+  }),
+});
 
 const applyReferralCodeValidationSchema = z.object({
   body: z.object({
@@ -162,6 +178,28 @@ const payVendorValidationSchema = z.object({
   }),
 });
 
+const updateAgentScheduleValidationSchema = z.object({
+  params: z.object({
+    agentId: z.string().min(1, 'Agent id is required'),
+  }),
+  body: z.union([
+    z.object({
+      startTime: timeStringSchema,
+      endTime: timeStringSchema,
+    }),
+    z.object({
+      startTime: z.null(),
+      endTime: z.null(),
+    }),
+  ]),
+});
+
+const agentIdParamValidationSchema = z.object({
+  params: z.object({
+    agentId: z.string().min(1, 'Agent id is required'),
+  }),
+});
+
 export const UserValidation = {
   updateUserValidationSchema,
   changeStatusValidationSchema,
@@ -170,12 +208,14 @@ export const UserValidation = {
   securityCodeValidationSchema,
   verifySecurityCodeValidationSchema,
   inviteVendorValidationSchema: invitePlatformUserValidationSchema,
-  inviteAgentValidationSchema: invitePlatformUserValidationSchema,
+  inviteAgentValidationSchema,
   applyReferralCodeValidationSchema,
   changeEmailZodSchema,
   nearbyShopsValidationSchema,
   shopDetailsValidationSchema,
   payVendorValidationSchema,
+  updateAgentScheduleValidationSchema,
+  agentIdParamValidationSchema,
 };
 
 

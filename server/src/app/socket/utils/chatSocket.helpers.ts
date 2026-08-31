@@ -6,6 +6,10 @@ import { Messages } from '@/app/modules/messages/messages.model';
 import { getPopulatedMessageById } from '@/app/modules/messages/messages.helpers';
 import { PARTICIPANT_STATUS } from '@/app/modules/participant/participant.constant';
 import { Participant } from '@/app/modules/participant/participant.model';
+import {
+  getAssignedAgentId,
+  getCustomerIdForChat,
+} from '@/app/modules/supportAssignment/supportAssignment.helpers';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import { TSocketRequester } from '@/app/socket/interface/chatSocket.interface';
@@ -42,7 +46,26 @@ export const assertSocketChatAccess = async (
   }
 
   const isAdmin = role === USER_ROLE.admin;
-  if (!isAdmin && !participants.includes(userId)) {
+  if (isAdmin) {
+    return {
+      chat,
+      participantIds: [...new Set([...participants, userId])],
+    };
+  }
+
+  if (role === USER_ROLE.agent) {
+    const customerId = await getCustomerIdForChat(chatId);
+    const assigned = customerId ? await getAssignedAgentId(customerId) : null;
+    if (!customerId || assigned !== userId) {
+      throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this chat');
+    }
+    return {
+      chat,
+      participantIds: [...new Set([...participants, userId])],
+    };
+  }
+
+  if (!participants.includes(userId)) {
     throw new ApiError(HttpStatusCode.Forbidden, 'You cannot access this chat');
   }
 

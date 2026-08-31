@@ -3,10 +3,14 @@ import { Router } from 'express';
 import auth from '@/app/middlewares/auth';
 import { ChatController } from '@/app/modules/chat/chat.controllers';
 import { ChatValidation } from '@/app/modules/chat/chat.validation';
-import { AUTHENTICATED_ROLES } from '@/app/modules/user/user.constant';
+import { AUTHENTICATED_ROLES, USER_ROLE } from '@/app/modules/user/user.constant';
 import validateRequest from '@/app/utils/validateRequest';
 
 const router = Router();
+
+router
+  .route('/agent/customers')
+  .get(auth(USER_ROLE.agent), ChatController.getAgentCustomers);
 
 router
   .route('/')

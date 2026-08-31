@@ -25,6 +25,12 @@ import {
   getMyParticipantChatIds,
   getSharedChatIds,
 } from '@/app/modules/participant/participant.helpers';
+import {
+  countOpenGrievancesByCustomerIds,
+} from '@/app/modules/supportAssignment/supportAssignment.helpers';
+import { SupportAssignment } from '@/app/modules/supportAssignment/supportAssignment.model';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
+import { User } from '@/app/modules/user/user.model';
 
 const createChat = async (
   traceId: string,
@@ -181,7 +187,7 @@ const getChatOrderById = async (
   orderId: string
 ) => {
   const order = await getChatOrderOrThrow(traceId, orderId);
-  assertOrderSupportAccess(traceId, order, requester);
+  await assertOrderSupportAccess(traceId, order, requester);
 
   const chat = await Chat.findOne({
     order: orderId,
@@ -241,6 +247,89 @@ const getChatByUserId = async (
   return buildChatDetail(chat);
 };
 
+const getAgentCustomers = async (traceId: string, requester: TChatRequester) => {
+  if (requester.role !== USER_ROLE.agent) {
+    throw new ApiError(HttpStatusCode.Forbidden, 'Only agents can access this', traceId);
+  }
+
+  const assignments = await SupportAssignment.find({ agent: requester.userId })
+    .select('customer createdAt')
+    .lean();
+  const customerIds = assignments.map((row) => String(row.customer));
+  if (!customerIds.length) return { customers: [] };
+
+  const [customers, grievanceCounts] = await Promise.all([
+    User.find({ _id: { $in: customerIds }, isDeleted: false })
+      .select('name profileAvatar phone')
+      .lean(),
+    countOpenGrievancesByCustomerIds(customerIds),
+  ]);
+
+  const customerMap = new Map(customers.map((user) => [String(user._id), user]));
+  const chatIds = await getMyParticipantChatIds(requester.userId);
+  const supportChats = await Chat.find({
+    _id: { $in: chatIds },
+    type: { $in: [CHAT_TYPES.customer_support, CHAT_TYPES.order_support] },
+  })
+    .populate(chatPopulate)
+    .select('_id type order createdAt updatedAt')
+    .lean();
+
+  const chatsWithMeta = await attachLastMessagesToChats(
+    await attachParticipantsToChats(supportChats)
+  );
+
+  const chatsByCustomer = new Map<string, ReturnType<typeof formatChatListCard>[]>();
+  for (const chat of chatsWithMeta) {
+    const participants = (chat as any).participants ?? [];
+    const customerParticipant = participants.find(
+      (row: any) => String(row?.user?._id ?? row?.user) !== requester.userId
+    );
+    const customerId = String(
+      customerParticipant?.user?._id ?? customerParticipant?.user ?? ''
+    );
+    if (!customerId || !customerIds.includes(customerId)) continue;
+
+    const card = formatChatListCard(chat, { excludeUserId: requester.userId });
+    const existing = chatsByCustomer.get(customerId) ?? [];
+    chatsByCustomer.set(customerId, [...existing, card]);
+  }
+
+  const grouped = assignments
+    .map((assignment) => {
+      const customerId = String(assignment.customer);
+      const customer = customerMap.get(customerId);
+      if (!customer) return null;
+
+      const chats = chatsByCustomer.get(customerId) ?? [];
+      const lastMessageAt = chats.reduce<string | null>((latest, chat) => {
+        const createdAt = (chat as any).lastMessage?.createdAt;
+        if (!createdAt) return latest;
+        if (!latest || new Date(createdAt) > new Date(latest)) {
+          return String(createdAt);
+        }
+        return latest;
+      }, null);
+
+      return {
+        customer: {
+          _id: customer._id,
+          name: customer.name ?? null,
+          profileAvatar: customer.profileAvatar ?? null,
+          phone: customer.phone ?? null,
+        },
+        assignedAt: assignment.createdAt,
+        openGrievanceCount: grievanceCounts.get(customerId) ?? 0,
+        openChatCount: chats.length,
+        lastMessageAt,
+        chats,
+      };
+    })
+    .filter(Boolean);
+
+  return { customers: grouped };
+};
+
 export const ChatService = {
   createChat,
   getMyChatList,
@@ -249,4 +338,5 @@ export const ChatService = {
   getChatByUserId,
   getOrCreateAiAssistantChat,
   resolveChatIdForSend,
+  getAgentCustomers,
 };

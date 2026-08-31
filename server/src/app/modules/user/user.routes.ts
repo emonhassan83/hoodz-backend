@@ -41,6 +41,14 @@ router
     UserControllers.inviteAgent
   );
 
+router
+  .route('/agents/:agentId/schedule')
+  .patch(
+    auth(USER_ROLE.admin),
+    validateRequest(UserValidation.updateAgentScheduleValidationSchema),
+    UserControllers.updateAgentSchedule
+  );
+
 // ─── Profile ───────────────────────────────────────────────────────────────
 
 router

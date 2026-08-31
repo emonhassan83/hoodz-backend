@@ -121,6 +121,7 @@ export const COIN_REVIEW_MONTHLY_CAP = 2;
 export const COIN_REDEMPTION_MIN_BALANCE = 50;
 export const COIN_REDEMPTION_MIN_BASKET_SUBTOTAL_EGP = 500;
 export const COIN_REDEMPTION_MAX_SUBTOTAL_PERCENT = 15;
+export const DEFAULT_COINS_PER_EGP = 10;
 
 /**
  * ==============================================
