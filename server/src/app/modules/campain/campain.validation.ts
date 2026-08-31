@@ -5,8 +5,7 @@ const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
 const createCampainValidationSchema = z.object({
   body: z.object({
     title: z.string().trim().min(1, 'Title is required'),
-    banner: objectIdSchema,
-    products: z.array(objectIdSchema).optional().default([]),
+    products: z.array(objectIdSchema).min(1, 'At least one product is required'),
   }),
 });
 
@@ -17,8 +16,7 @@ const updateCampainValidationSchema = z.object({
   body: z
     .object({
       title: z.string().trim().min(1).optional(),
-      banner: objectIdSchema.optional(),
-      products: z.array(objectIdSchema).optional(),
+      products: z.array(objectIdSchema).min(1).optional(),
     })
     .refine((body) => Object.keys(body).length > 0, {
       message: 'At least one field is required',

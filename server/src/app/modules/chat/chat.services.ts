@@ -29,6 +29,7 @@ import {
   countOpenGrievancesByCustomerIds,
 } from '@/app/modules/supportAssignment/supportAssignment.helpers';
 import { SupportAssignment } from '@/app/modules/supportAssignment/supportAssignment.model';
+import { getUnreadMessageCountsByChatIds } from '@/app/modules/messages/messages.helpers';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 
@@ -136,12 +137,24 @@ const getMyChatList = async (
   const chatsWithLastMessage = await attachLastMessagesToChats(
     chatsWithParticipants
   );
+  const unreadCounts = await getUnreadMessageCountsByChatIds(
+    requester.userId,
+    chatsWithLastMessage.map((chat) => String(chat._id))
+  );
   const listOptions = { excludeUserId: requester.userId };
 
   const ofType = (type: IChatType) =>
     chatsWithLastMessage
       .filter((chat) => chat.type === type)
-      .map((chat) => formatChatListCard(chat, listOptions));
+      .map((chat) =>
+        formatChatListCard(
+          {
+            ...chat,
+            unreadMessageCount: unreadCounts.get(String(chat._id)) ?? 0,
+          },
+          listOptions
+        )
+      );
 
   if (typeFilter) {
     return {

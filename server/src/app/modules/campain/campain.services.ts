@@ -11,14 +11,13 @@ import {
   TUpdateCampainPayload,
 } from '@/app/modules/campain/campain.types';
 
-/** Creates a campaign linked to one banner. */
+/** Creates a campaign with title and products. */
 const createCampain = async (traceId: string, payload: TCampainPayload) => {
   await assertCampainReferences(traceId, payload);
 
   const campain = await Campain.create({
     title: payload.title,
-    banner: payload.banner,
-    products: payload.products ?? [],
+    products: payload.products,
   });
 
   return Campain.findById(campain._id)
@@ -30,9 +29,9 @@ const createCampain = async (traceId: string, payload: TCampainPayload) => {
 const getAllCampain = async (query: Record<string, unknown>) =>
   findCampains(query);
 
-/** Returns one campaign by banner id. */
+/** Returns one campaign by banner id (via banner.reference). */
 const getCampainByBanner = async (traceId: string, bannerId: string) => {
-  const campain = await findCampainByBanner(bannerId);
+  const campain = await findCampainByBanner(traceId, bannerId);
   assertCampainExists(campain, traceId);
   return campain;
 };

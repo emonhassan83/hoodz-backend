@@ -10,6 +10,7 @@ import {
 import { Chat } from '@/app/modules/chat/chat.model';
 import { TChatRequester } from '@/app/modules/chat/chat.types';
 import { Messages } from '@/app/modules/messages/messages.model';
+import { getUnreadChatCountForUser } from '@/app/modules/messages/messages.helpers';
 import { IOrders } from '@/app/modules/orders/orders.interface';
 import { Orders } from '@/app/modules/orders/orders.model';
 import {
@@ -156,18 +157,19 @@ export const assertSingleChatUsers = async (
 export const getUserSupportFlags = async (userId: string) => {
   const chatIds = await getMyParticipantChatIds(userId);
   if (chatIds.length === 0) {
-    return { hasCustomerSupport: false };
+    return { hasCustomerSupport: false, unreadChatCount: 0 };
   }
 
-  const hasCustomerSupport = Boolean(
-    await Chat.exists({
+  const [hasCustomerSupport, unreadChatCount] = await Promise.all([
+    Chat.exists({
       _id: { $in: chatIds },
       type: CHAT_TYPES.customer_support,
       order: null,
-    })
-  );
+    }).then(Boolean),
+    getUnreadChatCountForUser(userId, chatIds),
+  ]);
 
-  return { hasCustomerSupport };
+  return { hasCustomerSupport, unreadChatCount };
 };
 
 /** Returns whether an order already has an order_support chat. */
@@ -354,6 +356,10 @@ export const formatChatListCard = (
 
   if ('lastMessage' in chat) {
     card.lastMessage = chat.lastMessage ?? null;
+  }
+
+  if ('unreadMessageCount' in chat) {
+    card.unreadMessageCount = chat.unreadMessageCount ?? 0;
   }
 
   return card;

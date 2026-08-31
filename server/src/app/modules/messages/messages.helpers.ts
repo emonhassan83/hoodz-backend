@@ -1,9 +1,10 @@
 import { HttpStatusCode } from 'axios';
+import { Types } from 'mongoose';
 
 import ApiError from '@/app/errors/ApiError';
 import { Chat } from '@/app/modules/chat/chat.model';
 import { Messages } from '@/app/modules/messages/messages.model';
-import { isChatParticipant } from '@/app/modules/participant/participant.helpers';
+import { getMyParticipantChatIds, isChatParticipant } from '@/app/modules/participant/participant.helpers';
 import {
   assertAgentAssignedToCustomer,
   getCustomerIdForChat,
@@ -41,6 +42,76 @@ export const assertMessageChatAccess = async (
   }
 
   return chat;
+};
+
+/** Returns unread message counts per chat for a user. */
+export const getUnreadMessageCountsByChatIds = async (
+  userId: string,
+  chatIds: string[]
+) => {
+  const counts = new Map<string, number>();
+  if (!chatIds.length) return counts;
+
+  const objectIds = chatIds
+    .filter((chatId) => Types.ObjectId.isValid(chatId))
+    .map((chatId) => new Types.ObjectId(chatId));
+  if (!objectIds.length) return counts;
+
+  const rows = await Messages.aggregate<{ _id: Types.ObjectId; count: number }>([
+    {
+      $match: {
+        chat: { $in: objectIds },
+        seen: false,
+        sender: { $ne: new Types.ObjectId(userId) },
+      },
+    },
+    {
+      $group: {
+        _id: '$chat',
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  for (const row of rows) {
+    counts.set(String(row._id), row.count);
+  }
+
+  return counts;
+};
+
+/** Returns how many chats have at least one unread message for the user. */
+export const getUnreadChatCountForUser = async (
+  userId: string,
+  chatIds?: Array<Types.ObjectId | string>
+) => {
+  const ids = chatIds?.map((chatId) => String(chatId)) ?? (await getMyParticipantChatIds(userId)).map(String);
+  if (!ids.length) return 0;
+
+  const objectIds = ids
+    .filter((chatId) => Types.ObjectId.isValid(chatId))
+    .map((chatId) => new Types.ObjectId(chatId));
+  if (!objectIds.length) return 0;
+
+  const result = await Messages.aggregate<{ unreadChatCount: number }>([
+    {
+      $match: {
+        chat: { $in: objectIds },
+        seen: false,
+        sender: { $ne: new Types.ObjectId(userId) },
+      },
+    },
+    {
+      $group: {
+        _id: '$chat',
+      },
+    },
+    {
+      $count: 'unreadChatCount',
+    },
+  ]);
+
+  return result[0]?.unreadChatCount ?? 0;
 };
 
 /** Bumps chat updatedAt so the inbox list stays newest-first. */

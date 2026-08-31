@@ -41,6 +41,12 @@ const formatWishlistProduct = (product: {
   discount: number;
   discountPrice: number;
   stock: number;
+  variants?: Array<{
+    _id?: unknown;
+    size?: string | null;
+    color?: { code: string; name: string } | null;
+    quantity: number;
+  }>;
 }) => ({
   _id: product._id,
   title: product.title,
@@ -50,6 +56,7 @@ const formatWishlistProduct = (product: {
   discount: product.discount,
   discountPrice: product.discountPrice,
   stock: product.stock,
+  variants: product.variants ?? [],
 });
 
 /** Toggles a shop or product inside the user's wishlist. */
@@ -138,7 +145,7 @@ const getAll = async (userId: string) => {
     _id: { $in: productIds },
     isDeleted: false,
   })
-    .select('title banner inventoryType price discount discountPrice stock')
+    .select('title banner inventoryType price discount discountPrice stock variants')
     .lean();
 
   const productById = new Map(

@@ -9,13 +9,6 @@ const campainSchema = new Schema<ICampain, ICampainModel>(
       required: true,
       trim: true,
     },
-    banner: {
-      type: Schema.Types.ObjectId,
-      ref: 'Banner',
-      required: true,
-      unique: true,
-      index: true,
-    },
     products: {
       type: [{ type: Schema.Types.ObjectId, ref: 'Product' }],
       default: [],

@@ -8,7 +8,6 @@ import { Campain } from '@/app/modules/campain/campain.model';
 import { Product } from '@/app/modules/product/product.model';
 
 export const campainPopulate = [
-  { path: 'banner', select: 'banner reference section status type' },
   {
     path: 'products',
     select:
@@ -23,18 +22,11 @@ export const assertCampainExists = (campain: unknown, traceId: string) => {
   }
 };
 
-/** Ensures banner and products exist before create/update. */
+/** Ensures products exist before create/update. */
 export const assertCampainReferences = async (
   traceId: string,
-  payload: { banner?: string; products?: string[] }
+  payload: { products?: string[] }
 ) => {
-  if (payload.banner) {
-    const banner = await Banner.findById(payload.banner).select('_id');
-    if (!banner) {
-      throw new ApiError(HttpStatusCode.NotFound, 'Banner not found', traceId);
-    }
-  }
-
   const productIds = [...new Set(payload.products ?? [])];
   if (!productIds.length) return;
 
@@ -71,9 +63,23 @@ export const findCampains = async (query: Record<string, unknown>) => {
   return { meta, data };
 };
 
-/** Returns one campaign by banner id. */
-export const findCampainByBanner = (bannerId: string) =>
-  Campain.findOne({ banner: new Types.ObjectId(bannerId) })
+/** Returns one campaign linked to a banner via banner.reference. */
+export const findCampainByBanner = async (traceId: string, bannerId: string) => {
+  const banner = await Banner.findById(bannerId).select('reference').lean();
+  if (!banner) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Banner not found', traceId);
+  }
+
+  if (!banner.reference || !Types.ObjectId.isValid(banner.reference)) {
+    throw new ApiError(
+      HttpStatusCode.NotFound,
+      'Campaign not found for this banner',
+      traceId
+    );
+  }
+
+  return Campain.findById(banner.reference)
     .populate(campainPopulate)
     .select('-__v')
     .lean();
+};
