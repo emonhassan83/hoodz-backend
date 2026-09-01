@@ -19,7 +19,11 @@ router
 
 router
   .route('/my-products')
-  .get(auth(USER_ROLE.vendor), ProductController.getMyProducts);
+  .get(
+    auth(USER_ROLE.vendor),
+    validateRequest(ProductValidation.getMyProductsValidationSchema),
+    ProductController.getMyProducts
+  );
 
 router
   .route('/admin')

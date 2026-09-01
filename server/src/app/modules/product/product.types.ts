@@ -94,6 +94,7 @@ export type TProductFilterQuery = {
   maxDeliveryTimeMinutes?: string | number;
   maxDeliveryTime?: string | number;
   excludeStockOut?: string | boolean;
+  stockFilter?: string;
 };
 
 export type TProductViewPayload = {

@@ -4,6 +4,7 @@ import {
   COLLECTION_TYPE,
   PRODUCT_BRAND_TYPE,
   PRODUCT_INVENTORY_TYPE,
+  STOCK_FILTER,
 } from '@/app/modules/product/product.constant';
 
 const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
@@ -188,6 +189,22 @@ const searchShopProductsValidationSchema = z.object({
   }).passthrough(),
 });
 
+const getMyProductsValidationSchema = z.object({
+  query: z.object({
+    searchTerm: z.string().trim().optional(),
+    stockFilter: z
+      .enum([
+        STOCK_FILTER.low,
+        STOCK_FILTER.inStock,
+        STOCK_FILTER.outStock,
+      ])
+      .optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).optional(),
+    sort: z.string().optional(),
+  }),
+});
+
 export const ProductValidation = {
   createProductValidationSchema,
   createProductByAdminValidationSchema,
@@ -196,6 +213,7 @@ export const ProductValidation = {
   shopProductsValidationSchema,
   searchShopProductsValidationSchema,
   notifyMeValidationSchema,
+  getMyProductsValidationSchema,
 };
 
 

@@ -207,6 +207,25 @@ export const applyExcludeStockOutFilter = (
   return filter;
 };
 
+/** Applies vendor dashboard stock filter on product stock count. */
+export const applyStockFilter = (
+  filter: Record<string, unknown>,
+  query: Record<string, unknown>
+) => {
+  const stockFilter =
+    typeof query.stockFilter === 'string' ? query.stockFilter.trim() : '';
+
+  if (stockFilter === 'low') {
+    filter.stock = { $lt: 10 };
+  } else if (stockFilter === 'inStock') {
+    filter.stock = { $gt: 10 };
+  } else if (stockFilter === 'outStock') {
+    filter.stock = 0;
+  }
+
+  return filter;
+};
+
 export const getUserOrigin = async (
   traceId: string,
   userId?: string,

@@ -14,6 +14,7 @@ import {
   assertSkuAvailable,
   assertVendorExists,
   applyExcludeStockOutFilter,
+  applyStockFilter,
   buildProductListFilter,
   buildProductWritePayload,
   buildVendorProductStats,
@@ -708,7 +709,7 @@ const getMyProducts = async (
   query: Record<string, unknown>
 ) => {
   const cacheKey = REDIS_KEYS.PRODUCT_LIST(
-    `my:${vendorId}:dashboard:v4:${JSON.stringify(query)}`
+    `my:${vendorId}:dashboard:v5:${JSON.stringify(query)}`
   );
   const cached = await getCache<TMyProductsResponse>(cacheKey);
   if (cached) return cached;
@@ -717,7 +718,7 @@ const getMyProducts = async (
     vendor: vendorId,
     isDeleted: false,
   };
-  applyExcludeStockOutFilter(baseFilter, query, false);
+  applyStockFilter(baseFilter, query);
 
   const productQuery = new QueryBuilder(
     Product.find(baseFilter)

@@ -19,3 +19,9 @@ export const PRODUCT_BRAND_TYPE = {
   trending: 'trending',
   new: 'new',
 } as const;
+
+export const STOCK_FILTER = {
+  low: 'low',
+  inStock: 'inStock',
+  outStock: 'outStock',
+} as const;

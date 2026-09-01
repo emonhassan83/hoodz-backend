@@ -29,7 +29,15 @@ class QueryBuilder<T> {
     const queryObj = { ...this.query }
 
     // Remove special fields
-    const excludeFields = ['searchTerm', 'sort', 'limit', 'page', 'fields']
+    const excludeFields = [
+      'searchTerm',
+      'sort',
+      'limit',
+      'page',
+      'fields',
+      'excludeStockOut',
+      'stockFilter',
+    ]
     excludeFields.forEach((el) => delete queryObj[el])
 
     if (Object.keys(queryObj).length > 0) {
