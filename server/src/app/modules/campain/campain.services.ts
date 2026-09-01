@@ -2,6 +2,7 @@ import {
   assertCampainExists,
   assertCampainReferences,
   campainPopulate,
+  ensureCampainIndexes,
   findCampainByBanner,
   findCampains,
 } from '@/app/modules/campain/campain.helpers';
@@ -13,6 +14,7 @@ import {
 
 /** Creates a campaign with title and products. */
 const createCampain = async (traceId: string, payload: TCampainPayload) => {
+  await ensureCampainIndexes();
   await assertCampainReferences(traceId, payload);
 
   const campain = await Campain.create({

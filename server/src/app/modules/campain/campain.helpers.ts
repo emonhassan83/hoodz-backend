@@ -15,6 +15,22 @@ export const campainPopulate = [
   },
 ];
 
+/** Drops legacy banner unique index left from the old campaign schema. */
+let campainIndexesReady = false;
+
+export const ensureCampainIndexes = async () => {
+  if (campainIndexesReady) return;
+
+  const indexes = await Campain.collection.indexes();
+  const legacyBannerIndex = indexes.find((index) => index.key?.banner === 1);
+  if (legacyBannerIndex?.name) {
+    await Campain.collection.dropIndex(legacyBannerIndex.name);
+  }
+
+  await Campain.syncIndexes();
+  campainIndexesReady = true;
+};
+
 /** Throws when a campaign was not found. */
 export const assertCampainExists = (campain: unknown, traceId: string) => {
   if (!campain) {

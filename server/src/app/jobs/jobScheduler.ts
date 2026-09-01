@@ -31,6 +31,11 @@ export const startCronJobs = async () => {
       );
     }
 
+    const { ensureCampainIndexes } = await import(
+      '@/app/modules/campain/campain.helpers'
+    );
+    await ensureCampainIndexes();
+
     console.log(`⏰ [Cron] ✓ ${jobs.length} cron schedules active`);
   } catch (error) {
     console.error('⏰ [Cron] Failed to load node-cron or start jobs:', error);

@@ -91,7 +91,7 @@ export const getSectionBanners = async (section: ISectionType) => {
     section,
     status: BANNER_STATUS.active,
   })
-    .select('banner reference -_id')
+    .select('banner reference type -_id')
     .sort({ createdAt: -1 })
     .lean();
 
@@ -99,6 +99,7 @@ export const getSectionBanners = async (section: ISectionType) => {
     (item): TMetaBannerItem => ({
       banner: item.banner,
       reference: item.reference ?? null,
+      type: item.type,
     })
   );
 };
