@@ -1,4 +1,4 @@
-import axios, { HttpStatusCode } from 'axios';
+import axios, { AxiosError, HttpStatusCode, isAxiosError } from 'axios';
 
 import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
@@ -13,7 +13,35 @@ import {
   TAiProviderResult,
 } from '@/app/modules/aiAssistant/aiAssistant.types';
 
-const aiTimeoutMs = 15000;
+const aiTimeoutMs = 30000;
+
+const getGeminiErrorMessage = (error: unknown) => {
+  if (error instanceof ApiError) return error.message;
+
+  if (isAxiosError(error)) {
+    const axiosError = error as AxiosError<{
+      error?: { message?: string; status?: string; code?: number };
+    }>;
+    const apiMessage = axiosError.response?.data?.error?.message?.trim();
+
+    if (axiosError.code === 'ECONNABORTED') {
+      return 'Gemini request timed out. Please try again.';
+    }
+    if (axiosError.response?.status === 429) {
+      return 'Gemini rate limit reached. Please wait a moment and try again.';
+    }
+    if (apiMessage) return apiMessage;
+  }
+
+  if (error instanceof Error && error.message) {
+    if (error.message === 'gemini returned empty content') {
+      return 'Gemini returned an empty response. Please try again.';
+    }
+    return error.message;
+  }
+
+  return 'AI assistant is unavailable right now';
+};
 
 /** Escapes user text before using it inside MongoDB regex filters. */
 export const escapeRegex = (value: string) =>
@@ -83,7 +111,17 @@ const callGemini = async (messages: TAiChatMessage[]) => {
     }
   );
 
-  return String(response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+  const candidate = response.data?.candidates?.[0];
+  const text = String(candidate?.content?.parts?.[0]?.text || '').trim();
+
+  if (text) return text;
+
+  const finishReason = candidate?.finishReason;
+  if (finishReason && finishReason !== 'STOP') {
+    throw new Error(`Gemini blocked the response (${finishReason})`);
+  }
+
+  throw new Error('gemini returned empty content');
 };
 
 /** Completes a chat turn with Gemini. */
@@ -96,10 +134,12 @@ export const completeWithGemini = async (
     if (!content) throw new Error('gemini returned empty content');
     return { provider: AI_PROVIDER.gemini, content };
   } catch (error) {
-    const message =
-      error instanceof ApiError
-        ? error.message
-        : 'AI assistant is unavailable right now';
+    const message = getGeminiErrorMessage(error);
+    console.error('[AI Assistant] Gemini request failed:', {
+      traceId,
+      message,
+      error,
+    });
     throw new ApiError(HttpStatusCode.ServiceUnavailable, message, traceId);
   }
 };
