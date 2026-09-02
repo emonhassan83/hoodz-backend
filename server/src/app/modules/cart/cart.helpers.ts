@@ -170,6 +170,46 @@ export const assertVariantStock = (
   }
 };
 
+/** Returns unique vendor ids for products already stored in the cart. */
+export const getCartVendorIds = async (
+  cartItems: Pick<TCartItem, 'productId'>[]
+) => {
+  if (!cartItems.length) return [];
+
+  const products = await Product.find({
+    _id: { $in: cartItems.map((item) => item.productId) },
+    isDeleted: false,
+  })
+    .select('vendor')
+    .lean();
+
+  return [
+    ...new Set(
+      products
+        .map((product) => product.vendor?.toString())
+        .filter((vendorId): vendorId is string => Boolean(vendorId))
+    ),
+  ];
+};
+
+/** Blocks adding a product when the cart already contains items from another shop. */
+export const assertSingleShopCartOrThrow = async (
+  traceId: string,
+  cartItems: Pick<TCartItem, 'productId'>[],
+  nextVendorId: string
+) => {
+  const cartVendorIds = await getCartVendorIds(cartItems);
+  const vendorId = nextVendorId.toString();
+
+  if (cartVendorIds.length > 0 && !cartVendorIds.includes(vendorId)) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'You can only add products from one shop at a time. Clear your cart to shop from another store.',
+      traceId
+    );
+  }
+};
+
 const getCartItemProductId = (productId: TCartItem['productId'] | string) =>
   productId?.toString?.() ?? String(productId);
 

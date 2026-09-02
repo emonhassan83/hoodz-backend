@@ -3,8 +3,10 @@ import { HttpStatusCode } from 'axios';
 import ApiError from '@/app/errors/ApiError';
 import {
   assertCartActorExists,
+  assertSingleShopCartOrThrow,
   assertVariantStock,
   buildCartActorFilter,
+  getCartVendorIds,
   buildCartItemMatchFromItem,
   buildCartItem,
   clearCart,
@@ -50,6 +52,14 @@ const add = async (
   const existingItem = findCartItem(cart?.items ?? [], identity);
   const nextQuantity = (existingItem?.quantity ?? 0) + payload.quantity;
   assertVariantStock(traceId, variant.quantity, nextQuantity);
+
+  if (!existingItem) {
+    await assertSingleShopCartOrThrow(
+      traceId,
+      cart?.items ?? [],
+      product.vendor.toString()
+    );
+  }
 
   if (existingItem) {
     await Cart.updateOne(
@@ -286,7 +296,25 @@ const mergeGuestCart = async (guestId: string | undefined, userId: string) => {
   if (!guestItems.length) return { merged: 0 };
 
   const userItems = await getCartItemsOrEmpty(userActor);
+  let allowedVendorId = (await getCartVendorIds(userItems))[0] ?? null;
+  let mergedCount = 0;
+
   for (const guestItem of guestItems) {
+    const guestProduct = await Product.findOne({
+      _id: guestItem.productId,
+      isDeleted: false,
+    })
+      .select('vendor')
+      .lean();
+    if (!guestProduct?.vendor) continue;
+
+    const guestVendorId = guestProduct.vendor.toString();
+    if (!allowedVendorId) {
+      allowedVendorId = guestVendorId;
+    } else if (guestVendorId !== allowedVendorId) {
+      continue;
+    }
+
     const existing = userItems.find((item) =>
       isSameCartItem(item, {
         productId: guestItem.productId.toString(),
@@ -300,6 +328,7 @@ const mergeGuestCart = async (guestId: string | undefined, userId: string) => {
     } else {
       userItems.push(guestItem);
     }
+    mergedCount += 1;
   }
 
   await Cart.findOneAndUpdate(
@@ -313,7 +342,7 @@ const mergeGuestCart = async (guestId: string | undefined, userId: string) => {
     clearCartCache(getCartActorCacheKey(guestActor)),
   ]);
 
-  return { merged: guestItems.length };
+  return { merged: mergedCount };
 };
 
 export const CartService = {
