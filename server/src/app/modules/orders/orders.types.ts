@@ -34,6 +34,13 @@ export type TOrderBillingDetails = {
   } | null;
 };
 
+export type TShopLocation = {
+  type: 'Point';
+  coordinates: [number, number];
+  latitude: number;
+  longitude: number;
+};
+
 export type TCreateOrderPayload = {
   items: {
     product: string;

@@ -79,6 +79,28 @@ const ORDER_STEPPER_BY_STATUS: Record<string, number> = {
 export const getOrderSteper = (status?: string | null) =>
   status ? (ORDER_STEPPER_BY_STATUS[status] ?? null) : null;
 
+/** Formats a GeoJSON point into checkout-friendly lat/lng fields. */
+export const formatGeoPointLocation = (location?: {
+  type?: string;
+  coordinates?: number[];
+} | null) => {
+  const [longitude, latitude] = location?.coordinates ?? [];
+  if (
+    latitude === undefined ||
+    longitude === undefined ||
+    (latitude === 0 && longitude === 0)
+  ) {
+    return null;
+  }
+
+  return {
+    type: 'Point' as const,
+    coordinates: [longitude, latitude] as [number, number],
+    latitude,
+    longitude,
+  };
+};
+
 /** Normalizes checkout lat/lng into GeoJSON [longitude, latitude]. */
 export const normalizeBillingDeliveryLocation = (
   billingDetails: TCreateOrderPayload['orderData']['billingDetails']
@@ -174,21 +196,16 @@ export const getDeliveryChargesForCheckoutOrThrow = async (
     .select('_id location')
     .lean();
   const vendorById = new Map(vendors.map((vendor) => [vendor._id.toString(), vendor]));
-
-  return Promise.all(
+  const deliveryCharges: number[] = [];
+  const shopLocations = await Promise.all(
     vendorIds.map(async (vendorId) => {
       const vendor = vendorById.get(vendorId);
       if (!vendor) {
         throw new ApiError(HttpStatusCode.NotFound, 'Vendor not found', traceId);
       }
 
-      const shopCoordinates = vendor.location?.coordinates;
-      const [shopLongitude, shopLatitude] = shopCoordinates ?? [];
-      if (
-        shopLatitude === undefined ||
-        shopLongitude === undefined ||
-        (shopLatitude === 0 && shopLongitude === 0)
-      ) {
+      const shopLocation = formatGeoPointLocation(vendor.location);
+      if (!shopLocation) {
         throw new ApiError(
           HttpStatusCode.BadRequest,
           'Vendor shop location is not configured',
@@ -206,14 +223,20 @@ export const getDeliveryChargesForCheckoutOrThrow = async (
         googleDistanceKm ??
         Number(
           calculateDistanceKm(
-            { latitude: shopLatitude, longitude: shopLongitude },
+            {
+              latitude: shopLocation.latitude,
+              longitude: shopLocation.longitude,
+            },
             destination
           ).toFixed(2)
         );
 
-      return Number((distanceKm * perKmRate).toFixed(2));
+      deliveryCharges.push(Number((distanceKm * perKmRate).toFixed(2)));
+      return shopLocation;
     })
   );
+
+  return { deliveryCharges, shopLocations };
 };
 
 /** Groups cart items by product vendor/author for multi-vendor checkout. */
@@ -1119,7 +1142,7 @@ export const buildCheckoutQuote = async (
 ) => {
   const checkoutItems = await resolveCheckoutItemsOrThrow(traceId, payload.items);
   const groupedItems = [...groupCartItemsByAuthor(checkoutItems).entries()];
-  const deliveryCharges = await getDeliveryChargesForCheckoutOrThrow(
+  const { deliveryCharges, shopLocations } = await getDeliveryChargesForCheckoutOrThrow(
     traceId,
     payload.orderData.deliveryType,
     payload.orderData.billingDetails,
@@ -1179,6 +1202,7 @@ export const buildCheckoutQuote = async (
 
     return {
       author: authorId,
+      shopLocation: shopLocations[index] ?? null,
       amount,
       voucherDiscount,
       giftDetails: voucherQuote.perOrderGifts[index],

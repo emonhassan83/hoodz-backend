@@ -162,7 +162,10 @@ const createOrders = async (
       orders.map((order) => emitOrderUpdated(order._id, 'created'))
     );
 
-    return orders;
+    return orders.map((order, index) => ({
+      ...order.toObject(),
+      shopLocation: checkout.orders[index]?.shopLocation ?? null,
+    }));
   } catch (error) {
     await session.abortTransaction();
     throw error;
