@@ -24,6 +24,7 @@ import { PosOrderRoutes } from '@/app/modules/posOrder/posOrder.routes';
 import { ProductRoutes } from '@/app/modules/product/product.routes';
 import { ReviewRoutes } from '@/app/modules/review/review.routes';
 import { SavedCardRoutes } from '@/app/modules/savedCard/savedCard.routes';
+import { SavedLocationRoutes } from '@/app/modules/savedLocation/savedLocation.routes';
 import { SearchRoutes } from '@/app/modules/search/search.routes';
 import { SettingsRoutes } from '@/app/modules/settings/settings.routes';
 import { TopUpRoutes } from '@/app/modules/topUp/topUp.routes';
@@ -153,6 +154,10 @@ const apiRoutes = [
   {
     path: '/saved-cards',
     route: SavedCardRoutes,
+  },
+  {
+    path: '/saved-locations',
+    route: SavedLocationRoutes,
   },
   {
     path: '/top-up',
