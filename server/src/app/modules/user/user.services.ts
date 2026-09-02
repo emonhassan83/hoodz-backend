@@ -101,7 +101,12 @@ const getSingleUser = async (traceId: string, userId: string) => {
       CoinService.getSummary(userId),
       getUserSupportFlags(userId),
     ]);
-    return { ...user, coins: coinSummary.balance, ...supportFlags };
+    return {
+      ...user,
+      coins: coinSummary.balance,
+      coinsPerEgp: coinSummary.redemption.coinsPerEgp,
+      ...supportFlags,
+    };
   }
 
   const [
@@ -131,6 +136,7 @@ const getSingleUser = async (traceId: string, userId: string) => {
     ...supportFlags,
     completedDeliveries,
     coins: coinSummary.balance,
+    coinsPerEgp: coinSummary.redemption.coinsPerEgp,
     kyc,
     wallets: (wallets as Record<string, any>[]).map(formatKycWallet),
   };

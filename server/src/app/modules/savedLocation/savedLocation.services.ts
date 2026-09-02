@@ -23,6 +23,25 @@ const getMyLocation = async (userId: string) =>
     .sort({ createdAt: -1 })
     .lean();
 
+/** Updates one saved location owned by the authenticated user. */
+const updateALocation = async (
+  traceId: string,
+  userId: string,
+  locationId: string,
+  payload: TSaveLocationPayload
+) => {
+  const location = await findSavedLocationForUser(userId, locationId);
+  assertSavedLocationExists(location, traceId);
+
+  return SavedLocation.findByIdAndUpdate(
+    locationId,
+    normalizeSavedLocationPayload(payload),
+    { new: true }
+  )
+    .select('-__v')
+    .lean();
+};
+
 /** Deletes one saved location owned by the authenticated user. */
 const deleteALocation = async (
   traceId: string,
@@ -43,5 +62,6 @@ const deleteALocation = async (
 export const SavedLocationService = {
   saveALocation,
   getMyLocation,
+  updateALocation,
   deleteALocation,
 };

@@ -33,6 +33,24 @@ const getMyLocation = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const updateALocation = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await SavedLocationService.updateALocation(
+    traceId,
+    req.user.userId,
+    req.params.locationId as string,
+    req.body
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Saved location updated successfully',
+    data,
+    traceId,
+  });
+});
+
 const deleteALocation = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await SavedLocationService.deleteALocation(
@@ -53,5 +71,6 @@ const deleteALocation = asyncHandler(async (req: Request, res: Response) => {
 export const SavedLocationController = {
   saveALocation,
   getMyLocation,
+  updateALocation,
   deleteALocation,
 };

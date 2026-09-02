@@ -102,6 +102,7 @@ const createOrders = async (
       );
       const deliveryCharge = checkout.deliveryCharges[index] ?? 0;
       const coinDiscount = checkout.coinDiscounts[index] ?? 0;
+      const redeemedCoins = checkout.redeemedCoinsPerOrder[index] ?? 0;
       const voucherDiscount = checkout.voucherQuote.perOrderDiscounts[index] ?? 0;
       const giftDetails = checkout.voucherQuote.perOrderGifts[index];
       const hasVoucherBenefit = voucherDiscount > 0 || Boolean(giftDetails);
@@ -132,14 +133,16 @@ const createOrders = async (
       );
 
       await createOrderItems(order._id, authorId, items, session);
-      await CoinService.redeemCoins(
-        traceId,
-        userId,
-        coinDiscount,
-        COIN_REFERENCE_TYPE.order,
-        order._id,
-        session
-      );
+      if (redeemedCoins > 0) {
+        await CoinService.redeemCoins(
+          traceId,
+          userId,
+          redeemedCoins,
+          COIN_REFERENCE_TYPE.order,
+          order._id,
+          session
+        );
+      }
       orders.push(order);
     }
 

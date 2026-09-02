@@ -1151,10 +1151,11 @@ export const buildCheckoutQuote = async (
     redemption.redeemCoins > 0
       ? redemption.coinDiscount / redemption.redeemCoins
       : 0;
-  const coinDiscounts = distributeCoinDiscount(
+  const redeemedCoinsPerOrder = distributeCoinDiscount(
     redemption.redeemCoins,
     groupedItems
-  ).map((redeemedCoins, index) => {
+  );
+  const coinDiscounts = redeemedCoinsPerOrder.map((redeemedCoins, index) => {
     const orderAmount = Number(
       groupedItems[index][1].reduce((total, item) => total + item.totalPrice, 0).toFixed(2)
     );
@@ -1199,10 +1200,11 @@ export const buildCheckoutQuote = async (
     amount,
     voucherQuote,
     redemption: {
-      redeemCoins: coinDiscount,
+      redeemCoins: redemption.redeemCoins,
       coinDiscount,
     },
     coinDiscounts,
+    redeemedCoinsPerOrder,
     orders,
   };
 };

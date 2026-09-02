@@ -19,6 +19,11 @@ router
 
 router
   .route('/:locationId')
+  .put(
+    auth(USER_ROLE.user),
+    validateRequest(SavedLocationValidation.updateLocationValidationSchema),
+    SavedLocationController.updateALocation
+  )
   .delete(
     auth(USER_ROLE.user),
     validateRequest(SavedLocationValidation.locationIdParamValidationSchema),

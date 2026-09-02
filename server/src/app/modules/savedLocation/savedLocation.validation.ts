@@ -6,6 +6,13 @@ const saveLocationValidationSchema = z.object({
   body: deliveryAddressSchema,
 });
 
+const updateLocationValidationSchema = z.object({
+  params: z.object({
+    locationId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid location id'),
+  }),
+  body: deliveryAddressSchema,
+});
+
 const locationIdParamValidationSchema = z.object({
   params: z.object({
     locationId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid location id'),
@@ -14,5 +21,6 @@ const locationIdParamValidationSchema = z.object({
 
 export const SavedLocationValidation = {
   saveLocationValidationSchema,
+  updateLocationValidationSchema,
   locationIdParamValidationSchema,
 };
