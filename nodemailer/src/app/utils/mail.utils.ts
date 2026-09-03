@@ -8,7 +8,7 @@ export function mailOption(
   text = ''
 ): TMailOption {
   return {
-    from: env.MAIL_FROM,
+    from: env.SMTP_USER,
     to,
     subject,
     text,

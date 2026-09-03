@@ -21,17 +21,8 @@ Update `.env` with your SMTP credentials. For Gmail, use an App Password.
 ## Environment
 
 ```bash
-PORT=3000
-NODE_ENV=development
-CORS_ORIGIN=*
-
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_SECURE=false
-MAIL_FROM=your-mail@example.com
-
-NODEMAILLER_HOST_MAIL=your-email@gmail.com
-NODEMAILLER_HOST_PASS=your-app-password
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
 ```
 
 ## Scripts

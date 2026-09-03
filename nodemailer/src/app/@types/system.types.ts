@@ -2,12 +2,8 @@ export type TEnv = {
   NODE_ENV: string;
   PORT: number;
   CORS_ORIGIN: string;
-  MAIL_HOST: string;
-  MAIL_PORT: number;
-  MAIL_SECURE: boolean;
-  MAIL_USER: string;
-  MAIL_PASS: string;
-  MAIL_FROM: string;
+  SMTP_USER: string;
+  SMTP_PASS: string;
 };
 
 export type TSendMailBody = {
