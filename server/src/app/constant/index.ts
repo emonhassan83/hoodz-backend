@@ -2,7 +2,8 @@ import { REVIEW_SORT } from '@/app/modules/review/review.constant';
 
 export const corsWhiteList = [
   'http://localhost:5173',
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'http://72.244.153.29:3000'
 ];
 export const corsAllowedHosts = ['10.10.10.27'];
 export const SALT_ROUNDS = 12;
