@@ -1,6 +1,12 @@
 import { type TransportOptions, createTransport } from 'nodemailer';
 
-import { env } from '@/app/configs/env.configs';
+import { env } from './env.configs';
+
+export const assertSmtpConfig = (): void => {
+  if (!env.SMTP_USER || !env.SMTP_PASS) {
+    throw new Error('SMTP_USER and SMTP_PASS must be set in Vercel Environment Variables');
+  }
+};
 
 const mailTransporter = createTransport({
   host: 'smtp.gmail.com',

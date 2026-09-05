@@ -34,6 +34,17 @@ npm start
 npm run lint
 ```
 
+## Vercel Deploy
+
+Set the Vercel project Root Directory to `nodemailer` and add these environment variables:
+
+```bash
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+```
+
+The `vercel.json` routes all requests to `src/app.ts`, which exports the Express app for Vercel serverless runtime.
+
 ## Endpoints
 
 ```http

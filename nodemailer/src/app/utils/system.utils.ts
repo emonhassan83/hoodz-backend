@@ -1,4 +1,4 @@
-import { TSendMailBody } from '@/app/@types/system.types';
+import { TSendMailBody } from '../@types/system.types';
 
 export const isValidEmailPayload = (
   payload: TSendMailBody

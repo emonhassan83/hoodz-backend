@@ -1,8 +1,8 @@
 import { createServer, type Server } from 'node:http';
 
-import app from '@/app';
-import { env } from '@/app/configs/env.configs';
-import { shutdown } from '@/app/utils/shutdown.utils';
+import app from './app';
+import { env } from './app/configs/env.configs';
+import { shutdown } from './app/utils/shutdown.utils';
 
 const server: Server = createServer(app);
 

@@ -1,11 +1,11 @@
 import cors from 'cors';
 import express, { type Request, type Response } from 'express';
 
-import { TSendMailBody } from '@/app/@types/system.types';
-import { env } from '@/app/configs/env.configs';
-import mailTransporter from '@/app/configs/nodemailer.config';
-import { mailOption } from '@/app/utils/mail.utils';
-import { isValidEmailPayload } from '@/app/utils/system.utils';
+import { TSendMailBody } from './app/@types/system.types';
+import { env } from './app/configs/env.configs';
+import mailTransporter, { assertSmtpConfig } from './app/configs/nodemailer.config';
+import { mailOption } from './app/utils/mail.utils';
+import { isValidEmailPayload } from './app/utils/system.utils';
 
 const app = express();
 
@@ -38,6 +38,7 @@ app.post(
     const { to, subject, html, text } = req.body;
 
     try {
+      assertSmtpConfig();
       await mailTransporter.sendMail(mailOption(to, subject, html, text));
 
       res.status(200).json({

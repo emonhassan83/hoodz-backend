@@ -1,5 +1,5 @@
-import { TMailOption } from '@/app/@types/system.types';
-import { env } from '@/app/configs/env.configs';
+import { TMailOption } from '../@types/system.types';
+import { env } from '../configs/env.configs';
 
 export function mailOption(
   to: string,

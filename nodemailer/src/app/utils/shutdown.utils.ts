@@ -1,5 +1,5 @@
-import { TShutdown } from '@/app/@types/system.types';
-import mailTransporter from '@/app/configs/nodemailer.config';
+import { TShutdown } from '../@types/system.types';
+import mailTransporter from '../configs/nodemailer.config';
 
 let isShuttingDown = false;
 
