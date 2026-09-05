@@ -49,9 +49,8 @@ services:
       TYPESENSE_PORT: 8108
       TYPESENSE_PROTOCOL: http
       TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-hoodzTypesenseAdminKey}
-      PORT: 5000
     ports:
-      - "5000:5000"
+      - "5029:5029"
     volumes:
       - ./server/src:/usr/src/app/src
     depends_on:
