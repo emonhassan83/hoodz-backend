@@ -3,10 +3,11 @@ import { S3Client } from '@aws-sdk/client-s3';
 import { env } from '@/app/configs/env.configs';
 
 const s3Client = new S3Client({
-  region: env.S3_REGION,
+  endpoint: env.SPACES_API,
+  region: env.AWS_REGION,
   credentials: {
-    accessKeyId: env.S3_ACCESS_KEY,
-    secretAccessKey: env.S3_SECRET_KEY,
+    accessKeyId: env.S3_BUCKET_ACCESS_KEY,
+    secretAccessKey: env.S3_BUCKET_SECRET_ACCESS_KEY,
   },
 });
 

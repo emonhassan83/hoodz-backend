@@ -46,6 +46,7 @@ export type TEnrichedCartItem = TCartItem & {
     stock: number;
     colors: TCartColor[];
     sizes: string[];
+    isDiscounted?: boolean;
     variants: Array<{
       _id?: Types.ObjectId;
       size?: string | null;

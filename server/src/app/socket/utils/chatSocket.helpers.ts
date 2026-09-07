@@ -147,9 +147,9 @@ export const emitToChatParticipants = (
 /** Sends a socket ack response when callback is provided. */
 export const sendAck = (
   callback: unknown,
-  data: { success: boolean; message?: string; data?: unknown; status?: number }
+  data: { success: boolean; message?: string; data?: unknown; status?: number; meta?: any }
 ) => {
-  ackHandler(callback as any, data);
+  ackHandler(callback as any, data as any);
 };
 
 /** Gets display info for typing events. */

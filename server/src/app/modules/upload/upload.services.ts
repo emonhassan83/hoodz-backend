@@ -17,7 +17,7 @@ const multiple = async (traceId: string, files: any): Promise<object[]> => {
   const tasks = fileArray.map((file) => {
     const { folder } = categorizeFile(file);
     const key = generateS3Key(file);
-    return { file, folder, key };
+    return { file, path: folder, key };
   });
 
   const uploaded = await uploadManyToS3(tasks);

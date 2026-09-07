@@ -4,7 +4,7 @@ import { IUserRole } from '@/app/modules/user/user.types';
 
 export type TSocketUser = { _id: string; email: string; role?: IUserRole };
 
-export type TAckRes = { success: boolean; message?: string; data?: any; status?: number };
+export type TAckRes = { success: boolean; message?: string; data?: any; status?: number; meta?: any };
 export type TAckFn = (response: TAckRes) => void;
 
 export type TSocketHandler<TData = any> = (

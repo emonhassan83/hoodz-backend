@@ -3,26 +3,40 @@ import { REDIS_PREFIXES } from '@/app/constant';
 export type TEnv = {
   NODE_ENV: string;
   IP: string;
+  PORT: number;
+
   MONGODB_URI: string;
+  ADMIN_PASSWORD: string;
+
+  REDIS_HOST: string;
+  REDIS_PASSWORD: string;
+  REDIS_PORT: number;
+
   JWT_ACCESS_TOKEN_SECRET_KEY: string;
   JWT_REFRESH_TOKEN_SECRET_KEY: string;
   JWT_VERIFY_OTP_SECRET_KEY: string;
   JWT_ACCESS_EXPIRATION_TIME: string;
   JWT_REFRESH_EXPIRATION_TIME: string;
   JWT_OTP_EXPIRATION_TIME: string;
+
   SMTP_HOST: string;
   SMTP_PORT: number;
   SMTP_USER: string;
   SMTP_PASS: string;
+
   OTP_HASH_SECRET: string;
-  REDIS_HOST: string;
-  REDIS_PASSWORD: string;
-  REDIS_PORT: number;
-  S3_ACCESS_KEY: string;
-  S3_SECRET_KEY: string;
-  S3_REGION: string;
-  S3_BUCKET_NAME: string;
-  STRIPE_API_SECRET_KEY: string;
+
+  S3_BUCKET_ACCESS_KEY: string;
+  S3_BUCKET_SECRET_ACCESS_KEY: string;
+  SPACES_API: string;
+  S3_API: string;
+  S3_BASE_URL: string;
+  AWS_REGION: string;
+  AWS_BUCKET_NAME: string;
+
+  EXCHANGE_RATE_API_KEY: string;
+  GOOGLE_MAPS_API_KEY: string;
+
   PAYMOB_API_KEY?: string;
   PAYMOB_INTEGRATION_ID?: string;
   PAYMOB_IFRAME_ID?: string;
@@ -30,18 +44,22 @@ export type TEnv = {
   PAYMOB_CURRENCY?: string;
   PAYMOB_BASE_URL?: string;
   PAYMOB_CARD_SETUP_AMOUNT_CENTS?: number;
+
   SAVED_CARD_ENCRYPTION_KEY?: string;
   SAVED_CARD_HASH_SECRET?: string;
+
   SERVER_URL: string;
   DASHBOARD_URL: string;
-  GOOGLE_MAPS_API_KEY: string;
+
   TYPESENSE_HOST?: string;
   TYPESENSE_PORT?: number;
   TYPESENSE_PROTOCOL?: string;
   TYPESENSE_API_KEY?: string;
   TYPESENSE_ENABLED?: boolean;
+
   GEMINI_API_KEY?: string;
   GEMINI_MODEL?: string;
+  
   DELIVERY_OTP_TTL_SECONDS?: number;
   SMS_PROVIDER?: string;
   VODAFONE_SMS_TOKEN_URL?: string;
@@ -51,9 +69,10 @@ export type TEnv = {
   VODAFONE_SMS_SENDER_ID?: string;
   VODAFONE_SMS_TIMEOUT_MS?: number;
 
-  TWILIO_ACCOUNT_SID: string;
-  TWILIO_AUTH_TOKEN: string;
-  TWILIO_PHONE_NUMBER: string;
+  // Optional Twilio envs (may be unused if using another SMS provider)
+  TWILIO_ACCOUNT_SID?: string;
+  TWILIO_AUTH_TOKEN?: string;
+  TWILIO_PHONE_NUMBER?: string;
 
   // Firebase-related envs
   FIREBASE_ACCOUNT_TYPE?: string;
