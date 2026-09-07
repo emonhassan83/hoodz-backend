@@ -2,7 +2,7 @@ import { compare, hash } from 'bcrypt';
 import { HttpStatusCode } from 'axios';
 import { Secret, sign, verify } from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import twilio from 'twilio';
+import sendSmsViaVodafone from '@/app/utils/sms.utils';
 
 import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
@@ -122,13 +122,12 @@ export const sendDeliveryOtpSms = async (
     );
   }
 
-  const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
   try {
-    await client.messages.create({
-      body: `Your Hoodz delivery OTP is ${otp}. It expires in 6 minutes. Please do not share it.`,
-      from: env.TWILIO_PHONE_NUMBER,
-      to: phoneNumber,
-    });
+    await sendSmsViaVodafone(
+      phoneNumber as string,
+      `Your Hoodz delivery OTP is ${otp}. It expires in 6 minutes. Please do not share it.`,
+      traceId
+    );
     return { sent: true, mock };
   } catch (error) {
     console.error(`[${traceId}] Delivery OTP SMS error:`, error);

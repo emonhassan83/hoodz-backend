@@ -3,7 +3,7 @@ import { compare, hash } from 'bcrypt';
 import { JwtPayload, Secret, sign, verify } from 'jsonwebtoken';
 import moment from 'moment';
 import { generate } from 'otp-generator';
-import twilio from 'twilio';
+import sendSmsViaVodafone from '@/app/utils/sms.utils';
 
 import { env } from '@/app/configs/env.configs';
 import { OTP_GENERATE_CONFIG } from '@/app/constant';
@@ -216,16 +216,14 @@ export const sendOtpSms = async (
     return;
   }
 
-  const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
-
   try {
-    await client.messages.create({
-      body: `Welcome to Split Ride, your verification code is ${otp}. It expires in 5 minutes. Please do not share.`,
-      from: env.TWILIO_PHONE_NUMBER,
-      to: phone,
-    });
+    await sendSmsViaVodafone(
+      phone,
+      `Welcome to Split Ride, your verification code is ${otp}. It expires in 5 minutes. Please do not share.`,
+      traceId
+    );
   } catch (error) {
-    console.error(`[${traceId}] Twilio SMS error:`, error);
+    console.error(`[${traceId}] Vodafone SMS error:`, error);
     throw new ApiError(
       HttpStatusCode.InternalServerError,
       'Failed to send OTP',
