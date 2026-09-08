@@ -1,14 +1,21 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
+import { CHAT_TYPES } from '@/app/modules/chat/chat.constant';
+import { Chat } from '@/app/modules/chat/chat.model';
 import { ChatService } from '@/app/modules/chat/chat.services';
 import { Messages } from '@/app/modules/messages/messages.model';
 import { getPopulatedMessageById } from '@/app/modules/messages/messages.helpers';
 import { PARTICIPANT_STATUS } from '@/app/modules/participant/participant.constant';
+import {
+  pruneChatParticipantsExcept,
+  syncChatParticipants,
+} from '@/app/modules/participant/participant.helpers';
 import { Participant } from '@/app/modules/participant/participant.model';
 import {
   getAssignedAgentId,
   getCustomerIdForChat,
+  resolveOrAssignAgentForCustomer,
 } from '@/app/modules/supportAssignment/supportAssignment.helpers';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
@@ -16,7 +23,11 @@ import { TSocketRequester } from '@/app/socket/interface/chatSocket.interface';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import { getIO } from '@/app/socket/socket.init';
 import ackHandler from '@/app/socket/utils/ackHandler';
-import { Chat } from '@/app/modules/chat/chat.model';
+
+const AGENT_SUPPORT_CHAT_TYPES = [
+  CHAT_TYPES.customer_support,
+  CHAT_TYPES.order_support,
+];
 
 /** Returns active participant user ids for a chat. */
 export const getChatParticipantIds = async (chatId: string) => {
@@ -73,6 +84,30 @@ export const assertSocketChatAccess = async (
     chat,
     participantIds: [...new Set([...participants, userId])],
   };
+};
+
+/** Refreshes support chat participants before emitting socket messages. */
+export const ensureSocketSupportChatParticipants = async (
+  chatId: string,
+  userId: string,
+  role?: string
+) => {
+  const chat = await Chat.findById(chatId).select('_id type').lean();
+  if (!chat || !AGENT_SUPPORT_CHAT_TYPES.includes(chat.type as any)) {
+    return getChatParticipantIds(chatId);
+  }
+
+  const customerId =
+    role === USER_ROLE.user ? userId : await getCustomerIdForChat(chatId);
+  if (!customerId) return getChatParticipantIds(chatId);
+
+  const agentId = await resolveOrAssignAgentForCustomer(customerId);
+  const participantIds = agentId ? [customerId, agentId] : [customerId];
+
+  await syncChatParticipants(chatId, participantIds);
+  await pruneChatParticipantsExcept(chatId, participantIds);
+
+  return getChatParticipantIds(chatId);
 };
 
 /** Loads a socket-ready message payload. */

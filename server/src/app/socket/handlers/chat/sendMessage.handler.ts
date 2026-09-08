@@ -11,6 +11,7 @@ import {
   emitChatListsToParticipants,
   emitToChatParticipants,
   emitUnreadCountsToParticipants,
+  ensureSocketSupportChatParticipants,
   sendAck,
 } from '@/app/socket/utils/chatSocket.helpers';
 import eventHandler from '@/app/socket/utils/eventHandler';
@@ -33,6 +34,8 @@ export const sendMessageHandler = eventHandler<TSendMessagePayload>(
       participant: payload?.participant,
       participent: payload?.participent,
     });
+
+    await ensureSocketSupportChatParticipants(chatId, userId, socket.auth.role);
 
     const { participantIds } = await assertSocketChatAccess(
       chatId,

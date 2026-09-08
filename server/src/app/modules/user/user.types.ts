@@ -21,6 +21,7 @@ export type TInvitePlatformUserPayload = {
 };
 
 export type TInviteAgentPayload = TInvitePlatformUserPayload & {
+  timeZone?: string;
   agentSchedule?: {
     startTime: string;
     endTime: string;
@@ -103,5 +104,4 @@ export type TUpdateAgentSchedulePayload = {
   startTime: string;
   endTime: string;
 } | null;
-
 

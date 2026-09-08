@@ -603,7 +603,7 @@ const inviteVendor = async (
 
 /** Invites an agent with the agent-specific email template. */
 const inviteAgent = async (traceId: string, payload: TInviteAgentPayload) => {
-  const { agentSchedule, ...invitePayload } = payload;
+  const { agentSchedule, timeZone, ...invitePayload } = payload;
   const user = await createInvitedPlatformUser(
     traceId,
     invitePayload,
@@ -616,6 +616,13 @@ const inviteAgent = async (traceId: string, payload: TInviteAgentPayload) => {
       startTime: agentSchedule.startTime,
       endTime: agentSchedule.endTime,
     };
+  }
+
+  if (timeZone) {
+    user.timeZone = timeZone;
+  }
+
+  if (agentSchedule || timeZone) {
     await user.save();
   }
 
@@ -873,4 +880,3 @@ export const UserService = {
   payVendor,
   deleteUserProfile,
 };
-

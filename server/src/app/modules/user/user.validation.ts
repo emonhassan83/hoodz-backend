@@ -103,6 +103,7 @@ const invitePlatformUserValidationSchema = z.object({
 
 const inviteAgentValidationSchema = z.object({
   body: invitePlatformUserValidationSchema.shape.body.extend({
+    timeZone: z.string().trim().min(1).optional(),
     agentSchedule: z
       .object({
         startTime: timeStringSchema,
