@@ -30,10 +30,9 @@ export const aiSendMessageHandler = eventHandler<TAiSendMessagePayload>(
     sendAck(callback, {
       success: true,
       status: 200,
-      message: 'AI assistant replied successfully',
+      message: 'AI message sent successfully',
       data,
     });
   }
 );
-
 

@@ -11,7 +11,7 @@ const sendMessage = asyncHandler(async (req: Request, res: Response) => {
   sendResponse(res, {
     success: true,
     statusCode: 200,
-    message: 'AI assistant replied successfully',
+    message: 'AI message sent successfully',
     data,
     traceId,
   });
