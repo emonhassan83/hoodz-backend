@@ -2,14 +2,9 @@ import axios, { AxiosError, HttpStatusCode, isAxiosError } from 'axios';
 
 import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
-import {
-  AI_INTENT,
-  AI_PROVIDER,
-} from '@/app/modules/aiAssistant/aiAssistant.constant';
+import { AI_PROVIDER } from '@/app/modules/aiAssistant/aiAssistant.constant';
 import {
   TAiChatMessage,
-  TAiIntentResult,
-  TAiProductCard,
   TAiProviderResult,
 } from '@/app/modules/aiAssistant/aiAssistant.types';
 
@@ -28,7 +23,7 @@ const getGeminiErrorMessage = (error: unknown) => {
       return 'Gemini request timed out. Please try again.';
     }
     if (axiosError.response?.status === 429) {
-      return 'Gemini rate limit reached. Please wait a moment and try again.';
+      return 'AI is busy right now. Please try again shortly.';
     }
     if (apiMessage) return apiMessage;
   }
@@ -42,38 +37,6 @@ const getGeminiErrorMessage = (error: unknown) => {
 
   return 'AI assistant is unavailable right now';
 };
-
-/** Escapes user text before using it inside MongoDB regex filters. */
-export const escapeRegex = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-/** Extracts the first JSON object from a model response. */
-export const parseAiJsonObject = <T>(content: string): T => {
-  const cleanContent = content.replace(/```json|```/g, '').trim();
-  const startIndex = cleanContent.indexOf('{');
-  const endIndex = cleanContent.lastIndexOf('}');
-
-  if (startIndex === -1 || endIndex === -1 || endIndex <= startIndex) {
-    throw new Error('AI did not return JSON');
-  }
-
-  return JSON.parse(cleanContent.slice(startIndex, endIndex + 1)) as T;
-};
-
-/** Normalizes extracted intent so downstream product search gets safe defaults. */
-export const normalizeIntent = (
-  intent: Partial<TAiIntentResult>,
-  fallbackMessage: string
-): TAiIntentResult => ({
-  intent: intent.intent || AI_INTENT.general,
-  searchQuery: intent.searchQuery || fallbackMessage,
-  category: intent.category ?? null,
-  colors: Array.isArray(intent.colors) ? intent.colors : [],
-  sizes: Array.isArray(intent.sizes) ? intent.sizes : [],
-  minPrice: typeof intent.minPrice === 'number' ? intent.minPrice : null,
-  maxPrice: typeof intent.maxPrice === 'number' ? intent.maxPrice : null,
-  collectionType: intent.collectionType ?? null,
-});
 
 /** Calls Google Gemini generateContent API. */
 const callGemini = async (messages: TAiChatMessage[]) => {
@@ -100,8 +63,8 @@ const callGemini = async (messages: TAiChatMessage[]) => {
         : undefined,
       contents,
       generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 800,
+        temperature: 0.4,
+        maxOutputTokens: 320,
       },
     },
     {
@@ -144,36 +107,17 @@ export const completeWithGemini = async (
   }
 };
 
-/** Builds a strict JSON prompt for ecommerce intent extraction. */
-export const buildIntentMessages = (message: string): TAiChatMessage[] => [
-  {
-    role: 'system',
-    content:
-      'You are Hoodz Backend ecommerce AI. Extract product search intent only. Return ONLY valid JSON. No markdown. JSON shape: {"intent":"product_search|product_compare|styling_advice|policy_question|general","searchQuery":"","category":null,"colors":[],"sizes":[],"minPrice":null,"maxPrice":null,"collectionType":"men|woman|unisex|null"}. Use null when unknown.',
-  },
-  { role: 'user', content: message },
-];
-
-/** Builds a short shopping reply prompt grounded only in backend product results. */
-export const buildAssistantReplyMessages = (
+/** Builds a compact Gemini prompt for plain AI shopping chat. */
+export const buildAssistantChatMessages = (
   userMessage: string,
-  intent: TAiIntentResult,
-  products: TAiProductCard[]
+  history: TAiChatMessage[] = []
 ): TAiChatMessage[] => [
   {
     role: 'system',
     content:
-      'You are a concise ecommerce shopping assistant for Hoodz. Do not invent products, prices, stock, or discounts. Keep response short. Mention products only from the given JSON. If no products found, suggest refining search.',
+      'You are Hoodz, a concise ecommerce shopping assistant. Give short, practical style and shopping guidance. Do not claim live stock, exact prices, discounts, or availability. If the user needs real products, tell them to search or open product listings in the app.',
   },
-  {
-    role: 'user',
-    content: JSON.stringify({
-      userMessage,
-      extractedIntent: intent,
-      products,
-    }),
-  },
+  ...history.slice(-8),
+  { role: 'user', content: userMessage },
 ];
-
-
 

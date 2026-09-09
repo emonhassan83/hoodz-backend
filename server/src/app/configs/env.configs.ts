@@ -46,7 +46,7 @@ export const env: TEnv = {
   TYPESENSE_ENABLED: process.env.TYPESENSE_ENABLED === 'true',
 
   GEMINI_API_KEY: process.env.GEMINI_API_KEY,
-  GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
+  GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
 
   PAYMOB_API_KEY: process.env.PAYMOB_API_KEY,
   PAYMOB_INTEGRATION_ID: process.env.PAYMOB_INTEGRATION_ID,
@@ -74,5 +74,4 @@ export const env: TEnv = {
   VODAFONE_SMS_SENDER_ID: process.env.VODAFONE_SMS_SENDER_ID || 'Hoodz',
   VODAFONE_SMS_TIMEOUT_MS: Number(process.env.VODAFONE_SMS_TIMEOUT_MS || 10000),
 };
-
 
