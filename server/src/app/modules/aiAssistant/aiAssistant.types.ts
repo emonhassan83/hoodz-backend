@@ -17,6 +17,18 @@ export type TAiChatMessage = {
   content: string;
 };
 
+export type TAiSearchIntent = {
+  searchQuery: string;
+  brand?: string | null;
+  brandType?: 'local' | 'international' | 'trending' | 'new' | null;
+  category?: string | null;
+  colors?: string[];
+  sizes?: string[];
+  collectionType?: 'men' | 'women' | 'unisex' | null;
+  minPrice?: number | null;
+  maxPrice?: number | null;
+};
+
 export type TAiProviderResult = {
   provider: TAiProvider;
   content: string;
