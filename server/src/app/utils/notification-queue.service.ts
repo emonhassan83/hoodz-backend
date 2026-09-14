@@ -11,16 +11,17 @@ export const sendNotificationViaQueue = async (payload: INotificationPayload) =>
   const traceId = getTraceId();
   const queue = getNotificationQueue();
 
-  const fcmToken =
-    payload.fcmToken ??
-    (
-      await User.findById(payload.userId).select('fcmToken').lean()
-    )?.fcmToken;
+  const user = await User.findById(payload.userId)
+    .select('fcmToken language')
+    .lean();
+  const fcmToken = payload.fcmToken ?? user?.fcmToken;
+  const language = payload.language ?? user?.language ?? 'english';
 
   const jobData = {
     traceId,
     ...payload,
     fcmToken,
+    language,
   };
 
   await queue.add('send-notification', jobData, {
@@ -40,22 +41,27 @@ export const sendPromosionalNotificationViaQueue = async (
 ) => {
   const traceId = getTraceId();
   const queue = getNotificationQueue();
+  const recipients =
+    payload.recipients ??
+    (
+      await User.find({ _id: { $in: payload.userIds } })
+        .select('_id fcmToken language')
+        .lean()
+    ).map((user) => ({
+      userId: user._id.toString(),
+      fcmToken: user.fcmToken,
+      language: user.language ?? 'english',
+    }));
   const fcmTokens =
     payload.fcmTokens ??
-    (
-      await User.find({
-        _id: { $in: payload.userIds },
-        fcmToken: { $exists: true, $ne: null },
-      })
-        .select('fcmToken')
-        .lean()
-    )
-      .map((user) => user.fcmToken)
-      .filter(Boolean);
+    recipients
+      .map((recipient) => recipient.fcmToken)
+      .filter((token): token is string => Boolean(token));
 
   const jobData = {
     traceId,
     ...payload,
+    recipients,
     fcmTokens,
   };
 
@@ -78,20 +84,27 @@ export const sendPromosionalNotificationViaQueue = async (
 export const sendBatchNotificationViaQueue = async (payload: IBatchNotificationPayload) => {
   const traceId = getTraceId();
   const queue = getNotificationQueue();
+  const recipients =
+    payload.recipients ??
+    (
+      await User.find({ _id: { $in: payload.userIds } })
+        .select('_id fcmToken language')
+        .lean()
+    ).map((user) => ({
+      userId: user._id.toString(),
+      fcmToken: user.fcmToken,
+      language: user.language ?? 'english',
+    }));
   const fcmTokens =
     payload.fcmTokens ??
-    (
-      await User.find({
-        _id: { $in: payload.userIds },
-        fcmToken: { $exists: true, $ne: null },
-      })
-        .select('fcmToken')
-        .lean()
-    ).map((user) => user.fcmToken).filter(Boolean);
+    recipients
+      .map((recipient) => recipient.fcmToken)
+      .filter((token): token is string => Boolean(token));
 
   const jobData = {
     traceId,
     ...payload,
+    recipients,
     fcmTokens,
   };
 
@@ -116,13 +129,17 @@ export const sendPushNotificationViaQueue = async (
   fcmToken: string,
   title: string,
   message: string,
-  data?: Record<string, any>
+  data?: Record<string, any>,
+  titleArabic?: string,
+  messageArabic?: string
 ) => {
   return sendNotificationViaQueue({
     userId,
     channel: 'push',
     title,
     message,
+    titleArabic,
+    messageArabic,
     fcmToken,
     data,
   });
@@ -136,13 +153,17 @@ export const sendSocketNotificationViaQueue = async (
   userId: string,
   title: string,
   message: string,
-  data?: Record<string, any>
+  data?: Record<string, any>,
+  titleArabic?: string,
+  messageArabic?: string
 ) => {
   return sendNotificationViaQueue({
     userId,
     channel: 'socket',
     title,
     message,
+    titleArabic,
+    messageArabic,
     data,
   });
 };
@@ -156,13 +177,17 @@ export const sendBothNotificationViaQueue = async (
   fcmToken: string,
   title: string,
   message: string,
-  data?: Record<string, any>
+  data?: Record<string, any>,
+  titleArabic?: string,
+  messageArabic?: string
 ) => {
   return sendNotificationViaQueue({
     userId,
     channel: 'both',
     title,
     message,
+    titleArabic,
+    messageArabic,
     fcmToken,
     data,
   });

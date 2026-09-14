@@ -7,6 +7,7 @@ import { CoinService } from '@/app/modules/coin/coin.services';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { REVIEW_MODEL_TYPE } from '@/app/modules/review/review.constant';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { buildNotificationCopy } from '@/app/modules/notification/notification.i18n';
 import {
   getDeliveredJobForReviewOrThrow,
   resolveReviewAuthorOrThrow,
@@ -86,11 +87,16 @@ const create = async (
   }
 
   if (payload.modelType === REVIEW_MODEL_TYPE.Job) {
+    const copy = buildNotificationCopy('review.ride_rating', {
+      rating: payload.rating,
+    });
     await sendNotificationViaQueue({
       userId: author.toString(),
       channel: 'both',
-      title: 'New ride rating',
-      message: `A customer rated your delivery ${payload.rating} stars.`,
+      title: copy.title,
+      message: copy.message,
+      titleArabic: copy.titleArabic,
+      messageArabic: copy.messageArabic,
       data: {
         modelType: NOTIFICATION_MODEL_TYPE.Job,
         reference: payload.reference,

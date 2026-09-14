@@ -8,6 +8,7 @@ import { Cart } from '@/app/modules/cart/cart.model';
 import { Category } from '@/app/modules/category/category.model';
 import { Items } from '@/app/modules/items/items.model';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { buildNotificationCopy } from '@/app/modules/notification/notification.i18n';
 import { ORDER_STATUS } from '@/app/modules/orders/orders.constant';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { PRODUCT_INVENTORY_TYPE } from '@/app/modules/product/product.constant';
@@ -117,7 +118,10 @@ export const buildProductListFilter = async (
   const categoryTitles = categoryValues.filter((value) => !isObjectIdString(value));
   if (categoryTitles.length > 0) {
     const categories = await Category.find({
-      $or: categoryTitles.map((title) => ({ title: exactInsensitive(title) })),
+      $or: categoryTitles.flatMap((title) => [
+        { title: exactInsensitive(title) },
+        { titleArabic: exactInsensitive(title) },
+      ]),
     })
       .select('_id')
       .lean();
@@ -665,19 +669,25 @@ export const notifyProductRestockedSubscribers = async (
     .lean();
 
   await Promise.all(
-    users.map((user) =>
-      sendNotificationViaQueue({
+    users.map((user) => {
+      const copy = buildNotificationCopy('product.back_in_stock', {
+        productTitle,
+      });
+
+      return sendNotificationViaQueue({
         userId: user._id.toString(),
         fcmToken: user.fcmToken,
         channel: 'both',
-        title: 'Product back in stock',
-        message: `${productTitle} is available again.`,
+        title: copy.title,
+        message: copy.message,
+        titleArabic: copy.titleArabic,
+        messageArabic: copy.messageArabic,
         data: {
           modelType: NOTIFICATION_MODEL_TYPE.Product,
           reference: productId,
         },
-      })
-    )
+      });
+    })
   );
 
   await ProductStockNotify.updateMany(
@@ -991,5 +1001,3 @@ export const hasSubmittedProductReview = async (
 
   return Boolean(review);
 };
-
-

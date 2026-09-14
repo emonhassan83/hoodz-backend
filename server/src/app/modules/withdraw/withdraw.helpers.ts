@@ -2,6 +2,7 @@ import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { buildNotificationCopy } from '@/app/modules/notification/notification.i18n';
 import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import { WITHDRAW_STATUS } from '@/app/modules/withdraw/withdraw.constant';
@@ -98,14 +99,23 @@ export const notifyAdminsWithdrawRequested = async (withdraw: {
     .lean();
   const adminIds = admins.map((admin) => admin._id.toString());
   if (!adminIds.length) return;
+  const amountText = Number(withdraw.amount ?? 0).toFixed(2);
+  const copy = buildNotificationCopy('withdraw.requested', {
+    amount: amountText,
+    noteText: withdraw.note ? ` Note: ${withdraw.note}` : '',
+  });
+  const copyArabic = buildNotificationCopy('withdraw.requested', {
+    amount: amountText,
+    noteText: withdraw.note ? ` ملاحظة: ${withdraw.note}` : '',
+  });
 
   await sendBatchNotificationViaQueue({
     userIds: adminIds,
     channel: 'both',
-    title: 'New withdraw request',
-    message: withdraw.note
-      ? `A rider requested a withdraw of ${Number(withdraw.amount ?? 0).toFixed(2)}. Note: ${withdraw.note}`
-      : `A rider requested a withdraw of ${Number(withdraw.amount ?? 0).toFixed(2)}.`,
+    title: copy.title,
+    message: copy.message,
+    titleArabic: copy.titleArabic,
+    messageArabic: copyArabic.messageArabic,
     data: {
       modelType: NOTIFICATION_MODEL_TYPE.Withdraw,
       reference: toIdString(withdraw._id),
@@ -138,17 +148,27 @@ export const notifyRiderWithdrawStatusChanged = async (
   if (!rider) return;
 
   const isCompleted = withdraw.status === WITHDRAW_STATUS.completed;
-  const noteSuffix = withdraw.note ? ` Note: ${withdraw.note}` : '';
-  const title = isCompleted ? 'Withdraw completed' : 'Withdraw rejected';
-  const message = isCompleted
-    ? `Your withdraw of ${Number(withdraw.amount ?? 0).toFixed(2)} has been completed.${noteSuffix}`
-    : `Your withdraw of ${Number(withdraw.amount ?? 0).toFixed(2)} has been rejected.${noteSuffix}`;
+  const amountText = Number(withdraw.amount ?? 0).toFixed(2);
+  const copy = buildNotificationCopy(
+    isCompleted ? 'withdraw.completed' : 'withdraw.rejected',
+    {
+      amount: amountText,
+      noteText: withdraw.note ? ` Note: ${withdraw.note}` : '',
+    }
+  );
+  const copyArabic = buildNotificationCopy(
+    isCompleted ? 'withdraw.completed' : 'withdraw.rejected',
+    {
+      amount: amountText,
+      noteText: withdraw.note ? ` ملاحظة: ${withdraw.note}` : '',
+    }
+  );
 
   await sendBothNotificationViaQueue(
     riderId,
     rider.fcmToken,
-    title,
-    message,
+    copy.title,
+    copy.message,
     {
       modelType: NOTIFICATION_MODEL_TYPE.Withdraw,
       reference: toIdString(withdraw._id),
@@ -157,7 +177,9 @@ export const notifyRiderWithdrawStatusChanged = async (
       status: withdraw.status,
       amount: withdraw.amount,
       note: withdraw.note ?? null,
-    }
+    },
+    copy.titleArabic,
+    copyArabic.messageArabic
   ).catch((error) => {
     console.warn('[Withdraw] Failed to notify rider about withdraw status', error);
   });

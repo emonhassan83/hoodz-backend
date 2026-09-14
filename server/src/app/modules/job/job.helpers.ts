@@ -31,6 +31,7 @@ import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import { SettingService } from '@/app/modules/settings/settings.services';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { buildNotificationCopy } from '@/app/modules/notification/notification.i18n';
 import { SOCKET_EMIT } from '@/app/socket/socket.constant';
 import { getIO } from '@/app/socket/socket.init';
 import {
@@ -510,15 +511,22 @@ export const notifyJobOffer = async (
   const attempt = options?.attempt ?? job.matchAttemptCount ?? 1;
   const maxAttempts = options?.maxAttempts;
   const isRematch = attempt > 1;
+  const copy = buildNotificationCopy(
+    isRematch ? 'job.rematch' : 'job.new_request',
+    {
+      attempt,
+      maxAttemptsText: maxAttempts ? `/${maxAttempts}` : '',
+    }
+  );
   const io = getSocketIO();
   riderIds.forEach((riderId) => io.to(riderId).emit(SOCKET_EMIT.jobNewRequest, job));
   await sendBatchNotificationViaQueue({
     userIds: riderIds,
     channel: 'both',
-    title: isRematch ? 'Delivery still waiting' : 'New delivery nearby',
-    message: isRematch
-      ? `Still unassigned. Offer ${attempt}${maxAttempts ? ` of ${maxAttempts}` : ''} — accept if available.`
-      : 'A nearby order is waiting for a rider. Open the app to accept.',
+    title: copy.title,
+    message: copy.message,
+    titleArabic: copy.titleArabic,
+    messageArabic: copy.messageArabic,
     data: {
       modelType: NOTIFICATION_MODEL_TYPE.Job,
       reference: job._id?.toString?.(),
@@ -607,11 +615,14 @@ export const notifyMatchingExhausted = async (job: any) => {
     );
 
     if (staffIds.length) {
+      const copy = buildNotificationCopy('job.matching_failed');
       await sendBatchNotificationViaQueue({
         userIds: staffIds,
         channel: 'both',
-        title: 'Rider matching failed',
-        message: 'No rider accepted this job. Assign a rider manually.',
+        title: copy.title,
+        message: copy.message,
+        titleArabic: copy.titleArabic,
+        messageArabic: copy.messageArabic,
         data: {
           modelType: NOTIFICATION_MODEL_TYPE.Job,
           reference: jobId,
@@ -844,5 +855,3 @@ export const applyMatchRound = async (traceId: string, jobId: string) => {
   // After the last attempt, wait until nextMatchAt elapses; rematchDueJobs will exhaust then.
   return updated;
 };
-
-

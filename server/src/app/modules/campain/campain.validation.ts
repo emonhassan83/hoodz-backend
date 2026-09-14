@@ -5,6 +5,7 @@ const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
 const createCampainValidationSchema = z.object({
   body: z.object({
     title: z.string().trim().min(1, 'Title is required'),
+    titleArabic: z.string().trim().min(1, 'Arabic title is required').nullable().optional(),
     products: z.array(objectIdSchema).min(1, 'At least one product is required'),
   }),
 });
@@ -16,6 +17,7 @@ const updateCampainValidationSchema = z.object({
   body: z
     .object({
       title: z.string().trim().min(1).optional(),
+      titleArabic: z.string().trim().min(1, 'Arabic title is required').nullable().optional(),
       products: z.array(objectIdSchema).min(1).optional(),
     })
     .refine((body) => Object.keys(body).length > 0, {

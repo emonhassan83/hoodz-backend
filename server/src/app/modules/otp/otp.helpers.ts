@@ -9,6 +9,7 @@ import { env } from '@/app/configs/env.configs';
 import { OTP_GENERATE_CONFIG } from '@/app/constant';
 import ApiError from '@/app/errors/ApiError';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { buildNotificationCopy } from '@/app/modules/notification/notification.i18n';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import { OtpRedisService } from '@/app/redis/helpers/otp';
@@ -174,9 +175,7 @@ export const sendOtpEmail = async (
 export const notifyRiderSignupVerified = async (user: any) => {
   if (user.role !== USER_ROLE.rider) return;
 
-  const title = 'Rider Account Pending KYC';
-  const message =
-    'Your signup verification is complete. Please submit KYC for admin approval.';
+  const copy = buildNotificationCopy('user.rider_pending_kyc');
 
   const emailQueue = await getEmailQueueInstance();
 
@@ -193,12 +192,14 @@ export const notifyRiderSignupVerified = async (user: any) => {
     sendBothNotificationViaQueue(
       user._id.toString(),
       user.fcmToken,
-      title,
-      message,
+      copy.title,
+      copy.message,
       {
         modelType: NOTIFICATION_MODEL_TYPE.User,
         reference: user._id.toString(),
-      }
+      },
+      copy.titleArabic,
+      copy.messageArabic
     ),
   ]);
 };
@@ -231,5 +232,3 @@ export const sendOtpSms = async (
     );
   }
 };
-
-

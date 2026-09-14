@@ -9,6 +9,7 @@ import mongoose from 'mongoose';
 import { env } from '@/app/configs/env.configs';
 import ApiError from '@/app/errors/ApiError';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { buildNotificationCopy } from '@/app/modules/notification/notification.i18n';
 import { Product } from '@/app/modules/product/product.model';
 import { upsertShopToTypesense } from '@/app/modules/search/search.typesense';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
@@ -306,32 +307,25 @@ export const sendUserStatusNotifYToUser = async (
 ) => {
   if (!user || !user?._id || !user?.fcmToken) return;
 
-  let message: string;
-  let description: string;
-
-  if (status === 'active') {
-    message = '✅ Account Activated';
-    description =
-      'Your account has been successfully activated. You can now access all available features.';
-  } else if (status === 'blocked') {
-    message = '🚫 Account Blocked';
-    description =
-      'Your account has been blocked. Please contact support for further assistance.';
-  } else {
-    message = '⏳ Account Status Updated';
-    description = 'Your account status has been updated.';
-  }
-
+  const copyKey =
+    status === 'active'
+      ? 'user.account_active'
+      : status === 'blocked'
+        ? 'user.account_blocked'
+        : 'user.account_updated';
+  const copy = buildNotificationCopy(copyKey);
   // Send notification via queue (async, non-blocking)
   await sendBothNotificationViaQueue(
     user._id.toString(),
     user.fcmToken,
-    message,
-    description,
+    copy.title,
+    copy.message,
     {
       modelType: NOTIFICATION_MODEL_TYPE.User,
       reference: user._id.toString(),
-    }
+    },
+    copy.titleArabic,
+    copy.messageArabic
   );
 };
 
@@ -533,12 +527,16 @@ export const notifyVendorPayoutCompleted = async (payload: {
   const amountText = Number(payload.amount).toFixed(2);
   const remainingText = Number(payload.remainingBalance).toFixed(2);
   const paidAt = new Date().toISOString();
+  const copy = buildNotificationCopy('user.vendor_payout', {
+    amount: amountText,
+    remaining: remainingText,
+  });
 
   await sendBothNotificationViaQueue(
     vendorId,
     String(payload.vendor.fcmToken ?? ''),
-    'Vendor payout completed',
-    `Admin paid ${amountText} to your shop. Remaining balance: ${remainingText}.`,
+    copy.title,
+    copy.message,
     {
       modelType: NOTIFICATION_MODEL_TYPE.User,
       reference: vendorId,
@@ -547,7 +545,9 @@ export const notifyVendorPayoutCompleted = async (payload: {
       previousBalance: payload.previousBalance,
       remainingBalance: payload.remainingBalance,
       note: payload.note ?? null,
-    }
+    },
+    copy.titleArabic,
+    copy.messageArabic
   ).catch((error) => {
     console.warn('[User] Failed to notify vendor about payout', error);
   });
@@ -612,4 +612,3 @@ export const isAgentOnSchedule = (agent: {
 
   return currentMinutes >= startMinutes || currentMinutes < endMinutes;
 };
-

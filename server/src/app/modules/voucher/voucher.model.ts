@@ -21,7 +21,17 @@ const voucherSchema = new Schema<IVoucher, IVoucherModel>(
       required: true,
       trim: true,
     },
+    titleArabic: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     description: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    descriptionArabic: {
       type: String,
       default: null,
       trim: true,
@@ -57,8 +67,10 @@ const voucherSchema = new Schema<IVoucher, IVoucherModel>(
     },
     giftDetails: {
       name: { type: String, default: null, trim: true },
+      nameArabic: { type: String, default: null, trim: true },
       bannerImage: { type: [String], default: [] },
       description: { type: String, default: null, trim: true },
+      descriptionArabic: { type: String, default: null, trim: true },
     },
     minSpend: {
       type: Number,

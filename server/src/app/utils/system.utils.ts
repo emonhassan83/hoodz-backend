@@ -17,6 +17,7 @@ import { env } from '@/app/configs/env.configs';
 import { logger } from '@/app/configs/logger.configs';
 import { getTraceId } from '@/app/configs/requestContext.configs';
 import { NOMINATIM_URL } from '@/app/constant';
+import { translateResponseMessage } from '@/app/modules/notification/notification.i18n';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -31,10 +32,15 @@ type TResponse<T> = {
 };
 
 export const sendResponse = <T>(res: Response, data: TResponse<T>) => {
+  const translatedMessage = translateResponseMessage(
+    data.message ?? '',
+    res.req as Request | undefined
+  );
+
   res.status(data?.statusCode).json({
     success: data.success,
     statusCode: data?.statusCode,
-    message: data.message,
+    message: translatedMessage,
     meta: data?.meta,
     data: data.data,
   });

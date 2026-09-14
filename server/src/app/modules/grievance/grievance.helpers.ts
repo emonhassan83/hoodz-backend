@@ -7,6 +7,7 @@ import {
 } from '@/app/modules/grievance/grievance.constant';
 import { IGrievance } from '@/app/modules/grievance/grievance.interface';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { buildNotificationCopy } from '@/app/modules/notification/notification.i18n';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { getAssignedCustomerIds } from '@/app/modules/supportAssignment/supportAssignment.helpers';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
@@ -235,16 +236,16 @@ export const notifyGrievanceStatusChanged = async (grievance: {
   if (!userId) return;
 
   const isResolved = grievance.status === GRIEVANCE_STATUS.resolved;
-  const title = isResolved ? 'Grievance resolved' : 'Grievance rejected';
-  const message = isResolved
-    ? 'Your grievance has been resolved.'
-    : 'Your grievance has been rejected.';
-
+  const copy = buildNotificationCopy(
+    isResolved ? 'grievance.resolved' : 'grievance.rejected'
+  );
   await sendNotificationViaQueue({
     userId,
     channel: 'both',
-    title,
-    message,
+    title: copy.title,
+    message: copy.message,
+    titleArabic: copy.titleArabic,
+    messageArabic: copy.messageArabic,
     data: {
       modelType: NOTIFICATION_MODEL_TYPE.Grievance,
       reference: String(grievance._id),

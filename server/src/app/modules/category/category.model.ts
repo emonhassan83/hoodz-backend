@@ -10,6 +10,11 @@ const categorySchema = new Schema<ICategory, ICategoryModel>(
       trim: true,
       unique: true,
     },
+    titleArabic: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     icon: {
       type: String,
       required: [true, 'Icon is required'],

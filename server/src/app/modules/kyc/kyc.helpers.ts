@@ -3,6 +3,7 @@ import { HttpStatusCode } from 'axios';
 import ApiError from '@/app/errors/ApiError';
 import { KYC_STATUS } from '@/app/modules/kyc/kyc.constant';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { buildNotificationCopy } from '@/app/modules/notification/notification.i18n';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { sendBothNotificationViaQueue } from '@/app/utils/notification-queue.service';
 import { getEmailQueueInstance } from '@/app/utils/queueHelper';
@@ -38,23 +39,16 @@ export const buildKycStatusNotification = (
   rejectedReason?: string
 ) => {
   if (status === KYC_STATUS.approved) {
-    return {
-      title: 'KYC Approved',
-      message: 'Your KYC has been approved. Your rider account is now active.',
-    };
+    return buildNotificationCopy('kyc.approved');
   }
 
   if (status === KYC_STATUS.rejected) {
-    return {
-      title: 'KYC Rejected',
-      message: `Your KYC has been rejected. Reason: ${rejectedReason}`,
-    };
+    return buildNotificationCopy('kyc.rejected', {
+      reason: rejectedReason,
+    });
   }
 
-  return {
-    title: 'KYC Status Updated',
-    message: 'Your KYC status has been updated.',
-  };
+  return buildNotificationCopy('kyc.updated');
 };
 
 export const sendKycStatusEmail = async (payload: {
@@ -75,6 +69,8 @@ export const sendKycStatusNotification = async (
   rider: any,
   title: string,
   message: string,
+  titleArabic?: string,
+  messageArabic?: string,
   kycId?: string
 ) => {
   if (!rider?._id) return;
@@ -87,7 +83,9 @@ export const sendKycStatusNotification = async (
     {
       modelType: NOTIFICATION_MODEL_TYPE.Kyc,
       reference: kycId,
-    }
+    },
+    titleArabic,
+    messageArabic
   );
 };
 
@@ -144,5 +142,3 @@ export const formatKycDetails = (
     wallets: wallets.map(formatKycWallet),
   };
 };
-
-

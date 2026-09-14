@@ -126,17 +126,26 @@ export interface INotificationPayload {
   channel: TChannel;
   title: string;
   message: string;
+  titleArabic?: string;
+  messageArabic?: string;
   fcmToken?: string;
+  language?: 'english' | 'arabic';
   data?: Record<string, any>;
 }
 
 export interface IBatchNotificationPayload {
   userIds: string[];
   fcmTokens?: string[];
+  recipients?: {
+    userId: string;
+    fcmToken?: string | null;
+    language?: 'english' | 'arabic';
+  }[];
   channel: TChannel;
   title: string;
   message: string;
+  titleArabic?: string;
+  messageArabic?: string;
   data?: Record<string, any>;
 }
-
 

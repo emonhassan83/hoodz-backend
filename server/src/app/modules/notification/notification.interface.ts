@@ -6,6 +6,8 @@ export interface INotification extends Document {
   receiver: Types.ObjectId | string
   message: string
   description: string
+  messageArabic?: string
+  descriptionArabic?: string
   reference?: Types.ObjectId | string | null
   modelType: INotificationModelType
   date?: Date

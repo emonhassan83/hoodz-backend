@@ -1,5 +1,6 @@
 import {
   REGISTER_WITH,
+  USER_LANGUAGE,
   USER_ROLE,
   USER_STATUS,
 } from '@/app/modules/user/user.constant';
@@ -7,6 +8,7 @@ import {
 export type IRegisterWith = keyof typeof REGISTER_WITH;
 export type IUserRole = keyof typeof USER_ROLE;
 export type IUserStatus = keyof typeof USER_STATUS;
+export type IUserLanguage = keyof typeof USER_LANGUAGE;
 
 export type TCoordinate = {
   latitude: number;
@@ -104,4 +106,3 @@ export type TUpdateAgentSchedulePayload = {
   startTime: string;
   endTime: string;
 } | null;
-

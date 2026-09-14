@@ -148,13 +148,20 @@ const changeStatus = async (
     await User.findByIdAndUpdate(kyc.user, { status: USER_STATUS.active });
   }
 
-  const { title, message } = buildKycStatusNotification(
+  const { title, message, titleArabic, messageArabic } = buildKycStatusNotification(
     payload.status,
     payload.rejectedReason
   );
 
   await Promise.all([
-    sendKycStatusNotification(rider, title, message, kyc._id.toString()),
+    sendKycStatusNotification(
+      rider,
+      title,
+      message,
+      titleArabic,
+      messageArabic,
+      kyc._id.toString()
+    ),
     sendKycStatusEmail({
       email: rider.email,
       name: rider.name,
@@ -175,5 +182,4 @@ export const KycService = {
   updateMyKyc,
   changeStatus,
 };
-
 

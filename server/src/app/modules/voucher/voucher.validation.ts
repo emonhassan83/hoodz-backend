@@ -10,14 +10,18 @@ const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
 
 const giftDetailsSchema = z.object({
   name: z.string().trim().min(1).optional(),
+  nameArabic: z.string().trim().min(1).nullable().optional(),
   bannerImage: z.array(z.string().trim().min(1)).optional(),
   description: z.string().trim().optional(),
+  descriptionArabic: z.string().trim().nullable().optional(),
 });
 
 const voucherBodyBaseSchema = z.object({
   code: z.string().trim().min(2),
   title: z.string().trim().min(1),
+  titleArabic: z.string().trim().min(1).nullable().optional(),
   description: z.string().trim().optional(),
+  descriptionArabic: z.string().trim().nullable().optional(),
   voucherType: z.enum(Object.values(VOUCHER_TYPE) as [string, ...string[]]),
   shop: objectIdSchema.nullable().optional(),
   user: objectIdSchema.nullable().optional(),

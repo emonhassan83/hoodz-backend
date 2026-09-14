@@ -1,6 +1,10 @@
 import { Document, Model, Types } from "mongoose";
 
-import { IUserRole, IUserStatus } from "@/app/modules/user/user.types";
+import {
+  IUserLanguage,
+  IUserRole,
+  IUserStatus,
+} from "@/app/modules/user/user.types";
 
 export type IGeoLocation = {
   type: 'Point';
@@ -48,6 +52,7 @@ export interface IUser extends Document {
   lastAvailable?: IGeoLocation | null;
   lastAvailableAt?: Date | null;
   timeZone: string;
+  language: IUserLanguage;
   agentSchedule?: IAgentSchedule | null;
   role: IUserRole;
 

@@ -9,20 +9,71 @@ import {
 } from '@/app/redis/helpers/notification';
 import { sendNotification } from '@/app/utils/sentPushNotification';
 
+type TNotificationLanguage = 'english' | 'arabic';
+
+const resolveLocalizedNotificationText = (
+  language: TNotificationLanguage | undefined,
+  title: string,
+  message: string,
+  titleArabic?: string,
+  messageArabic?: string
+) => {
+  if (language === 'arabic') {
+    return {
+      title: titleArabic || title,
+      message: messageArabic || message,
+    };
+  }
+
+  return { title, message };
+};
+
+const groupPushTokensByLanguage = (
+  recipients: {
+    fcmToken?: string | null;
+    language?: TNotificationLanguage;
+  }[] = [],
+  fallbackTokens: string[] = []
+) => {
+  const englishTokens = new Set<string>();
+  const arabicTokens = new Set<string>();
+
+  recipients.forEach((recipient) => {
+    if (!recipient.fcmToken) return;
+    if (recipient.language === 'arabic') {
+      arabicTokens.add(recipient.fcmToken);
+      return;
+    }
+    englishTokens.add(recipient.fcmToken);
+  });
+
+  if (recipients.length === 0) {
+    fallbackTokens.forEach((token) => {
+      if (token) englishTokens.add(token);
+    });
+  }
+
+  return {
+    englishTokens: [...englishTokens],
+    arabicTokens: [...arabicTokens],
+  };
+};
+
 export const initializeNotificationWorker = () => {
   const connection = getRedisClient();
 
   const worker = new Worker(
     'notification-queue',
     async (job: Job) => {
-      const { traceId, channel, title, message, data } = job.data;
+      const { traceId, channel, title, message, titleArabic, messageArabic, data } =
+        job.data;
       console.log(
         `[Notification Worker] Processing ${job.name} (channel: ${channel})`
       );
 
       try {
         if (job.name === 'send-notification') {
-          const { userId, fcmToken } = job.data;
+          const { userId, fcmToken, language } = job.data;
 
           // 1. Socket notification (Save to DB & emit socket)
           if (channel === 'socket' || channel === 'both') {
@@ -30,6 +81,8 @@ export const initializeNotificationWorker = () => {
               receiver: userId,
               message: title,
               description: message,
+              messageArabic: titleArabic,
+              descriptionArabic: messageArabic,
               modelType: data?.modelType,
               reference: data?.reference,
             });
@@ -39,6 +92,8 @@ export const initializeNotificationWorker = () => {
               receiver: userId,
               message: title,
               description: message,
+              messageArabic: titleArabic,
+              descriptionArabic: messageArabic,
               modelType: data?.modelType,
               reference: data?.reference,
             });
@@ -50,9 +105,16 @@ export const initializeNotificationWorker = () => {
           // 2. Push notification (FCM)
           if (channel === 'push' || channel === 'both') {
             if (fcmToken) {
+              const localizedText = resolveLocalizedNotificationText(
+                language,
+                title,
+                message,
+                titleArabic,
+                messageArabic
+              );
               await sendNotification([fcmToken], {
-                message: title,
-                description: message,
+                message: localizedText.title,
+                description: localizedText.message,
                 data,
               }).catch((error) => {
                 console.warn(
@@ -73,7 +135,7 @@ export const initializeNotificationWorker = () => {
           job.name === 'send-batch-notification' ||
           job.name === 'send-promotional-notification'
         ) {
-          const { userIds, fcmTokens } = job.data;
+          const { userIds, fcmTokens, recipients } = job.data;
 
           // 1. Batch Socket notification
           if (channel === 'socket' || channel === 'both') {
@@ -81,6 +143,8 @@ export const initializeNotificationWorker = () => {
               receiver: userId,
               message: title,
               description: message,
+              messageArabic: titleArabic,
+              descriptionArabic: messageArabic,
               modelType: data?.modelType,
               reference: data?.reference,
             }));
@@ -93,6 +157,8 @@ export const initializeNotificationWorker = () => {
                 receiver: userId,
                 message: title,
                 description: message,
+                messageArabic: titleArabic,
+                descriptionArabic: messageArabic,
                 modelType: data?.modelType,
                 reference: data?.reference,
               });
@@ -104,19 +170,49 @@ export const initializeNotificationWorker = () => {
 
           // 2. Batch Push notification (FCM tokens are resolved before enqueue)
           if (channel === 'push' || channel === 'both') {
-            if (fcmTokens && fcmTokens.length > 0) {
-              await sendNotification(fcmTokens, {
-                message: title,
-                description: message,
-                data,
-              }).catch((error) => {
-                console.warn(
-                  `[Notification Worker] Firebase multicast send failed:`,
-                  error instanceof Error ? error.message : error
+            const { englishTokens, arabicTokens } = groupPushTokensByLanguage(
+              recipients,
+              fcmTokens
+            );
+            const totalTokens = englishTokens.length + arabicTokens.length;
+
+            if (totalTokens > 0) {
+              if (englishTokens.length > 0) {
+                await sendNotification(englishTokens, {
+                  message: title,
+                  description: message,
+                  data,
+                }).catch((error) => {
+                  console.warn(
+                    `[Notification Worker] Firebase english multicast send failed:`,
+                    error instanceof Error ? error.message : error
+                  );
+                });
+              }
+
+              if (arabicTokens.length > 0) {
+                const localizedText = resolveLocalizedNotificationText(
+                  'arabic',
+                  title,
+                  message,
+                  titleArabic,
+                  messageArabic
                 );
-              });
+
+                await sendNotification(arabicTokens, {
+                  message: localizedText.title,
+                  description: localizedText.message,
+                  data,
+                }).catch((error) => {
+                  console.warn(
+                    `[Notification Worker] Firebase arabic multicast send failed:`,
+                    error instanceof Error ? error.message : error
+                  );
+                });
+              }
+
               console.log(
-                `[Notification Worker] Batch push notification sent to ${fcmTokens.length} devices via Firebase`
+                `[Notification Worker] Batch push notification sent to ${totalTokens} devices via Firebase`
               );
             } else {
               console.log(
@@ -145,5 +241,3 @@ export const initializeNotificationWorker = () => {
   console.log('[Notification Worker] Notification worker initialized');
   return worker;
 };
-
-

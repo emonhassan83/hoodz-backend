@@ -1,0 +1,161 @@
+{
+  "order": {
+    "paid": {
+      "title": "Payment received",
+      "message": "We received your payment for order {{orderId}}. The shop will confirm it shortly."
+    },
+    "confirmed": {
+      "title": "Order confirmed",
+      "message": "The shop confirmed your order {{orderId}}. They will start preparing it soon."
+    },
+    "processing": {
+      "title": "Order is being prepared",
+      "message": "Your order {{orderId}} is now being processed by the shop."
+    },
+    "rider_assigned": {
+      "title": "Rider assigned",
+      "message": "A rider has been assigned to your order {{orderId}}."
+    },
+    "picked_up": {
+      "title": "Order picked up",
+      "message": "Your order {{orderId}} has been picked up from the shop."
+    },
+    "on_the_way": {
+      "title": "Order on the way",
+      "message": "Your order {{orderId}} is on the way to you."
+    },
+    "delivered": {
+      "title": "Order delivered",
+      "message": "Your order {{orderId}} has been delivered. Please rate your rider."
+    }
+  },
+  "product": {
+    "back_in_stock": {
+      "title": "Product back in stock",
+      "message": "{{productTitle}} is available again."
+    }
+  },
+  "coin": {
+    "earned": {
+      "title": "You earned {{coins}} coins",
+      "account_creation": "You earned {{coins}} welcome bonus coins.",
+      "profile_completion": "You earned {{coins}} coins for completing your profile.",
+      "purchase": "You earned {{coins}} coins from your order.",
+      "product_review": "You earned {{coins}} coins for your product review.",
+      "photo_review": "You earned {{coins}} coins for your photo review.",
+      "referral_inviter": "You earned {{coins}} coins after your friend placed their first order.",
+      "referral_invitee": "You earned {{coins}} referral coins on your first order.",
+      "message": "You earned {{coins}} coins."
+    },
+    "redeemed": {
+      "title": "You used {{coins}} coins",
+      "message": "You used {{coins}} coins on your order."
+    },
+    "expired": {
+      "title": "{{coins}} coins expired",
+      "message": "{{coins}} coins expired from your account."
+    },
+    "reminder_waiting": {
+      "title": "{{coins}} coins are waiting",
+      "message": "You have {{coins}} coins waiting in your account."
+    },
+    "reminder_expiring": {
+      "title": "{{coins}} coins expire soon",
+      "message": "Your {{coins}} coins expire in 10 days!"
+    }
+  },
+  "grievance": {
+    "resolved": {
+      "title": "Grievance resolved",
+      "message": "Your grievance has been resolved."
+    },
+    "rejected": {
+      "title": "Grievance rejected",
+      "message": "Your grievance has been rejected."
+    }
+  },
+  "review": {
+    "ride_rating": {
+      "title": "New ride rating",
+      "message": "A customer rated your delivery {{rating}} stars."
+    }
+  },
+  "job": {
+    "new_request": {
+      "title": "New delivery nearby",
+      "message": "A nearby order is waiting for a rider. Open the app to accept."
+    },
+    "rematch": {
+      "title": "Delivery still waiting",
+      "message": "Still unassigned. Offer {{attempt}}{{maxAttemptsText}} - accept if available."
+    },
+    "matching_failed": {
+      "title": "Rider matching failed",
+      "message": "No rider accepted this job. Assign a rider manually."
+    }
+  },
+  "deposit": {
+    "submitted": {
+      "title": "New COD deposit submitted",
+      "message": "A rider submitted a deposit of {{amount}}."
+    },
+    "verified": {
+      "title": "Deposit verified",
+      "message": "Your deposit of {{amount}} has been verified.{{noteText}}"
+    },
+    "rejected": {
+      "title": "Deposit rejected",
+      "message": "Your deposit of {{amount}} was rejected.{{noteText}}"
+    }
+  },
+  "withdraw": {
+    "requested": {
+      "title": "New withdraw request",
+      "message": "A rider requested a withdraw of {{amount}}.{{noteText}}"
+    },
+    "completed": {
+      "title": "Withdraw completed",
+      "message": "Your withdraw of {{amount}} has been completed.{{noteText}}"
+    },
+    "rejected": {
+      "title": "Withdraw rejected",
+      "message": "Your withdraw of {{amount}} has been rejected.{{noteText}}"
+    }
+  },
+  "kyc": {
+    "approved": {
+      "title": "KYC Approved",
+      "message": "Your KYC has been approved. Your rider account is now active."
+    },
+    "rejected": {
+      "title": "KYC Rejected",
+      "message": "Your KYC has been rejected. Reason: {{reason}}"
+    },
+    "updated": {
+      "title": "KYC Status Updated",
+      "message": "Your KYC status has been updated."
+    }
+  },
+  "user": {
+    "account_active": {
+      "title": "Account Activated",
+      "message": "Your account has been successfully activated. You can now access all available features."
+    },
+    "account_blocked": {
+      "title": "Account Blocked",
+      "message": "Your account has been blocked. Please contact support for further assistance."
+    },
+    "account_updated": {
+      "title": "Account Status Updated",
+      "message": "Your account status has been updated."
+    },
+    "vendor_payout": {
+      "title": "Vendor payout completed",
+      "message": "Admin paid {{amount}} to your shop. Remaining balance: {{remaining}}."
+    },
+    "rider_pending_kyc": {
+      "title": "Rider Account Pending KYC",
+      "message": "Your signup verification is complete. Please submit KYC for admin approval."
+    }
+  }
+}

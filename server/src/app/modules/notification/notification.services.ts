@@ -29,6 +29,8 @@ const createNotificationIntoDB = async (
     channel: 'both',
     title: payload.message,
     message: payload.description,
+    titleArabic: payload.messageArabic,
+    messageArabic: payload.descriptionArabic,
     data: {
       modelType: payload.modelType,
       reference: payload.reference,
@@ -42,7 +44,13 @@ const sendPromosionalNotificationIntoDB = async (
   traceId: string,
   payload: TPromosionalNotificationPayload
 ) => {
-  const { body, description, reference = null } = payload;
+  const {
+    body,
+    description,
+    bodyArabic,
+    descriptionArabic,
+    reference = null,
+  } = payload;
   const userCursor = getActiveUserCursorForPromotional();
 
   let totalUsers = 0;
@@ -57,6 +65,8 @@ const sendPromosionalNotificationIntoDB = async (
       channel: 'both',
       title: body,
       message: description,
+      titleArabic: bodyArabic,
+      messageArabic: descriptionArabic,
       data: {
         modelType: NOTIFICATION_MODEL_TYPE.Promosional,
         reference,

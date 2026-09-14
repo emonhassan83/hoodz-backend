@@ -4,6 +4,7 @@ import { Schema, model } from 'mongoose';
 import {
   REGISTER_WITH,
   registerWith,
+  USER_LANGUAGE,
   USER_ROLE,
   USER_STATUS,
 } from '@/app/modules/user/user.constant';
@@ -83,6 +84,11 @@ const userSchema = new Schema<IUser, IUserModal>(
     // deliveryTime: { type: String, default: null },
     // deliveryZone: { type: [String], default: [] },
     timeZone: { type: String, default: 'UTC' },
+    language: {
+      type: String,
+      enum: Object.values(USER_LANGUAGE),
+      default: USER_LANGUAGE.english,
+    },
     agentSchedule: {
       startTime: { type: String, default: null, trim: true },
       endTime: { type: String, default: null, trim: true },

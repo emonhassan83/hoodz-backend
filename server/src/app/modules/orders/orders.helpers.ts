@@ -15,6 +15,7 @@ import { Items } from '@/app/modules/items/items.model';
 import { Job } from '@/app/modules/job/job.model';
 import { Kyc } from '@/app/modules/kyc/kyc.model';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { buildNotificationCopy } from '@/app/modules/notification/notification.i18n';
 import { DELIVERY_TYPE, ORDER_ACTIVE_STATUSES, ORDER_LIST_FILTER, ORDER_STATUS, PAYMENT_STATUS } from '@/app/modules/orders/orders.constant';
 import { IOrders } from '@/app/modules/orders/orders.interface';
 import { Orders } from '@/app/modules/orders/orders.model';
@@ -868,41 +869,14 @@ export type TOrderUserNotice =
   | 'on_the_way'
   | 'delivered';
 
-const orderNoticeCopy: Record<
-  TOrderUserNotice,
-  { title: string; body: (orderId: string) => string }
-> = {
-  paid: {
-    title: 'Payment received',
-    body: (orderId) =>
-      `We received your payment for order ${orderId}. The shop will confirm it shortly.`,
-  },
-  confirmed: {
-    title: 'Order confirmed',
-    body: (orderId) =>
-      `The shop confirmed your order ${orderId}. They will start preparing it soon.`,
-  },
-  processing: {
-    title: 'Order is being prepared',
-    body: (orderId) =>
-      `Your order ${orderId} is now being processed by the shop.`,
-  },
-  rider_assigned: {
-    title: 'Rider assigned',
-    body: (orderId) => `A rider has been assigned to your order ${orderId}.`,
-  },
-  picked_up: {
-    title: 'Order picked up',
-    body: (orderId) => `Your order ${orderId} has been picked up from the shop.`,
-  },
-  on_the_way: {
-    title: 'Order on the way',
-    body: (orderId) => `Your order ${orderId} is on the way to you.`,
-  },
-  delivered: {
-    title: 'Order delivered',
-    body: (orderId) => `Your order ${orderId} has been delivered. Please rate your rider.`,
-  },
+const orderNoticeCopy: Record<TOrderUserNotice, string> = {
+  paid: 'order.paid',
+  confirmed: 'order.confirmed',
+  processing: 'order.processing',
+  rider_assigned: 'order.rider_assigned',
+  picked_up: 'order.picked_up',
+  on_the_way: 'order.on_the_way',
+  delivered: 'order.delivered',
 };
 
 /** Notifies the buyer about payment or order status changes (push + in-app). */
@@ -914,9 +888,7 @@ export const notifyOrderUser = async (
   if (!userId) return;
 
   const orderId = order.id || order._id?.toString?.();
-  const copy = orderNoticeCopy[notice];
-  const title = copy.title;
-  const body = copy.body(orderId);
+  const copy = buildNotificationCopy(orderNoticeCopy[notice], { orderId });
 
   const user = await User.findById(userId).select('fcmToken').lean();
 
@@ -924,8 +896,10 @@ export const notifyOrderUser = async (
     userId,
     fcmToken: user?.fcmToken,
     channel: 'both',
-    title,
-    message: body,
+    title: copy.title,
+    message: copy.message,
+    titleArabic: copy.titleArabic,
+    messageArabic: copy.messageArabic,
     data: {
       modelType: NOTIFICATION_MODEL_TYPE.Order,
       reference: order._id?.toString?.(),
@@ -1318,5 +1292,3 @@ export const creditShopBalanceForPaidOrders = async (
     await flagQuery;
   }
 };
-
-

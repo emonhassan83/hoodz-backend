@@ -1,0 +1,161 @@
+{
+  "order": {
+    "paid": {
+      "title": "تم استلام الدفع",
+      "message": "تم استلام دفعتك للطلب {{orderId}}. سيقوم المتجر بتأكيده قريبًا."
+    },
+    "confirmed": {
+      "title": "تم تأكيد الطلب",
+      "message": "أكد المتجر طلبك {{orderId}}. سيبدأون في تحضيره قريبًا."
+    },
+    "processing": {
+      "title": "يتم تحضير الطلب",
+      "message": "يتم الآن تجهيز طلبك {{orderId}} بواسطة المتجر."
+    },
+    "rider_assigned": {
+      "title": "تم تعيين السائق",
+      "message": "تم تعيين سائق لطلبك {{orderId}}."
+    },
+    "picked_up": {
+      "title": "تم استلام الطلب",
+      "message": "تم استلام طلبك {{orderId}} من المتجر."
+    },
+    "on_the_way": {
+      "title": "الطلب في الطريق",
+      "message": "طلبك {{orderId}} في الطريق إليك."
+    },
+    "delivered": {
+      "title": "تم توصيل الطلب",
+      "message": "تم توصيل طلبك {{orderId}}. يرجى تقييم السائق."
+    }
+  },
+  "product": {
+    "back_in_stock": {
+      "title": "المنتج متوفر مرة أخرى",
+      "message": "{{productTitle}} متوفر مرة أخرى."
+    }
+  },
+  "coin": {
+    "earned": {
+      "title": "لقد حصلت على {{coins}} عملة",
+      "account_creation": "لقد حصلت على {{coins}} عملة ترحيبية.",
+      "profile_completion": "لقد حصلت على {{coins}} عملة لإكمال ملفك الشخصي.",
+      "purchase": "لقد حصلت على {{coins}} عملة من طلبك.",
+      "product_review": "لقد حصلت على {{coins}} عملة مقابل تقييم المنتج.",
+      "photo_review": "لقد حصلت على {{coins}} عملة مقابل تقييمك بالصور.",
+      "referral_inviter": "لقد حصلت على {{coins}} عملة بعد أن أكمل صديقك أول طلب.",
+      "referral_invitee": "لقد حصلت على {{coins}} عملة إحالة في أول طلب لك.",
+      "message": "لقد حصلت على {{coins}} عملة."
+    },
+    "redeemed": {
+      "title": "لقد استخدمت {{coins}} عملة",
+      "message": "لقد استخدمت {{coins}} عملة في طلبك."
+    },
+    "expired": {
+      "title": "انتهت صلاحية {{coins}} عملة",
+      "message": "انتهت صلاحية {{coins}} عملة من حسابك."
+    },
+    "reminder_waiting": {
+      "title": "{{coins}} عملة في انتظارك",
+      "message": "لديك {{coins}} عملة في حسابك."
+    },
+    "reminder_expiring": {
+      "title": "{{coins}} عملة ستنتهي صلاحيتها قريبًا",
+      "message": "ستنتهي صلاحية {{coins}} عملة خلال 10 أيام!"
+    }
+  },
+  "grievance": {
+    "resolved": {
+      "title": "تم حل الشكوى",
+      "message": "تم حل الشكوى الخاصة بك."
+    },
+    "rejected": {
+      "title": "تم رفض الشكوى",
+      "message": "تم رفض الشكوى الخاصة بك."
+    }
+  },
+  "review": {
+    "ride_rating": {
+      "title": "تقييم جديد للتوصيل",
+      "message": "قام عميل بتقييم توصيلك بـ {{rating}} نجوم."
+    }
+  },
+  "job": {
+    "new_request": {
+      "title": "توصيل جديد بالقرب منك",
+      "message": "يوجد طلب قريب في انتظار سائق. افتح التطبيق للقبول."
+    },
+    "rematch": {
+      "title": "التوصيل لا يزال في الانتظار",
+      "message": "لا يزال الطلب غير معين. العرض {{attempt}}{{maxAttemptsText}} - اقبله إذا كنت متاحًا."
+    },
+    "matching_failed": {
+      "title": "فشل العثور على سائق",
+      "message": "لم يقبل أي سائق هذه المهمة. يرجى تعيين سائق يدويًا."
+    }
+  },
+  "deposit": {
+    "submitted": {
+      "title": "تم تقديم إيداع نقدي جديد",
+      "message": "قدم أحد السائقين إيداعًا بقيمة {{amount}}."
+    },
+    "verified": {
+      "title": "تم التحقق من الإيداع",
+      "message": "تم التحقق من إيداعك بقيمة {{amount}}.{{noteText}}"
+    },
+    "rejected": {
+      "title": "تم رفض الإيداع",
+      "message": "تم رفض إيداعك بقيمة {{amount}}.{{noteText}}"
+    }
+  },
+  "withdraw": {
+    "requested": {
+      "title": "طلب سحب جديد",
+      "message": "طلب أحد السائقين سحب مبلغ {{amount}}.{{noteText}}"
+    },
+    "completed": {
+      "title": "تم إكمال السحب",
+      "message": "تم إكمال طلب السحب بقيمة {{amount}}.{{noteText}}"
+    },
+    "rejected": {
+      "title": "تم رفض السحب",
+      "message": "تم رفض طلب السحب بقيمة {{amount}}.{{noteText}}"
+    }
+  },
+  "kyc": {
+    "approved": {
+      "title": "تمت الموافقة على KYC",
+      "message": "تمت الموافقة على KYC الخاص بك. حساب السائق الخاص بك نشط الآن."
+    },
+    "rejected": {
+      "title": "تم رفض KYC",
+      "message": "تم رفض KYC الخاص بك. السبب: {{reason}}"
+    },
+    "updated": {
+      "title": "تم تحديث حالة KYC",
+      "message": "تم تحديث حالة KYC الخاصة بك."
+    }
+  },
+  "user": {
+    "account_active": {
+      "title": "تم تفعيل الحساب",
+      "message": "تم تفعيل حسابك بنجاح. يمكنك الآن الوصول إلى جميع الميزات المتاحة."
+    },
+    "account_blocked": {
+      "title": "تم حظر الحساب",
+      "message": "تم حظر حسابك. يرجى التواصل مع الدعم للحصول على المساعدة."
+    },
+    "account_updated": {
+      "title": "تم تحديث حالة الحساب",
+      "message": "تم تحديث حالة حسابك."
+    },
+    "vendor_payout": {
+      "title": "تم إكمال دفع البائع",
+      "message": "دفعت الإدارة {{amount}} لمتجرك. الرصيد المتبقي: {{remaining}}."
+    },
+    "rider_pending_kyc": {
+      "title": "حساب السائق بانتظار KYC",
+      "message": "اكتمل التحقق من التسجيل. يرجى تقديم KYC للحصول على موافقة الإدارة."
+    }
+  }
+}

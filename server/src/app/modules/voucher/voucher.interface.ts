@@ -11,7 +11,9 @@ export interface IVoucher {
   _id: Types.ObjectId;
   code: string;
   title: string;
+  titleArabic?: string | null;
   description?: string | null;
+  descriptionArabic?: string | null;
   voucherType: TVoucherType;
   shop?: Types.ObjectId | null;
   user?: Types.ObjectId | null;

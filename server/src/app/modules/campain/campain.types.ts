@@ -1,5 +1,6 @@
 export type TCampainPayload = {
   title: string;
+  titleArabic?: string | null;
   products: string[];
 };
 

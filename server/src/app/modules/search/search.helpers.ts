@@ -140,7 +140,7 @@ export const getPopularCategories = async () => {
   if (categoryIds.length === 0) return [];
 
   return Category.find({ _id: { $in: categoryIds } })
-    .select('_id title icon')
+    .select('_id title titleArabic icon')
     .sort({ title: 1 })
     .lean();
 };
@@ -189,7 +189,8 @@ export const getFilterPageData = async () => {
       {
         $project: {
           _id: '$category._id',
-          title: '$category.title'
+          title: '$category.title',
+          titleArabic: '$category.titleArabic',
         },
       },
     ]),

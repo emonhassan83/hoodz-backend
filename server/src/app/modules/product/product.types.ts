@@ -39,7 +39,9 @@ export type TProductPayload = {
   brand: string;
   brandType?: TProductBrandType;
   title: string;
+  titleArabic?: string | null;
   description: string;
+  descriptionArabic?: string | null;
   banner?: string | null;
   images?: string[];
   price: number;

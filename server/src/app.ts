@@ -12,6 +12,10 @@ import morgan from 'morgan';
 
 import corsConfiguration from '@/app/configs/cors.configs';
 import {
+  i18next,
+  i18nextMiddleware,
+} from '@/app/configs/i18next.configs';
+import {
   morganMessageFormat,
   streamConfig,
 } from '@/app/configs/morgan.configs';
@@ -37,6 +41,7 @@ app.use(
   })
 );
 app.use(helmet());
+app.use(i18nextMiddleware.handle(i18next));
 
 app.get('/health', (_req: Request, res: Response) => {
   const traceId = getTraceId();

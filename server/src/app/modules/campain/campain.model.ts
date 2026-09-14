@@ -9,6 +9,11 @@ const campainSchema = new Schema<ICampain, ICampainModel>(
       required: true,
       trim: true,
     },
+    titleArabic: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     products: {
       type: [{ type: Schema.Types.ObjectId, ref: 'Product' }],
       default: [],

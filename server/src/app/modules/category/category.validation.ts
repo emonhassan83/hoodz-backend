@@ -10,6 +10,7 @@ const brandTypeSchema = z.enum(
 const createCategoryValidationSchema = z.object({
   body: z.object({
     title: z.string().trim().min(1, 'Title is required'),
+    titleArabic: z.string().trim().min(1, 'Arabic title is required').nullable().optional(),
     icon: z.string().trim().min(1, 'Icon is required'),
   }),
 });
@@ -18,6 +19,7 @@ const updateCategoryValidationSchema = z.object({
   body: z
     .object({
       title: z.string().trim().min(1, 'Title is required').optional(),
+      titleArabic: z.string().trim().min(1, 'Arabic title is required').nullable().optional(),
       icon: z.string().trim().min(1, 'Icon is required').optional(),
     })
     .refine((data) => Object.keys(data).length > 0, {
@@ -51,5 +53,4 @@ export const CategoryValidation = {
   getCategoryByBrandTypeValidationSchema,
   getCategoryByShopValidationSchema,
 };
-
 

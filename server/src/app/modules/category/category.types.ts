@@ -1,5 +1,6 @@
 export type TCategoryPayload = {
   title: string;
+  titleArabic?: string | null;
   icon: string;
 };
 

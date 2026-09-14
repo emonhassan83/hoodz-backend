@@ -26,6 +26,10 @@ export const USER_ROLE = {
   user: 'user',
 } as const
 
-export const AUTHENTICATED_ROLES: IUserRole[] = Object.values(USER_ROLE)
+export const USER_LANGUAGE = {
+  english: 'english',
+  arabic: 'arabic',
+} as const
 
+export const AUTHENTICATED_ROLES: IUserRole[] = Object.values(USER_ROLE)
 

@@ -15,14 +15,18 @@ export type TVoucherStatus =
 
 export type TVoucherGiftDetails = {
   name?: string;
+  nameArabic?: string;
   bannerImage?: string[];
   description?: string;
+  descriptionArabic?: string;
 };
 
 export type TVoucherPayload = {
   code: string;
   title: string;
+  titleArabic?: string | null;
   description?: string;
+  descriptionArabic?: string | null;
   voucherType: TVoucherType;
   shop?: string | null;
   user?: string | null;

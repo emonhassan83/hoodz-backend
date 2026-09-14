@@ -11,6 +11,8 @@ const createNotificationSchema = z.object({
     receiver: z.string({ message: 'Receiver is required' }).min(1),
     message: z.string({ message: 'Message is required' }).min(1),
     description: z.string().optional(),
+    messageArabic: z.string().optional(),
+    descriptionArabic: z.string().optional(),
     reference: z.string().optional().nullable(),
     modelType: modelTypeSchema,
   }),
@@ -20,6 +22,8 @@ const promosionalNotificationSchema = z.object({
   body: z.object({
     body: z.string({ message: 'Body is required' }).min(1),
     description: z.string({ message: 'Description is required' }).min(1),
+    bodyArabic: z.string().optional(),
+    descriptionArabic: z.string().optional(),
     reference: z.string().optional().nullable(),
   }),
 });

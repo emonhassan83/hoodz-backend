@@ -28,6 +28,14 @@ const notificationSchema = new Schema<INotification>(
       type: String,
       default: '',
     },
+    messageArabic: {
+      type: String,
+      default: '',
+    },
+    descriptionArabic: {
+      type: String,
+      default: '',
+    },
     date: {
       type: Date,
       default: Date.now,

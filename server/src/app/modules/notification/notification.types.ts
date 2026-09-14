@@ -5,6 +5,8 @@ export type INotificationModelType = keyof typeof NOTIFICATION_MODEL_TYPE;
 export type TPromosionalNotificationPayload = {
   body: string;
   description: string;
+  bodyArabic?: string;
+  descriptionArabic?: string;
   reference?: string | null;
 };
 

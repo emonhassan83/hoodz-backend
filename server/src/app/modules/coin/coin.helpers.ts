@@ -5,6 +5,10 @@ import { TCoinEarningAction } from '@/app/modules/coin/coin.interface';
 import { CoinAccount, CoinTransaction } from '@/app/modules/coin/coin.model';
 import { TReferenceId } from '@/app/modules/coin/coin.types';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import {
+  buildNotificationCopy,
+  translateNotificationText,
+} from '@/app/modules/notification/notification.i18n';
 import { sendNotificationViaQueue } from '@/app/utils/notification-queue.service';
 
 type TCoinNotificationReference = string | Types.ObjectId | null | undefined;
@@ -127,32 +131,36 @@ export const syncAccountBalance = async (userId: string, now = new Date()) => {
   return stats.balance;
 };
 
-const getEarnedCoinMessage = (
+const getEarnedCoinMessageKey = (
   action: (typeof COIN_EARNING_ACTION)[keyof typeof COIN_EARNING_ACTION],
-  coins: number
+  fallbackKey = 'coin.earned.message'
 ) => {
   const descriptions = {
-    [COIN_EARNING_ACTION.account_creation]: `You earned ${coins} welcome bonus coins.`,
-    [COIN_EARNING_ACTION.profile_completion]: `You earned ${coins} coins for completing your profile.`,
-    [COIN_EARNING_ACTION.purchase]: `You earned ${coins} coins from your order.`,
-    [COIN_EARNING_ACTION.product_review]: `You earned ${coins} coins for your product review.`,
-    [COIN_EARNING_ACTION.photo_review]: `You earned ${coins} coins for your photo review.`,
-    [COIN_EARNING_ACTION.referral_inviter]: `You earned ${coins} coins after your friend placed their first order.`,
-    [COIN_EARNING_ACTION.referral_invitee]: `You earned ${coins} referral coins on your first order.`,
+    [COIN_EARNING_ACTION.account_creation]: 'coin.earned.account_creation',
+    [COIN_EARNING_ACTION.profile_completion]: 'coin.earned.profile_completion',
+    [COIN_EARNING_ACTION.purchase]: 'coin.earned.purchase',
+    [COIN_EARNING_ACTION.product_review]: 'coin.earned.product_review',
+    [COIN_EARNING_ACTION.photo_review]: 'coin.earned.photo_review',
+    [COIN_EARNING_ACTION.referral_inviter]: 'coin.earned.referral_inviter',
+    [COIN_EARNING_ACTION.referral_invitee]: 'coin.earned.referral_invitee',
   };
 
-  return descriptions[action] ?? `You earned ${coins} coins.`;
+  return descriptions[action] ?? fallbackKey;
 };
 
 export const sendCoinNotification = async ({
   userId,
   title,
   description,
+  titleArabic,
+  descriptionArabic,
   reference,
 }: {
   userId: string;
   title: string;
   description: string;
+  titleArabic?: string;
+  descriptionArabic?: string;
   reference?: TCoinNotificationReference;
 }) =>
   sendNotificationViaQueue({
@@ -160,6 +168,8 @@ export const sendCoinNotification = async ({
     channel: 'both',
     title,
     message: description,
+    titleArabic,
+    messageArabic: descriptionArabic,
     data: {
       modelType: NOTIFICATION_MODEL_TYPE.Coin,
       reference: reference?.toString(),
@@ -172,48 +182,72 @@ export const sendCoinEarnedNotification = (
   action: (typeof COIN_EARNING_ACTION)[keyof typeof COIN_EARNING_ACTION],
   reference?: TCoinNotificationReference
 ) =>
-  sendCoinNotification({
-    userId,
-    title: `You earned ${coins} coins`,
-    description: getEarnedCoinMessage(action, coins),
-    reference,
-  });
+  {
+    const titleCopy = buildNotificationCopy('coin.earned', { coins });
+    const messageCopy = translateNotificationText(getEarnedCoinMessageKey(action), {
+      coins,
+    });
+
+    return sendCoinNotification({
+      userId,
+      title: titleCopy.title,
+      description: messageCopy.english,
+      titleArabic: titleCopy.titleArabic,
+      descriptionArabic: messageCopy.arabic,
+      reference,
+    });
+  };
 
 export const sendCoinRedeemedNotification = (
   userId: string,
   coins: number,
   reference?: TCoinNotificationReference
 ) =>
-  sendCoinNotification({
-    userId,
-    title: `You used ${coins} coins`,
-    description: `You used ${coins} coins on your order.`,
-    reference,
-  });
+  {
+    const copy = buildNotificationCopy('coin.redeemed', { coins });
+    return sendCoinNotification({
+      userId,
+      title: copy.title,
+      description: copy.message,
+      titleArabic: copy.titleArabic,
+      descriptionArabic: copy.messageArabic,
+      reference,
+    });
+  };
 
 export const sendCoinExpiredNotification = (
   userId: string,
   coins: number,
   reference?: TCoinNotificationReference
 ) =>
-  sendCoinNotification({
-    userId,
-    title: `${coins} coins expired`,
-    description: `${coins} coins expired from your account.`,
-    reference,
-  });
+  {
+    const copy = buildNotificationCopy('coin.expired', { coins });
+    return sendCoinNotification({
+      userId,
+      title: copy.title,
+      description: copy.message,
+      titleArabic: copy.titleArabic,
+      descriptionArabic: copy.messageArabic,
+      reference,
+    });
+  };
 
 export const sendCoinReminderNotification = (
   userId: string,
   coins: number,
   days: 30 | 50
 ) =>
-  sendCoinNotification({
-    userId,
-    title: days === 30 ? `${coins} coins are waiting` : `${coins} coins expire soon`,
-    description:
-      days === 30
-        ? `You have ${coins} coins waiting in your account.`
-        : `Your ${coins} coins expire in 10 days!`,
-  });
+  {
+    const copy = buildNotificationCopy(
+      days === 30 ? 'coin.reminder_waiting' : 'coin.reminder_expiring',
+      { coins }
+    );
 
+    return sendCoinNotification({
+      userId,
+      title: copy.title,
+      description: copy.message,
+      titleArabic: copy.titleArabic,
+      descriptionArabic: copy.messageArabic,
+    });
+  };

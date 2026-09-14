@@ -14,6 +14,7 @@ import { User } from '@/app/modules/user/user.model';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { TDepositRequester } from '@/app/modules/deposit/deposit.types';
 import { NOTIFICATION_MODEL_TYPE } from '@/app/modules/notification/notification.constant';
+import { buildNotificationCopy } from '@/app/modules/notification/notification.i18n';
 import {
   sendBatchNotificationViaQueue,
   sendBothNotificationViaQueue,
@@ -106,12 +107,18 @@ export const notifyAgentsDepositSubmitted = async (deposit: {
 }) => {
   const agentIds = await getUserIdsByRoles([USER_ROLE.agent]);
   if (!agentIds.length) return;
+  const amountText = Number(deposit.amount ?? 0).toFixed(2);
+  const copy = buildNotificationCopy('deposit.submitted', {
+    amount: amountText,
+  });
 
   await sendBatchNotificationViaQueue({
     userIds: agentIds,
     channel: 'both',
-    title: 'New COD deposit submitted',
-    message: `A rider submitted a deposit of ${Number(deposit.amount ?? 0).toFixed(2)}.`,
+    title: copy.title,
+    message: copy.message,
+    titleArabic: copy.titleArabic,
+    messageArabic: copy.messageArabic,
     data: {
       modelType: NOTIFICATION_MODEL_TYPE.Deposit,
       reference: toIdString(deposit._id),
@@ -137,15 +144,27 @@ export const notifyRiderDepositVerified = async (deposit: {
 
   const rider = await User.findById(riderId).select('fcmToken').lean();
   const isCompleted = deposit.status === DEPOSIT_STATUS.completed;
-  const noteSuffix = deposit.note ? ` Note: ${deposit.note}` : '';
+  const amountText = Number(deposit.amount ?? 0).toFixed(2);
+  const copy = buildNotificationCopy(
+    isCompleted ? 'deposit.verified' : 'deposit.rejected',
+    {
+      amount: amountText,
+      noteText: deposit.note ? ` Note: ${deposit.note}` : '',
+    }
+  );
+  const copyArabic = buildNotificationCopy(
+    isCompleted ? 'deposit.verified' : 'deposit.rejected',
+    {
+      amount: amountText,
+      noteText: deposit.note ? ` ملاحظة: ${deposit.note}` : '',
+    }
+  );
 
   await sendBothNotificationViaQueue(
     riderId,
     rider?.fcmToken ?? '',
-    isCompleted ? 'Deposit verified' : 'Deposit rejected',
-    isCompleted
-      ? `Your deposit of ${Number(deposit.amount ?? 0).toFixed(2)} has been verified.${noteSuffix}`
-      : `Your deposit of ${Number(deposit.amount ?? 0).toFixed(2)} was rejected.${noteSuffix}`,
+    copy.title,
+    copy.message,
     {
       modelType: NOTIFICATION_MODEL_TYPE.Deposit,
       reference: toIdString(deposit._id),
@@ -153,7 +172,9 @@ export const notifyRiderDepositVerified = async (deposit: {
       depositPublicId: deposit.id,
       status: deposit.status,
       note: deposit.note ?? null,
-    }
+    },
+    copy.titleArabic,
+    copyArabic.messageArabic
   ).catch((error) => {
     console.warn('[Deposit] Failed to notify rider about deposit verify', error);
   });
@@ -304,5 +325,3 @@ export const getRiderMoneySummary = async (riderId: string) => {
     collectedMoney: Number((collected[0]?.total ?? 0).toFixed(2)),
   };
 };
-
-

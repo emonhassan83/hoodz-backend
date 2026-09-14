@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { USER_STATUS } from '@/app/modules/user/user.constant';
+import { USER_LANGUAGE, USER_STATUS } from '@/app/modules/user/user.constant';
 
 const geoPointSchema = z.object({
   type: z.literal('Point').optional(),
@@ -39,6 +39,9 @@ const updateUserValidationSchema = z.object({
     deliveryAddress: deliveryAddressSchema.optional(),
     deliveryTime: z.string().optional(),
     deliveryZone: z.array(z.string().min(1)).optional(),
+    language: z
+      .enum(Object.values(USER_LANGUAGE) as [string, ...string[]])
+      .optional(),
     isProfileSetUp: z.boolean().optional(),
   }),
 });
