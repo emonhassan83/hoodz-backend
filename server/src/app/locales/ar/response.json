@@ -117,6 +117,8 @@
   "POS order removed successfully": "تم حذف طلب نقطة البيع بنجاح",
 
   "SKU generated successfully": "تم إنشاء SKU بنجاح",
+  "Product created successfully": "تم إنشاء المنتج بنجاح",
+  "Products fetched successfully": "تم جلب المنتجات بنجاح",
   "Product view saved successfully": "تم حفظ مشاهدة المنتج بنجاح",
   "Recently viewed products fetched successfully": "تم جلب المنتجات التي تمت مشاهدتها مؤخرًا بنجاح",
   "Trending products fetched successfully": "تم جلب المنتجات الشائعة بنجاح",
@@ -125,6 +127,10 @@
   "Shop products search fetched successfully": "تم جلب نتائج بحث منتجات المتجر بنجاح",
   "My products fetched successfully": "تم جلب منتجاتي بنجاح",
   "Product fetched successfully": "تم جلب المنتج بنجاح",
+  "Product updated successfully": "تم تحديث المنتج بنجاح",
+  "Product deleted successfully": "تم حذف المنتج بنجاح",
+  "Product is already in stock": "المنتج متوفر بالفعل",
+  "Stock notification request saved successfully": "تم حفظ طلب إشعار المخزون بنجاح",
 
   "Review created successfully": "تم إنشاء التقييم بنجاح",
   "Author reviews fetched successfully": "تم جلب تقييمات المؤلف بنجاح",
@@ -204,6 +210,10 @@
 
   "Wishlist fetched successfully": "تم جلب قائمة المفضلة بنجاح",
   "Wishlist item removed successfully": "تم حذف عنصر قائمة المفضلة بنجاح",
+  "Product added to wishlist successfully": "تمت إضافة المنتج إلى قائمة المفضلة بنجاح",
+  "Product removed from wishlist successfully": "تم حذف المنتج من قائمة المفضلة بنجاح",
+  "Shop added to wishlist successfully": "تمت إضافة المتجر إلى قائمة المفضلة بنجاح",
+  "Shop removed from wishlist successfully": "تم حذف المتجر من قائمة المفضلة بنجاح",
 
   "Withdraw request submitted successfully": "تم إرسال طلب السحب بنجاح",
   "Withdraw requests fetched successfully": "تم جلب طلبات السحب بنجاح",

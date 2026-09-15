@@ -117,6 +117,8 @@
   "POS order removed successfully": "POS order removed successfully",
 
   "SKU generated successfully": "SKU generated successfully",
+  "Product created successfully": "Product created successfully",
+  "Products fetched successfully": "Products fetched successfully",
   "Product view saved successfully": "Product view saved successfully",
   "Recently viewed products fetched successfully": "Recently viewed products fetched successfully",
   "Trending products fetched successfully": "Trending products fetched successfully",
@@ -125,6 +127,10 @@
   "Shop products search fetched successfully": "Shop products search fetched successfully",
   "My products fetched successfully": "My products fetched successfully",
   "Product fetched successfully": "Product fetched successfully",
+  "Product updated successfully": "Product updated successfully",
+  "Product deleted successfully": "Product deleted successfully",
+  "Product is already in stock": "Product is already in stock",
+  "Stock notification request saved successfully": "Stock notification request saved successfully",
 
   "Review created successfully": "Review created successfully",
   "Author reviews fetched successfully": "Author reviews fetched successfully",
@@ -204,6 +210,10 @@
 
   "Wishlist fetched successfully": "Wishlist fetched successfully",
   "Wishlist item removed successfully": "Wishlist item removed successfully",
+  "Product added to wishlist successfully": "Product added to wishlist successfully",
+  "Product removed from wishlist successfully": "Product removed from wishlist successfully",
+  "Shop added to wishlist successfully": "Shop added to wishlist successfully",
+  "Shop removed from wishlist successfully": "Shop removed from wishlist successfully",
 
   "Withdraw request submitted successfully": "Withdraw request submitted successfully",
   "Withdraw requests fetched successfully": "Withdraw requests fetched successfully",
