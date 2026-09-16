@@ -56,6 +56,7 @@ export type TUserMetaProfile = {
 export type TUserMetaPayload = {
   profile: TUserMetaProfile;
   unreadNotification: number;
+  cartItems: number;
   firstSectionBanner: TMetaBannerItem[];
   lastOrder: TMetaLastOrder | null;
   nearbyBrands: TMetaBrandItem[];
@@ -67,7 +68,7 @@ export type TUserMetaPayload = {
 
 export type TGuestMetaPayload = Omit<
   TUserMetaPayload,
-  'lastOrder' | 'profile' | 'unreadNotification'
+  'lastOrder' | 'profile' | 'unreadNotification' | 'cartItems'
 >;
 
 export type TRiderAssignJob = {

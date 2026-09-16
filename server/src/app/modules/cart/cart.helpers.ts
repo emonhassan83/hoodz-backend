@@ -334,6 +334,12 @@ export const getCartItemsOrEmpty = async (actor: TCartActor) => {
   return cart?.items ?? [];
 };
 
+/** Returns total cart quantity for badge counts. */
+export const getCartItemsCount = async (actor: TCartActor) => {
+  const items = await getCartItemsOrEmpty(actor);
+  return items.reduce((total, item) => total + (item.quantity ?? 0), 0);
+};
+
 /** Refreshes Redis cart cache from the current MongoDB cart document. */
 export const syncCartCacheFromMongo = async (actor: TCartActor) => {
   const items = await getCartItemsOrEmpty(actor);

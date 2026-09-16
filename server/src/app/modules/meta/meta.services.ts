@@ -1,6 +1,7 @@
 import { HttpStatusCode } from 'axios';
 
 import ApiError from '@/app/errors/ApiError';
+import { getCartItemsCount } from '@/app/modules/cart/cart.helpers';
 import {
   getAdminDashboardStats,
   getAdminJoinedUsers,
@@ -48,6 +49,7 @@ const getUserMeta = async (
     trending,
     aiRecommended,
     unreadNotification,
+    cartItems,
   ] = await Promise.all([
     User.findById(userId)
       .select('name deliveryAddress')
@@ -59,6 +61,7 @@ const getUserMeta = async (
     ProductService.getTrendingProducts({ page: 1, limit: 2 }, userId),
     ProductService.getAiRecommendedProducts(actor, { page: 1, limit: 2 }),
     getRiderUnreadNotificationCount(userId),
+    getCartItemsCount(actor),
   ]);
 
   if (!user) {
@@ -71,6 +74,7 @@ const getUserMeta = async (
       deliveryAddress: user.deliveryAddress ?? null,
     },
     unreadNotification,
+    cartItems,
     firstSectionBanner: banners.firstSectionBanner,
     lastOrder,
     nearbyBrands,
