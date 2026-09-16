@@ -2,6 +2,7 @@ export type TCategoryPayload = {
   title: string;
   titleArabic?: string | null;
   icon: string;
+  iconArabic?: string | null;
 };
 
 export type TCategoryShopQuery = {

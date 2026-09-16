@@ -15,6 +15,7 @@ export type TMetaOrigin = {
 
 export type TMetaBannerItem = {
   banner: string;
+  bannerArabic?: string | null;
   reference: string | null;
   type: string;
 };

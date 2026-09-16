@@ -12,6 +12,12 @@ const createCategoryValidationSchema = z.object({
     title: z.string().trim().min(1, 'Title is required'),
     titleArabic: z.string().trim().min(1, 'Arabic title is required').nullable().optional(),
     icon: z.string().trim().min(1, 'Icon is required'),
+    iconArabic: z
+      .string()
+      .trim()
+      .min(1, 'Arabic icon is required')
+      .nullable()
+      .optional(),
   }),
 });
 
@@ -21,6 +27,12 @@ const updateCategoryValidationSchema = z.object({
       title: z.string().trim().min(1, 'Title is required').optional(),
       titleArabic: z.string().trim().min(1, 'Arabic title is required').nullable().optional(),
       icon: z.string().trim().min(1, 'Icon is required').optional(),
+      iconArabic: z
+        .string()
+        .trim()
+        .min(1, 'Arabic icon is required')
+        .nullable()
+        .optional(),
     })
     .refine((data) => Object.keys(data).length > 0, {
       message: 'At least one field is required',

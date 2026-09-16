@@ -13,6 +13,7 @@ export type IBannerStatus = (typeof BANNER_STATUS)[keyof typeof BANNER_STATUS];
 export interface IBanner {
   _id: Types.ObjectId;
   banner: string;
+  bannerArabic?: string | null;
   reference: string | null;
   type: IBannerType;
   section: ISectionType;

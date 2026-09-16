@@ -5,6 +5,7 @@ export interface ICategory {
   title: string;
   titleArabic?: string | null;
   icon: string;
+  iconArabic?: string | null;
 }
 
 export type ICategoryModel = Model<ICategory, Record<string, unknown>>;
