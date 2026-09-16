@@ -21,6 +21,12 @@ const sectionTypeSchema = z.enum([SECTION_TYPE.first, SECTION_TYPE.second]);
 const addBannerValidationSchema = z.object({
   body: z.object({
     banner: z.string().trim().min(1, 'Banner is required'),
+    bannerArabic: z
+      .string()
+      .trim()
+      .min(1, 'Arabic banner is required')
+      .nullable()
+      .optional(),
     reference: z.string().trim().min(1).nullable().optional(),
     type: bannerTypeSchema.optional(),
     section: sectionTypeSchema,
@@ -35,6 +41,12 @@ const updateBannerValidationSchema = z.object({
   body: z
     .object({
       banner: z.string().trim().min(1).optional(),
+      bannerArabic: z
+        .string()
+        .trim()
+        .min(1, 'Arabic banner is required')
+        .nullable()
+        .optional(),
       reference: z.string().trim().min(1).nullable().optional(),
       type: bannerTypeSchema.optional(),
       section: sectionTypeSchema.optional(),

@@ -20,6 +20,11 @@ const categorySchema = new Schema<ICategory, ICategoryModel>(
       required: [true, 'Icon is required'],
       trim: true,
     },
+    iconArabic: {
+      type: String,
+      default: null,
+      trim: true,
+    },
   }
 );
 

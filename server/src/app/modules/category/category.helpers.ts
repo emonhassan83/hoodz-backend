@@ -112,7 +112,9 @@ export const findCategoriesByBrandType = (brandType: string) =>
       $project: {
         _id: '$category._id',
         title: '$category.title',
+        titleArabic: '$category.titleArabic',
         icon: '$category.icon',
+        iconArabic: '$category.iconArabic',
       },
     },
   ]);

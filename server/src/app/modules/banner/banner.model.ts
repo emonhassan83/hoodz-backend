@@ -14,6 +14,11 @@ const bannerSchema = new Schema<IBanner, IBannerModel>(
       required: true,
       trim: true,
     },
+    bannerArabic: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     reference: {
       type: String,
       default: null,
