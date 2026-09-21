@@ -19,6 +19,7 @@ const createCampain = async (traceId: string, payload: TCampainPayload) => {
 
   const campain = await Campain.create({
     title: payload.title,
+    titleArabic: payload.titleArabic ?? null,
     products: payload.products,
   });
 

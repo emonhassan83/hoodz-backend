@@ -33,7 +33,7 @@ router
 
 router
   .route('/:categoryId')
-  .patch(
+  .put(
     auth(USER_ROLE.admin),
     validateRequest(CategoryValidation.updateCategoryValidationSchema),
     CategoryController.updateA
