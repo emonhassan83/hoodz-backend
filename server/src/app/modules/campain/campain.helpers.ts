@@ -11,7 +11,7 @@ export const campainPopulate = [
   {
     path: 'products',
     select:
-      'title banner price discountPrice avgRating ratingCount collectionType stock',
+      'title titleArabic banner price discountPrice avgRating ratingCount collectionType stock',
   },
 ];
 

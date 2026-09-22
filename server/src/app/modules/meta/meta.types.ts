@@ -29,6 +29,7 @@ export type TMetaBrandItem = {
 export type TMetaProductCard = {
   _id: unknown;
   title: string;
+  titleArabic?: string | null;
   collectionType: string;
   banner: string | null;
   price: number;

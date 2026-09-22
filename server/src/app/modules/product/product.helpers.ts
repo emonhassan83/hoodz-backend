@@ -606,6 +606,9 @@ export const formatProductListItem = (
       ? {
           _id: product.category._id,
           title: product.category.title,
+          titleArabic: product.category.titleArabic ?? null,
+          icon: product.category.icon ?? null,
+          iconArabic: product.category.iconArabic ?? null,
         }
       : product.category;
 
@@ -613,6 +616,7 @@ export const formatProductListItem = (
     _id: product._id,
     category,
     title: product.title,
+    titleArabic: product.titleArabic ?? null,
     inventoryType: product.inventoryType,
     collectionType: product.collectionType,
     brand: product.brand ?? null,
@@ -704,14 +708,14 @@ export const notifyProductRestockedSubscribers = async (
 
 export const productPopulate = [
   { path: 'vendor', select: 'name email phone profileAvatar address location' },
-  { path: 'category', select: 'title icon' },
+  { path: 'category', select: 'title titleArabic icon iconArabic' },
 ];
 
 export const productListSelect =
-  '_id category vendor title inventoryType collectionType brand brandType banner price discount discountPrice stock avgRating ratingCount sold createdAt';
+  '_id category vendor title titleArabic inventoryType collectionType brand brandType banner price discount discountPrice stock avgRating ratingCount sold createdAt';
 
 export const productMyListSelect =
-  '_id category vendor title inventoryType collectionType brand brandType banner price discount discountPrice stock avgRating ratingCount sold variants createdAt';
+  '_id category vendor title titleArabic inventoryType collectionType brand brandType banner price discount discountPrice stock avgRating ratingCount sold variants createdAt';
 
 export const getProductActorKey = (actor: TProductActor) => {
   if (actor.userId) return `user:${actor.userId}`;
@@ -814,6 +818,9 @@ export const formatProductCategory = (category: any) => {
   return {
     _id: category._id,
     title: category.title ?? null,
+    titleArabic: category.titleArabic ?? null,
+    icon: category.icon ?? null,
+    iconArabic: category.iconArabic ?? null,
   };
 };
 
@@ -875,7 +882,7 @@ export const getSimilarProducts = async (
     isDeleted: false,
     $or: matchSignals,
   })
-    .populate([{ path: 'category', select: 'title' }])
+    .populate([{ path: 'category', select: 'title titleArabic icon iconArabic' }])
     .select(productListSelect)
     .sort({ avgRating: -1, ratingCount: -1, sold: -1, createdAt: -1 })
     .limit(30)
@@ -918,7 +925,7 @@ export const getProductVouchers = async (
     $or: voucherScopes,
   })
     .select(
-      '_id title code voucherType discountType discountValue giftDetails minSpend expiryDate status'
+      '_id title titleArabic description descriptionArabic code voucherType discountType discountValue giftDetails minSpend expiryDate status'
     )
     .sort({ expiryDate: 1, createdAt: -1 })
     .limit(20)

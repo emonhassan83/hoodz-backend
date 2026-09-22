@@ -186,7 +186,7 @@ const getRecentlyViewedProducts = async (
       _id: { $in: productIds },
       isDeleted: false,
     })
-      .populate([{ path: 'category', select: 'title' }])
+      .populate([{ path: 'category', select: 'title titleArabic icon iconArabic' }])
       .select(productListSelect)
       .lean(),
     query
@@ -736,7 +736,7 @@ const getMyProducts = async (
     productQuery.modelQuery,
     productQuery.countTotal(),
     Product.find({ vendor: vendorId, isDeleted: false })
-      .populate([{ path: 'category', select: 'title' }])
+      .populate([{ path: 'category', select: 'title titleArabic icon iconArabic' }])
       .select('category price discountPrice stock')
       .lean(),
   ]);
@@ -762,7 +762,7 @@ const getProductById = async (
   const cacheKey = `${REDIS_KEYS.PRODUCT_SINGLE(
     productId,
     userId ?? 'anonymous'
-  )}:v2`;
+  )}:v3`;
   const cached = await getCache(cacheKey);
   if (cached) return cached;
 

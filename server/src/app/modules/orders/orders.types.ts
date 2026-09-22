@@ -60,8 +60,10 @@ export type TCreateOrderPayload = {
 
 export type TOrderGiftDetails = {
   name?: string | null;
+  nameArabic?: string | null;
   bannerImage?: string[];
   description?: string | null;
+  descriptionArabic?: string | null;
 };
 
 export type TCheckoutVoucherQuote = {

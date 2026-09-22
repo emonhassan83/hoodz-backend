@@ -145,7 +145,7 @@ const getAll = async (userId: string) => {
     _id: { $in: productIds },
     isDeleted: false,
   })
-    .select('title banner inventoryType price discount discountPrice stock variants')
+    .select('title titleArabic banner inventoryType price discount discountPrice stock variants')
     .lean();
 
   const productById = new Map(

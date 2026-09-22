@@ -40,8 +40,10 @@ const ordersSchema = new Schema<IOrders, IOrdersModel>(
     voucherDiscount: { type: Number, default: 0, min: 0 },
     giftDetails: {
       name: { type: String, default: null, trim: true },
+      nameArabic: { type: String, default: null, trim: true },
       bannerImage: { type: [String], default: [] },
       description: { type: String, default: null, trim: true },
+      descriptionArabic: { type: String, default: null, trim: true },
     },
     deliveryCharge: { type: Number, default: 0, min: 0 },
     totalAmount: { type: Number, default: 0, min: 0 },

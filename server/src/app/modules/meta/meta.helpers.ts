@@ -213,6 +213,7 @@ export const toHomeProductCards = (
   products.map((product) => ({
     _id: product._id,
     title: product.title,
+    titleArabic: product.titleArabic ?? null,
     collectionType: product.collectionType,
     banner: product.banner ?? null,
     price: product.price ?? 0,

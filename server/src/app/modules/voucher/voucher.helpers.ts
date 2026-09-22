@@ -212,8 +212,10 @@ export const formatCheckoutGiftDetails = (voucher: IVoucher) => {
 
   return {
     name: voucher.giftDetails?.name ?? null,
+    nameArabic: voucher.giftDetails?.nameArabic ?? null,
     bannerImage: voucher.giftDetails?.bannerImage ?? [],
     description: voucher.giftDetails?.description ?? null,
+    descriptionArabic: voucher.giftDetails?.descriptionArabic ?? null,
   };
 };
 
@@ -233,7 +235,7 @@ export const normalizeVoucherPayload = <T extends TVoucherPayload | TUpdateVouch
 };
 
 export const voucherListSelect =
-  '_id code title voucherType discountType discountValue giftDetails minSpend expiryDate status';
+  '_id code title titleArabic description descriptionArabic voucherType discountType discountValue giftDetails minSpend expiryDate status';
 
 /** Shapes voucher list cards for frontend. */
 export const formatVoucherListItem = (
@@ -244,13 +246,18 @@ export const formatVoucherListItem = (
     _id: voucher._id,
     code: voucher.code,
     title: voucher.title,
+    titleArabic: voucher.titleArabic ?? null,
+    description: voucher.description ?? null,
+    descriptionArabic: voucher.descriptionArabic ?? null,
     voucherType: voucher.voucherType,
     discountType: voucher.discountType,
     discountValue: voucher.discountValue ?? 0,
     giftDetails: {
       name: voucher.giftDetails?.name ?? null,
+      nameArabic: voucher.giftDetails?.nameArabic ?? null,
       bannerImage: voucher.giftDetails?.bannerImage ?? [],
       description: voucher.giftDetails?.description ?? null,
+      descriptionArabic: voucher.giftDetails?.descriptionArabic ?? null,
     },
     minSpend: voucher.minSpend ?? 0,
     expiryDate: voucher.expiryDate,
