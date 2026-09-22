@@ -194,7 +194,7 @@ export const getLastPaidActiveOrder = async (
   if (!order) return null;
 
   const items = await Items.find({ order: order._id })
-    .populate([{ path: 'product', select: 'title banner price discountPrice' }])
+    .populate([{ path: 'product', select: 'title titleArabic banner price discountPrice' }])
     .select('-__v')
     .lean();
 
@@ -471,7 +471,7 @@ export const getAdminRecentOrders = async (): Promise<TAdminRecentOrder[]> => {
   const orderIds = orders.map((order) => order._id);
   const [items, payments] = await Promise.all([
     Items.find({ order: { $in: orderIds } })
-      .populate([{ path: 'product', select: 'title banner' }])
+      .populate([{ path: 'product', select: 'title titleArabic banner' }])
       .sort({ createdAt: 1 })
       .lean(),
     Payment.find({ order: { $in: orderIds } })
@@ -497,7 +497,7 @@ export const getAdminRecentOrders = async (): Promise<TAdminRecentOrder[]> => {
   return orders.map((order) => {
     const item = itemByOrder.get(order._id.toString());
     const product = item?.product as
-      | { title?: string; banner?: string | null }
+      | { title?: string; titleArabic?: string | null; banner?: string | null }
       | undefined;
 
     return {
@@ -506,6 +506,7 @@ export const getAdminRecentOrders = async (): Promise<TAdminRecentOrder[]> => {
       items: {
         product: {
           title: product?.title ?? '',
+          titleArabic: product?.titleArabic ?? null,
           banner: product?.banner ?? null,
         },
       },
