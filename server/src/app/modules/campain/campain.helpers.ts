@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
+import { BANNER_TYPE } from '@/app/modules/banner/banner.constant';
 import { Banner } from '@/app/modules/banner/banner.model';
 import { Campain } from '@/app/modules/campain/campain.model';
 import { Product } from '@/app/modules/product/product.model';
@@ -81,21 +82,43 @@ export const findCampains = async (query: Record<string, unknown>) => {
 
 /** Returns one campaign linked to a banner via banner.reference. */
 export const findCampainByBanner = async (traceId: string, bannerId: string) => {
-  const banner = await Banner.findById(bannerId).select('reference').lean();
+  const banner = await Banner.findById(bannerId)
+    .select('reference type')
+    .lean();
+
   if (!banner) {
     throw new ApiError(HttpStatusCode.NotFound, 'Banner not found', traceId);
   }
 
-  if (!banner.reference || !Types.ObjectId.isValid(banner.reference)) {
+  if (banner.type !== BANNER_TYPE.campain) {
     throw new ApiError(
-      HttpStatusCode.NotFound,
-      'Campaign not found for this banner',
+      HttpStatusCode.BadRequest,
+      'This banner is not linked to a campaign',
       traceId
     );
   }
 
-  return Campain.findById(banner.reference)
+  const reference = banner.reference?.toString()?.trim() || null;
+  if (!reference || !Types.ObjectId.isValid(reference)) {
+    throw new ApiError(
+      HttpStatusCode.NotFound,
+      'Campaign not found for this banner. Banner has no valid campaign reference.',
+      traceId
+    );
+  }
+
+  const campain = await Campain.findById(reference)
     .populate(campainPopulate)
     .select('-__v')
     .lean();
+
+  if (!campain) {
+    throw new ApiError(
+      HttpStatusCode.NotFound,
+      `Campaign not found for this banner. Banner reference ${reference} does not match any campaign.`,
+      traceId
+    );
+  }
+
+  return campain;
 };
