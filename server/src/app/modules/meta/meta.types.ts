@@ -14,6 +14,7 @@ export type TMetaOrigin = {
 };
 
 export type TMetaBannerItem = {
+  _id: unknown;
   banner: string;
   bannerArabic?: string | null;
   reference: string | null;

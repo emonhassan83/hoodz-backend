@@ -91,12 +91,13 @@ export const getSectionBanners = async (section: ISectionType) => {
     section,
     status: BANNER_STATUS.active,
   })
-    .select('banner bannerArabic reference type -_id')
+    .select('_id banner bannerArabic reference type')
     .sort({ createdAt: -1 })
     .lean();
 
   return banners.map(
     (item): TMetaBannerItem => ({
+      _id: item._id,
       banner: item.banner,
       bannerArabic: item.bannerArabic ?? null,
       reference: item.reference ?? null,
