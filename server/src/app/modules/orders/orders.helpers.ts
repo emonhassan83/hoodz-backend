@@ -425,7 +425,7 @@ export const resolveCheckoutItemsOrThrow = async (
   const products = await Product.find({
     _id: { $in: items.map((item) => item.product) },
     isDeleted: false,
-  }).select('vendor title banner price discount discountPrice stock inventoryType variants');
+  }).select('vendor title titleArabic banner price discount discountPrice stock inventoryType variants');
 
   const productById = new Map(
     products.map((product) => [product._id.toString(), product])
@@ -493,6 +493,7 @@ export const resolveCheckoutItemsOrThrow = async (
         _id: product._id,
         vendor: product.vendor,
         title: product.title,
+        titleArabic: product.titleArabic ?? null,
         banner: product.banner ?? null,
         inventoryType: product.inventoryType,
         price: product.price,
@@ -639,7 +640,7 @@ export const mapOrdersToListCards = async (
 
   const [items, assignedOrderIds] = await Promise.all([
     Items.find(itemFilter)
-      .populate({ path: 'product', select: '_id title banner' })
+      .populate({ path: 'product', select: '_id title titleArabic banner' })
       .select('_id order product size color quantity')
       .lean(),
     options?.includeHasRiderAssigned
@@ -668,7 +669,12 @@ export const mapOrdersToListCards = async (
       _id: order._id,
       items: orderItems.map((item) => {
         const product = item.product as
-          | { _id?: unknown; title?: string; banner?: string | null }
+          | {
+              _id?: unknown;
+              title?: string;
+              titleArabic?: string | null;
+              banner?: string | null;
+            }
           | null;
         return {
           _id: item._id,
@@ -676,6 +682,7 @@ export const mapOrdersToListCards = async (
             ? {
                 _id: product._id,
                 title: product.title,
+                titleArabic: product.titleArabic ?? null,
                 banner: product.banner ?? null,
               }
             : null,
@@ -981,7 +988,7 @@ export const buildOrderDetailById = async (orderId: string) => {
     await Promise.all([
       Items.find({ order: orderId })
         .populate([
-          { path: 'product', select: 'title banner price discountPrice' },
+          { path: 'product', select: 'title titleArabic banner price discountPrice' },
         ])
         .select('-__v')
         .lean(),

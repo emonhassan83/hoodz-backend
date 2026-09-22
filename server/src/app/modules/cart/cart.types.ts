@@ -38,6 +38,7 @@ export type TEnrichedCartItem = TCartItem & {
     _id: Types.ObjectId;
     vendor: Types.ObjectId;
     title: string;
+    titleArabic?: string | null;
     banner: string | null;
     inventoryType: string;
     price: number;
