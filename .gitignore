@@ -3,3 +3,10 @@ node_modules
 .agent
 logs
 .tmp
+<<<<<<< HEAD
+=======
+.gitignore
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+>>>>>>> 97ab75ca689dc4931aa738c0d03c83df82d89800
