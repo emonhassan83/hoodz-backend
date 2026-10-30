@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.893.0",
-    "axios": "^1.16.0",
+    "axios": "^1.21.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.79.2",
     "class-transformer": "^0.5.1",
@@ -37,7 +37,7 @@
     "express": "^5.2.1",
     "firebase-admin": "^13.7.0",
     "geolib": "^3.3.4",
-    "handlebars": "^4.7.8",
+    "handlebars": "^4.7.10",
     "helmet": "^8.1.0",
     "i18next": "^26.4.2",
     "i18next-fs-backend": "^2.6.8",
@@ -45,12 +45,12 @@
     "ioredis": "^5.6.0",
     "jsonwebtoken": "^9.0.3",
     "mime-types": "^3.0.2",
-    "moment": "^2.30.1",
+    "moment": "^2.31.0",
     "mongoose": "^9.7.0",
     "morgan": "^1.12.1",
-    "multer": "^2.4.0",
+    "multer": "^2.5.0",
     "node-cron": "^4.2.1",
-    "nodemailer": "^9.1.1",
+    "nodemailer": "^10.3.1",
     "otp-generator": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "socket.io": "^4.8.3",
@@ -58,7 +58,7 @@
     "twilio": "^6.0.2",
     "uuid": "^13.0.0",
     "winston": "^3.19.0",
-    "zod": "^4.3.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
@@ -90,23 +90,26 @@
   },
   "pnpm": {
     "overrides": {
-      "nodemailer@<8.0.4": ">=8.0.4",
-      "nodemailer@<=8.0.4": ">=8.0.5",
       "uuid@<11.1.1": ">=11.1.1",
-      "nodemailer@<=8.0.8": ">=8.0.9",
-      "nodemailer@<=8.0.7": ">=8.0.8",
-      "nodemailer@<=9.0.0": ">=9.0.1",
-      "nodemailer@<9.1.1": ">=9.1.1",
-      "qs@<6.16.0": ">=6.16.0",
-      "brace-expansion@<1.1.16": "1.1.18",
+      "nodemailer": ">=10.3.1",
+      "qs": ">=6.16.1",
+      "brace-expansion@<2": "1.1.21",
+      "brace-expansion@>=4": "5.0.12",
       "protobufjs@>=7.5.0 <=7.6.4": ">=7.6.5",
       "fast-xml-parser@>=5.9.3 <5.10.1": ">=5.10.1",
-      "brace-expansion@<1.1.17": "1.1.18",
-      "brace-expansion@>=4.0.0 <5.0.8": "5.0.9",
       "socket.io-parser@>=4.0.0 <4.2.7": ">=4.2.7",
-      "brace-expansion@>=4.0.0 <5.0.9": "5.0.9",
-      "brace-expansion@<1.1.18": "1.1.18",
-      "js-yaml@>=4.0.0 <4.3.1": ">=4.3.1"
+      "js-yaml@<5": "4.3.2",
+      "js-yaml@>=5": "5.5.0",
+      "@fastify/busboy": ">=3.2.2",
+      "@grpc/grpc-js": ">=1.14.5",
+      "body-parser": ">=2.4.0",
+      "engine.io": ">=6.6.10",
+      "follow-redirects": ">=1.16.1",
+      "proxy-addr": ">=2.0.8",
+      "axios": ">=1.21.0",
+      "handlebars": ">=4.7.10",
+      "multer": ">=2.5.0",
+      "zod": ">=4.6.6"
     }
   }
 }
