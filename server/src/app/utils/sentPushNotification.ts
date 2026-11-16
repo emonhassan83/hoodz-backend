@@ -71,6 +71,7 @@ export const sendNotification = async (
     },
     apns: {
       headers: {
+        'apns-priority': '10',
         'apns-push-type': 'alert',
       },
       payload: {

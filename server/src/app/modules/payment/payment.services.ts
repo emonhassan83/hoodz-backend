@@ -15,9 +15,7 @@ import {
   getPayableOrdersOrThrow,
   getPaymobAuthToken,
   getPaymobTransaction,
-  initiateCardPayment,
   initiateCodPayment,
-  initiateWalletPayment,
   normalizePaymobCallbackPayload,
   formatPaymentTransaction,
   paymentPopulate,
@@ -46,12 +44,12 @@ const initiatePayment = async (
     payload.orderIds
   );
 
-  if (payload.paymentMethod === PAYMENT_METHOD.card) {
-    return initiateCardPayment(traceId, userId, payload, orders, amount);
-  }
-
-  if (payload.paymentMethod === PAYMENT_METHOD.wallet) {
-    return initiateWalletPayment(traceId, userId, payload, orders, amount);
+  if (payload.paymentMethod !== PAYMENT_METHOD.cod) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Only cash on delivery is accepted',
+      traceId
+    );
   }
 
   return initiateCodPayment(traceId, userId, payload, orders);
@@ -70,6 +68,14 @@ const confirmPayment = async (
 
   if (!payment) {
     throw new ApiError(HttpStatusCode.NotFound, 'Payment not found', traceId);
+  }
+
+  if (payment.paymentMethod !== PAYMENT_METHOD.cod) {
+    throw new ApiError(
+      HttpStatusCode.Gone,
+      'Online payment confirmation is disabled',
+      traceId
+    );
   }
 
   let status = payload.success ? PAYMENT_STATUS.paid : PAYMENT_STATUS.failed;

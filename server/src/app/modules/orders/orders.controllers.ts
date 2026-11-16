@@ -114,6 +114,23 @@ const confirmOrder = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const markOutForDelivery = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await OrdersService.markOutForDelivery(
+    traceId,
+    req.params.orderId as string,
+    req.user
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Order marked out for delivery',
+    data,
+    traceId,
+  });
+});
+
 const processOrder = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await OrdersService.processOrder(
@@ -175,6 +192,7 @@ export const OrdersController = {
   getOrdersById,
   confirmOrder,
   processOrder,
+  markOutForDelivery,
   changeOrderStatus,
   deleteOrder,
 };

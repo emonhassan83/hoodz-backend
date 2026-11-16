@@ -82,6 +82,12 @@ const securityCodeValidationSchema = z.object({
   }),
 });
 
+const fcmTokenValidationSchema = z.object({
+  body: z.object({
+    fcmToken: z.string().trim().min(1),
+  }),
+});
+
 const verifySecurityCodeValidationSchema = z.object({
   body: z.object({
     securityCode: z.string().regex(/^\d{6}$/, {
@@ -210,6 +216,7 @@ export const UserValidation = {
   updateLocationValidationSchema,
   updateDeliveryLocationValidationSchema,
   securityCodeValidationSchema,
+  fcmTokenValidationSchema,
   verifySecurityCodeValidationSchema,
   inviteVendorValidationSchema: invitePlatformUserValidationSchema,
   inviteAgentValidationSchema,

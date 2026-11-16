@@ -24,14 +24,7 @@ router
     PaymentController.confirmPayment
   );
 
-router
-  .route('/webhook/paymob')
-  .get(PaymentController.paymobWebhook)
-  .post(PaymentController.paymobWebhook);
-
-router
-  .route('/paymob/return')
-  .get(PaymentController.paymobReturnPage);
+// Cash on delivery only: Paymob webhook and return routes are not mounted.
 
 router
   .route('/user/transctions')

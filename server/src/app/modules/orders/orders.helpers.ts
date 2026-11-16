@@ -50,13 +50,80 @@ import { Voucher } from '@/app/modules/voucher/voucher.model';
 
 const ORDER_STATUS_AT_FIELD = {
   [ORDER_STATUS.cancelled]: 'cancelledAt',
+  [ORDER_STATUS.rejected]: 'rejectedAt',
+  [ORDER_STATUS.accepted]: 'confirmedAt',
   [ORDER_STATUS.confirmed]: 'confirmedAt',
+  [ORDER_STATUS.preparing]: 'processedAt',
   [ORDER_STATUS.processing]: 'processedAt',
+  [ORDER_STATUS.out_for_delivery]: 'outForDeliveryAt',
   [ORDER_STATUS.rider_assigned]: 'riderAssignedAt',
+  [ORDER_STATUS.collected]: 'pickedUpAt',
   [ORDER_STATUS.picked_up]: 'pickedUpAt',
   [ORDER_STATUS.on_the_way]: 'onTheWayAt',
   [ORDER_STATUS.delivered]: 'deliveredAt',
 } as const;
+
+const ORDER_TRANSITIONS: Record<string, string[]> = {
+  [ORDER_STATUS.pending]: [
+    ORDER_STATUS.accepted,
+    ORDER_STATUS.confirmed,
+    ORDER_STATUS.cancelled,
+    ORDER_STATUS.rejected,
+  ],
+  [ORDER_STATUS.accepted]: [
+    ORDER_STATUS.preparing,
+    ORDER_STATUS.processing,
+    ORDER_STATUS.cancelled,
+    ORDER_STATUS.rejected,
+  ],
+  [ORDER_STATUS.confirmed]: [
+    ORDER_STATUS.preparing,
+    ORDER_STATUS.processing,
+    ORDER_STATUS.cancelled,
+    ORDER_STATUS.rejected,
+  ],
+  [ORDER_STATUS.preparing]: [
+    ORDER_STATUS.out_for_delivery,
+    ORDER_STATUS.cancelled,
+    ORDER_STATUS.rejected,
+  ],
+  [ORDER_STATUS.processing]: [
+    ORDER_STATUS.out_for_delivery,
+    ORDER_STATUS.cancelled,
+    ORDER_STATUS.rejected,
+  ],
+  [ORDER_STATUS.rider_assigned]: [
+    ORDER_STATUS.out_for_delivery,
+    ORDER_STATUS.cancelled,
+    ORDER_STATUS.rejected,
+  ],
+  [ORDER_STATUS.out_for_delivery]: [
+    ORDER_STATUS.collected,
+    ORDER_STATUS.picked_up,
+    ORDER_STATUS.cancelled,
+    ORDER_STATUS.rejected,
+  ],
+  [ORDER_STATUS.collected]: [ORDER_STATUS.on_the_way, ORDER_STATUS.cancelled],
+  [ORDER_STATUS.picked_up]: [ORDER_STATUS.on_the_way, ORDER_STATUS.cancelled],
+  [ORDER_STATUS.on_the_way]: [ORDER_STATUS.delivered, ORDER_STATUS.cancelled],
+};
+
+/** Rejects a status change that skips or repeats a step. */
+export const assertOrderStatusTransition = (
+  traceId: string,
+  fromStatus: string,
+  toStatus: string
+) => {
+  if (fromStatus === toStatus) return;
+  const allowed = ORDER_TRANSITIONS[fromStatus] ?? [];
+  if (!allowed.includes(toStatus)) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      `Cannot change order from ${fromStatus} to ${toStatus}`,
+      traceId
+    );
+  }
+};
 
 export const getOrderStatusTimestampUpdate = (status?: string) => {
   if (!status) return {};
@@ -68,9 +135,13 @@ export const getOrderStatusTimestampUpdate = (status?: string) => {
 
 const ORDER_STEPPER_BY_STATUS: Record<string, number> = {
   [ORDER_STATUS.pending]: 1,
+  [ORDER_STATUS.accepted]: 2,
   [ORDER_STATUS.confirmed]: 2,
+  [ORDER_STATUS.preparing]: 3,
   [ORDER_STATUS.processing]: 3,
   [ORDER_STATUS.rider_assigned]: 4,
+  [ORDER_STATUS.out_for_delivery]: 4,
+  [ORDER_STATUS.collected]: 5,
   [ORDER_STATUS.picked_up]: 5,
   [ORDER_STATUS.on_the_way]: 6,
   [ORDER_STATUS.delivered]: 7,
@@ -869,18 +940,26 @@ export const assertOrderAccess = (
 
 export type TOrderUserNotice =
   | 'paid'
+  | 'accepted'
   | 'confirmed'
+  | 'preparing'
   | 'processing'
+  | 'out_for_delivery'
   | 'rider_assigned'
+  | 'collected'
   | 'picked_up'
   | 'on_the_way'
   | 'delivered';
 
 const orderNoticeCopy: Record<TOrderUserNotice, string> = {
   paid: 'order.paid',
+  accepted: 'order.confirmed',
   confirmed: 'order.confirmed',
+  preparing: 'order.processing',
   processing: 'order.processing',
+  out_for_delivery: 'order.rider_assigned',
   rider_assigned: 'order.rider_assigned',
+  collected: 'order.picked_up',
   picked_up: 'order.picked_up',
   on_the_way: 'order.on_the_way',
   delivered: 'order.delivered',

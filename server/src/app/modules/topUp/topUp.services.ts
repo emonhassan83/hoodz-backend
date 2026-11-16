@@ -47,81 +47,14 @@ const topUpPopulate = topUpListPopulate;
 /** Starts a Paymob wallet top-up flow for a new or saved card. */
 const addWalletMoney = async (
   traceId: string,
-  userId: string,
-  payload: TAddWalletMoneyPayload
+  _userId: string,
+  _payload: TAddWalletMoneyPayload
 ) => {
-  assertPaymobConfig(traceId);
-
-  const user = await User.findById(userId).select('name email phone address');
-  if (!user) {
-    throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
-  }
-
-  const topUp = await TopUp.create({
-    user: userId,
-    amount: payload.amount,
-    paymentMethod: payload.paymentMethod,
-    savedCard: payload.savedCardId ?? null,
-    saveCardRequested: payload.saveCard ?? false,
-  });
-
-  const amountCents = toPaymobCents(payload.amount);
-  const authToken = await getPaymobAuthToken();
-  const paymobOrder = await createPaymobOrder(
-    authToken,
-    buildTopUpMerchantOrderId(topUp._id.toString()),
-    amountCents
+  throw new ApiError(
+    HttpStatusCode.Gone,
+    'Customer wallet top-up is disabled. Orders are cash on delivery only.',
+    traceId
   );
-  const billingData = buildPaymobBillingData({
-    name: user.name,
-    email: user.email,
-    phoneNumber: user.phone,
-    address: user.address,
-    country: 'Egypt',
-  });
-
-  topUp.paymentIntentId = String(paymobOrder.id);
-  await topUp.save();
-
-  if (payload.savedCardId) {
-    const savedCard = await SavedCardService.getUsableCardById(
-      traceId,
-      userId,
-      payload.savedCardId
-    );
-    const cardToken = decryptCardToken(savedCard.paymobCardToken, traceId);
-    const paymentKey = await createPaymobPaymentKey(
-      authToken,
-      amountCents,
-      paymobOrder.id,
-      billingData,
-      { cardToken }
-    );
-    const charge = await payWithPaymobCardToken(paymentKey, cardToken);
-
-    return {
-      topUp,
-      paymentUrl: resolvePaymobRedirectUrl(charge),
-      returnUrl: buildPaymobReturnUrl(),
-      paymentIntentId: topUp.paymentIntentId,
-      charge,
-    };
-  }
-
-  const paymentKey = await createPaymobPaymentKey(
-    authToken,
-    amountCents,
-    paymobOrder.id,
-    billingData,
-    { tokenization: payload.saveCard ?? false }
-  );
-
-  return {
-    topUp,
-    paymentUrl: buildPaymobIframeUrl(paymentKey),
-    returnUrl: buildPaymobReturnUrl(),
-    paymentIntentId: topUp.paymentIntentId,
-  };
 };
 
 /** Handles Paymob webhook payloads that belong to wallet top-ups. */

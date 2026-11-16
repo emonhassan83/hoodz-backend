@@ -20,6 +20,7 @@ import {
 } from '@/app/modules/job/job.constant';
 import { IJob } from '@/app/modules/job/job.interface';
 import { Job } from '@/app/modules/job/job.model';
+import { assertRiderCashInHandAllowsJobs } from '@/app/modules/job/riderCash.helpers';
 import { buildOrderDetailById } from '@/app/modules/orders/orders.helpers';
 import { ORDER_STATUS } from '@/app/modules/orders/orders.constant';
 import { Orders } from '@/app/modules/orders/orders.model';
@@ -292,6 +293,7 @@ export const getAssignableRiderOrThrow = async (
       traceId
     );
   }
+  await assertRiderCashInHandAllowsJobs(traceId, riderId);
   return rider;
 };
 
@@ -315,7 +317,7 @@ export const resolveOrderPaymentMethod = async (orderId: string) => {
     return method as (typeof JOB_PAYMENT_METHOD)[keyof typeof JOB_PAYMENT_METHOD];
   }
 
-  return JOB_PAYMENT_METHOD.card;
+  return JOB_PAYMENT_METHOD.cod;
 };
 
 /** Infers money fields from order total and selected payment method. */
@@ -564,6 +566,23 @@ export const notifyJobAssignedToRider = async (job: any, riderId: string) => {
   if (!riderId) return;
   const io = getSocketIO();
   io.to(riderId).emit(SOCKET_EMIT.jobAssigned, job);
+  await sendBatchNotificationViaQueue({
+    userIds: [riderId],
+    channel: 'both',
+    title: 'New delivery assigned',
+    message: 'You have been assigned a new delivery job. Open the app to view it.',
+    titleArabic: 'تم تعيين توصيلة جديدة',
+    messageArabic: 'تم تعيين طلب توصيل جديد لك. افتح التطبيق لعرضه.',
+    data: {
+      modelType: NOTIFICATION_MODEL_TYPE.Job,
+      reference: job._id?.toString?.(),
+      jobId: job._id?.toString?.(),
+      orderId: toIdString(job.order),
+      notice: 'assigned',
+    },
+  }).catch((error) => {
+    console.warn('[Job] Failed to queue rider assignment notification', error);
+  });
 };
 
 /** Emits job:rider-assigned to the customer only. */
@@ -645,6 +664,49 @@ export const stopJobMatchingForOrder = async (orderId: string) => {
     { order: orderId, matchingEnabled: true, rider: null },
     { matchingEnabled: false, nextMatchAt: null }
   );
+};
+
+/** Closes any open job for a cancelled/rejected order and frees its riders. */
+export const cancelOpenJobsForOrder = async (orderId: string) => {
+  const openJobs = await Job.find({
+    order: orderId,
+    status: {
+      $in: [
+        JOB_STATUS.matching,
+        JOB_STATUS.assigned,
+        JOB_STATUS.accepted,
+        JOB_STATUS.picked_up,
+        JOB_STATUS.on_the_way,
+        JOB_STATUS.otp_sent,
+      ],
+    },
+  });
+
+  for (const job of openJobs) {
+    const assignedRiderId = job.rider?.toString() ?? null;
+    const riderIds = [
+      ...new Set(
+        [
+          ...(job.requestedRider ?? []).map((rider) => rider.toString()),
+          ...(job.offeredRider ?? []).map((rider) => rider.toString()),
+          ...(assignedRiderId ? [assignedRiderId] : []),
+        ].filter(Boolean)
+      ),
+    ];
+
+    job.status = JOB_STATUS.cancelled;
+    job.matchingEnabled = false;
+    job.nextMatchAt = null;
+    job.cancelledAt = new Date();
+    await job.save();
+
+    if (assignedRiderId) {
+      await RiderAvailabilitySocketHelper.setActiveJob(assignedRiderId, null);
+    }
+    if (riderIds.length) {
+      await notifyJobRequestCancelled(job, riderIds);
+    }
+  }
 };
 
 export const toRiderObjectId = (riderId: string) =>
@@ -806,21 +868,18 @@ export const applyMatchRound = async (traceId: string, jobId: string) => {
   const pendingRiderIds = (job.requestedRider ?? []).map((rider) => rider.toString());
   const declinedRiderIds = (job.declinedRider ?? []).map((rider) => rider.toString());
   const offeredRiderIds = (job.offeredRider ?? []).map((rider) => rider.toString());
+  const timedOutRiderIds = pendingRiderIds.filter((id) => !declinedRiderIds.includes(id));
   const nextAttempt = (job.matchAttemptCount ?? 0) + 1;
   const phaseRiders = await collectPhaseRequestedRiders(
     latitude,
     longitude,
     nextAttempt,
-    [...new Set([...offeredRiderIds, ...declinedRiderIds])]
+    [...new Set([...offeredRiderIds, ...declinedRiderIds, ...timedOutRiderIds])]
   );
-  const newRiderIds = phaseRiders.map((rider) => rider.toString());
-  const requestedRiderIds = [
-    ...new Set([
-      ...offeredRiderIds.filter((id) => !declinedRiderIds.includes(id)),
-      ...pendingRiderIds.filter((id) => !declinedRiderIds.includes(id)),
-      ...newRiderIds,
-    ]),
-  ];
+  const nextRiderId = phaseRiders[0]?.toString();
+  const newRiderIds = nextRiderId ? [nextRiderId] : [];
+  const requestedRiderIds = newRiderIds;
+  const declinedRiderIdsNext = [...new Set([...declinedRiderIds, ...timedOutRiderIds])];
   const offeredRiderIdsNext = [...new Set([...offeredRiderIds, ...newRiderIds])];
   const now = new Date();
   const nextMatchAt = new Date(now.getTime() + settings.intervalSeconds * 1000);
@@ -835,6 +894,7 @@ export const applyMatchRound = async (traceId: string, jobId: string) => {
     },
     {
       requestedRider: toObjectIdList(requestedRiderIds),
+      declinedRider: toObjectIdList(declinedRiderIdsNext),
       offeredRider: toObjectIdList(offeredRiderIdsNext),
       user: (order.user as any)?._id ?? order.user ?? job.user,
       matchAttemptCount: nextAttempt,

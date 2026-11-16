@@ -109,6 +109,27 @@ const riderGoOffline = async (
       traceId
     );
   }
+
+  const activeJob = await Job.findOne({
+    rider: riderId,
+    status: {
+      $in: [
+        JOB_STATUS.assigned,
+        JOB_STATUS.accepted,
+        JOB_STATUS.picked_up,
+        JOB_STATUS.on_the_way,
+        JOB_STATUS.otp_sent,
+      ],
+    },
+  }).select('_id status');
+  if (activeJob) {
+    throw new ApiError(
+      HttpStatusCode.Conflict,
+      'You cannot go offline while a delivery is active',
+      traceId
+    );
+  }
+
   return RiderAvailabilitySocketHelper.goOffline(traceId, riderId, geo);
 };
 
@@ -348,17 +369,40 @@ const pickupJob = async (traceId: string, riderId: string, payload: TJobIdPayloa
     'Job cannot be picked up now'
   );
 
+  const order = await Orders.findById(job.order);
+  const readyStatuses = [
+    ORDER_STATUS.out_for_delivery,
+    ORDER_STATUS.collected,
+    ORDER_STATUS.picked_up,
+  ];
+  if (!order || !readyStatuses.includes(order.status as any)) {
+    if (!payload.vendorForgot) {
+      throw new ApiError(
+        HttpStatusCode.BadRequest,
+        'Wait until the vendor marks the order out for delivery',
+        traceId
+      );
+    }
+    job.vendorForgotReady = true;
+    if (order) {
+      order.vendorForgotReadyAt = new Date();
+      order.status = ORDER_STATUS.out_for_delivery;
+      order.outForDeliveryAt = order.outForDeliveryAt ?? new Date();
+      await order.save();
+    }
+  }
+
   if (!job.acceptedAt) job.acceptedAt = new Date();
   job.status = JOB_STATUS.picked_up;
   job.pickedUpAt = new Date();
   await job.save();
   await Orders.findByIdAndUpdate(job.order, {
-    status: ORDER_STATUS.picked_up,
-    ...getOrderStatusTimestampUpdate(ORDER_STATUS.picked_up),
+    status: ORDER_STATUS.collected,
+    ...getOrderStatusTimestampUpdate(ORDER_STATUS.collected),
   });
   const pickedUpJob = await Job.findById(job._id).populate(jobPopulate);
-  await notifyOrderUser(pickedUpJob?.order as any, 'picked_up');
-  await emitOrderUpdated(job.order, 'picked_up');
+  await notifyOrderUser(pickedUpJob?.order as any, 'collected');
+  await emitOrderUpdated(job.order, 'collected');
   return pickedUpJob;
 };
 
@@ -474,15 +518,34 @@ const deliveredJob = async (
     const job = await Job.findById(payload.jobId).session(session);
     if (!job) throw new ApiError(HttpStatusCode.NotFound, 'Job not found', traceId);
     assertAssignedRider(traceId, job, riderId);
-    assertJobStatusIn(traceId, job, [JOB_STATUS.otp_sent], 'OTP verification is required before delivery');
+    assertJobStatusIn(
+      traceId,
+      job,
+      [JOB_STATUS.on_the_way, JOB_STATUS.otp_sent],
+      'Start the trip before marking the order delivered'
+    );
 
     const order = await Orders.findById(job.order).session(session);
-    if (!order?.isOtpVerified || !job.hasDeliveryOtpVerified) {
-      throw new ApiError(HttpStatusCode.BadRequest, 'Delivery OTP is not verified', traceId);
+    if (!order) {
+      throw new ApiError(HttpStatusCode.NotFound, 'Order not found', traceId);
     }
 
+    if (job.paymentMethod === JOB_PAYMENT_METHOD.cod && payload.cashCollected !== true) {
+      throw new ApiError(
+        HttpStatusCode.BadRequest,
+        'Confirm the cash collected from the customer before delivery',
+        traceId
+      );
+    }
+
+    const latitude = Number(payload.latitude ?? payload.lat);
+    const longitude = Number(payload.longitude ?? payload.lng);
     job.status = JOB_STATUS.delivered;
     job.completedAt = new Date();
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      job.deliveredLatitude = latitude;
+      job.deliveredLongitude = longitude;
+    }
     if (job.paymentMethod === JOB_PAYMENT_METHOD.cod) {
       job.collectedMoney = Number((order.totalAmount ?? 0).toFixed(2));
       job.depositStatus = JOB_DEPOSIT_STATUS.pending;
@@ -699,6 +762,16 @@ const getJobByOrderId = async (
 /** Creates an unmatched job and offers it to nearby online riders. */
 const startJobMatching = async (traceId: string, orderId: string) => {
   const order = await getAssignableOrderOrThrow(traceId, orderId);
+  if (
+    order.status !== ORDER_STATUS.preparing &&
+    order.status !== ORDER_STATUS.processing
+  ) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Riders are assigned only after the vendor marks the order Preparing',
+      traceId
+    );
+  }
   const existingJob = await Job.findOne({
     order: orderId,
     status: { $ne: JOB_STATUS.delivered },
@@ -784,9 +857,18 @@ const rematchDueJobs = async (traceId = 'cron') => {
   let exhausted = 0;
   for (const job of dueJobs) {
     const order = await Orders.findById(job.order).select('status isDeleted');
-    if (!order || order.isDeleted || order.status === ORDER_STATUS.cancelled) {
+    const canDispatch =
+      order &&
+      !order.isDeleted &&
+      (order.status === ORDER_STATUS.preparing ||
+        order.status === ORDER_STATUS.processing ||
+        order.status === ORDER_STATUS.rider_assigned);
+    if (!order || order.isDeleted || order.status === ORDER_STATUS.cancelled || order.status === ORDER_STATUS.rejected) {
       await exhaustMatching(job._id.toString());
       exhausted += 1;
+      continue;
+    }
+    if (!canDispatch) {
       continue;
     }
 

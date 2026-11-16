@@ -6,6 +6,7 @@ export const JOB_STATUS = {
   on_the_way: 'on_the_way',
   otp_sent: 'otp_sent',
   delivered: 'delivered',
+  cancelled: 'cancelled',
 } as const;
 
 export const JOB_PAYMENT_METHOD = {

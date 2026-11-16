@@ -52,6 +52,9 @@ export interface IJob {
   pickedUpAt?: Date | null;
   onTheWayAt?: Date | null;
   completedAt?: Date | null;
+  deliveredLatitude?: number | null;
+  deliveredLongitude?: number | null;
+  vendorForgotReady?: boolean;
   cancelledAt?: Date | null;
   rejectionReason?: string | null;
   createdAt: Date;

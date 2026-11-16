@@ -103,7 +103,11 @@ const ordersSchema = new Schema<IOrders, IOrdersModel>(
     riderAssignedAt: { type: Date, default: null },
     pickedUpAt: { type: Date, default: null },
     onTheWayAt: { type: Date, default: null },
+    outForDeliveryAt: { type: Date, default: null },
     deliveredAt: { type: Date, default: null },
+    rejectedAt: { type: Date, default: null },
+    vendorForgotReadyAt: { type: Date, default: null },
+    vendorEscalatedAt: { type: Date, default: null },
     isOtpVerified: {
       type: Boolean,
       default: false,

@@ -5,7 +5,10 @@ import { getRedisClient } from '@/app/configs/redis.config';
 import ApiError from '@/app/errors/ApiError';
 import { KYC_STATUS } from '@/app/modules/kyc/kyc.constant';
 import { Kyc } from '@/app/modules/kyc/kyc.model';
-import { RIDER_LOCATION } from '@/app/constant';
+import { RIDER_CASH_IN_HAND_LIMIT_EGP, RIDER_HEARTBEAT_TIMEOUT_SECONDS, RIDER_LOCATION } from '@/app/constant';
+import { getRiderCashInHand } from '@/app/modules/job/riderCash.helpers';
+import { JOB_STATUS } from '@/app/modules/job/job.constant';
+import { Job } from '@/app/modules/job/job.model';
 import { USER_ROLE, USER_STATUS } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 import { REDIS_KEYS } from '@/app/redis/keys';
@@ -87,11 +90,25 @@ const filterJobEligibleRiderIds = async (riderIds: string[]) => {
   ]);
 
   const approvedKycUserIds = new Set(kycs.map((kyc) => kyc.user.toString()));
-  return new Set(
-    users
-      .map((user) => user._id.toString())
-      .filter((id) => approvedKycUserIds.has(id))
+  const approvedIds = users
+    .map((user) => user._id.toString())
+    .filter((id) => approvedKycUserIds.has(id));
+  const cashChecks = await Promise.all(
+    approvedIds.map(async (id) => ({
+      id,
+      cashInHand: await getRiderCashInHand(id),
+    }))
   );
+  return new Set(
+    cashChecks
+      .filter((item) => item.cashInHand < RIDER_CASH_IN_HAND_LIMIT_EGP)
+      .map((item) => item.id)
+  );
+};
+
+const isRiderHeartbeatFresh = (lastSeenAt?: string | null) => {
+  const seen = lastSeenAt ? new Date(lastSeenAt).getTime() : 0;
+  return Number.isFinite(seen) && Date.now() - seen <= RIDER_HEARTBEAT_TIMEOUT_SECONDS * 1000;
 };
 
 const persistUserLastAvailable = async (
@@ -296,6 +313,26 @@ const goOffline = async (
 
 /** Clears rider mode on socket disconnect without requiring a location payload. */
 const deactivateOnDisconnect = async (riderId: string) => {
+  // A rider with an active delivery must not disappear when a socket drops:
+  // keep the online state and active job so a reconnect resumes the delivery.
+  const activeJob = await Job.findOne({
+    rider: riderId,
+    status: {
+      $in: [
+        JOB_STATUS.assigned,
+        JOB_STATUS.accepted,
+        JOB_STATUS.picked_up,
+        JOB_STATUS.on_the_way,
+        JOB_STATUS.otp_sent,
+      ],
+    },
+  })
+    .select('_id')
+    .lean();
+  if (activeJob) {
+    return { rider: null, isOnline: true, hasRiderActivateMode: true };
+  }
+
   const redis = getRedisClient();
   const current = parseAvailability(
     riderId,
@@ -367,7 +404,7 @@ const findOnlineRiders = async (
     )
   );
   const availableRiderIds = availabilityList
-    .filter((item) => item?.isOnline && !item.activeJob)
+    .filter((item) => item?.isOnline && !item.activeJob && isRiderHeartbeatFresh(item.lastSeenAt))
     .map((item) => item!.rider);
   const eligibleRiderIds = await filterJobEligibleRiderIds(availableRiderIds);
   const users = await User.find({
@@ -439,7 +476,20 @@ const findOnlineRidersNearShop = async (
     },
   ]);
 
-  return riders;
+  const redis = getRedisClient();
+  const fresh = await Promise.all(
+    riders.map(async (rider) => {
+      const data = await redis.hgetall(REDIS_KEYS.RIDER_AVAILABILITY(String(rider._id)));
+      return isRiderHeartbeatFresh(data.lastSeenAt) ? rider : null;
+    })
+  );
+  const freshRiders = fresh.filter(Boolean);
+  const eligibleRiderIds = await filterJobEligibleRiderIds(
+    freshRiders.map((rider: any) => String(rider._id))
+  );
+  return freshRiders.filter((rider: any) =>
+    eligibleRiderIds.has(String(rider._id))
+  );
 };
 
 /** Updates rider location in Redis while online or during a job. */

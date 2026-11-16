@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 
 import { getTraceId } from '@/app/configs/requestContext.configs';
-import { buildPaymobReturnHtml } from '@/app/modules/payment/payment.helpers';
 import { PaymentService } from '@/app/modules/payment/payment.services';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
 
@@ -90,25 +89,20 @@ const getUserTransactionHistory = asyncHandler(
 );
 
 const paymobWebhook = asyncHandler(async (req: Request, res: Response) => {
-  const traceId = getTraceId();
-  const payload = req.method === 'GET' ? req.query : req.body;
-  const data = await PaymentService.confirmPaymentByWebhook(
-    traceId,
-    payload,
-    (req.query.hmac as string | undefined) || req.body?.hmac
-  );
-
   sendResponse(res, {
-    success: true,
-    statusCode: 200,
-    message: 'Payment webhook processed successfully',
-    data,
-    traceId,
+    success: false,
+    statusCode: 410,
+    message: 'Online payments are disabled. Orders are cash on delivery only.',
+    data: null,
+    traceId: getTraceId(),
   });
 });
 
 const paymobReturnPage = asyncHandler(async (req: Request, res: Response) => {
-  res.status(200).type('html').send(buildPaymobReturnHtml(req.query));
+  res
+    .status(410)
+    .type('html')
+    .send('<p>Online payments are disabled. Pay the rider in cash.</p>');
 });
 
 export const PaymentController = {

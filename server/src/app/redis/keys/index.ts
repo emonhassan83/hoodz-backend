@@ -29,6 +29,10 @@ export const REDIS_KEYS = {
   REGISTER_OTP: (email: string) => createRedisKey(REDIS_PREFIXES.otp, email),
   RESET_OTP: (email: string) => createRedisKey(REDIS_PREFIXES.otp, 'reset', email),
   DELIVERY_OTP: (jobId: string) => createRedisKey(REDIS_PREFIXES.otp, 'delivery', jobId),
+  SECURITY_CODE_ATTEMPTS: (userId: string) =>
+    createRedisKey(REDIS_PREFIXES.otp, 'security-code', 'attempts', userId),
+  SECURITY_CODE_LOCK: (userId: string) =>
+    createRedisKey(REDIS_PREFIXES.otp, 'security-code', 'lock', userId),
 
   SETTINGS_SINGLE: (key: string, vendorId = 'platform') =>
     createRedisKey(REDIS_PREFIXES.settings, vendorId, key),

@@ -32,7 +32,11 @@ export interface IOrders {
   riderAssignedAt?: Date | null;
   pickedUpAt?: Date | null;
   onTheWayAt?: Date | null;
+  outForDeliveryAt?: Date | null;
   deliveredAt?: Date | null;
+  rejectedAt?: Date | null;
+  vendorForgotReadyAt?: Date | null;
+  vendorEscalatedAt?: Date | null;
   isOtpVerified: boolean;
   isStockDeducted: boolean;
   isShopBalanceCredited: boolean;

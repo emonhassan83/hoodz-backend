@@ -14,20 +14,31 @@ import {
 
 export type TOrderSocketNotice =
   | 'created'
+  | 'accepted'
   | 'confirmed'
+  | 'preparing'
   | 'processing'
+  | 'out_for_delivery'
   | 'paid'
   | 'status_changed'
   | 'cancelled'
+  | 'rejected'
   | 'rider_assigned'
+  | 'collected'
   | 'picked_up'
   | 'on_the_way'
-  | 'delivered';
+  | 'delivered'
+  | 'escalated';
 
 const STATUS_NOTICE_MAP: Partial<Record<string, TOrderSocketNotice>> = {
   [ORDER_STATUS.cancelled]: 'cancelled',
+  [ORDER_STATUS.rejected]: 'rejected',
+  [ORDER_STATUS.accepted]: 'accepted',
   [ORDER_STATUS.confirmed]: 'confirmed',
+  [ORDER_STATUS.preparing]: 'preparing',
   [ORDER_STATUS.processing]: 'processing',
+  [ORDER_STATUS.out_for_delivery]: 'out_for_delivery',
+  [ORDER_STATUS.collected]: 'collected',
   [ORDER_STATUS.rider_assigned]: 'rider_assigned',
   [ORDER_STATUS.picked_up]: 'picked_up',
   [ORDER_STATUS.on_the_way]: 'on_the_way',

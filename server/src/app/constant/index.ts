@@ -84,9 +84,15 @@ export const JOB_ACTIVE_STATUSES = [
 ] as const;
 
 export const RIDER_MATCH_DEFAULTS = {
-  intervalSeconds: 180,
+  intervalSeconds: 30,
   maxAttempts: 5,
 } as const;
+
+/** A rider with no location ping for this long is left out of new offers. */
+export const RIDER_HEARTBEAT_TIMEOUT_SECONDS = 90;
+
+/** Undeposited COD cash that blocks new jobs until a deposit is approved. */
+export const RIDER_CASH_IN_HAND_LIMIT_EGP = 2000;
 
 export const RIDER_LOCATION = {
   persistIntervalSeconds: 300,

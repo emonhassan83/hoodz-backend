@@ -29,6 +29,13 @@ export type TAssignJobPayload = {
 
 export type TJobIdPayload = {
   jobId: string;
+  vendorForgot?: boolean;
+  cashCollected?: boolean;
+  collectedAmount?: number;
+  latitude?: number;
+  longitude?: number;
+  lat?: number;
+  lng?: number;
 };
 
 export type TRiderLocationUpdatePayload = TGeoPayload & {

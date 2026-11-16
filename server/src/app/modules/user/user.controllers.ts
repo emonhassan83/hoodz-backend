@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 
 import { getTraceId } from '@/app/configs/requestContext.configs';
+import { updateUserFcmToken } from '@/app/modules/user/user.helpers';
 import { UserService } from '@/app/modules/user/user.services';
 import { TUpdateAgentSchedulePayload } from '@/app/modules/user/user.types';
 import { asyncHandler, sendResponse } from '@/app/utils/system.utils';
@@ -17,6 +18,32 @@ const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
     message: 'Users fetched successfully',
     meta: data.meta,
     data: data.users,
+    traceId,
+  });
+});
+
+const getMe = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await UserService.getSingleUser(traceId, req.user.userId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Profile fetched successfully',
+    data,
+    traceId,
+  });
+});
+
+const updateFcmToken = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  await updateUserFcmToken(req.user.userId, req.body.fcmToken);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'FCM token updated',
+    data: null,
     traceId,
   });
 });
@@ -291,6 +318,8 @@ const deleteUserProfile = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const UserControllers = {
+  getMe,
+  updateFcmToken,
   getAllUsers,
   getAUser,
   getNearbyShops,

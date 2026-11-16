@@ -3,6 +3,7 @@ import { startHealthHeartbeatJob } from '@/app/jobs/healthHeartbeat.job';
 import { startRiderLocationPersistJob } from '@/app/jobs/riderLocationPersist.job';
 import { startRiderMatchJob } from '@/app/jobs/riderMatch.job';
 import { startSupportAssignmentJob } from '@/app/jobs/supportAssignment.job';
+import { startVendorAcceptTimeoutJob } from '@/app/jobs/vendorAcceptTimeout.job';
 
 let jobs: any[] = [];
 let supportBackfillDone = false;
@@ -19,6 +20,7 @@ export const startCronJobs = async () => {
     jobs.push(startRiderMatchJob(cron));
     jobs.push(startRiderLocationPersistJob(cron));
     jobs.push(startSupportAssignmentJob(cron));
+    jobs.push(startVendorAcceptTimeoutJob(cron));
 
     if (!supportBackfillDone) {
       const { backfillSupportAssignmentsFromChats } = await import(

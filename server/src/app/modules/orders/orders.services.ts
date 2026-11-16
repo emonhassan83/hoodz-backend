@@ -7,13 +7,18 @@ import { COIN_REFERENCE_TYPE } from '@/app/modules/coin/coin.constant';
 import { CoinService } from '@/app/modules/coin/coin.services';
 import { Items } from '@/app/modules/items/items.model';
 import { JobService } from '@/app/modules/job/job.services';
-import { stopJobMatchingForOrder } from '@/app/modules/job/job.helpers';
+import {
+  cancelOpenJobsForOrder,
+  stopJobMatchingForOrder,
+} from '@/app/modules/job/job.helpers';
 import {
   ORDER_STATUS,
+  ORDER_VENDOR_ACCEPTED_STATUSES,
   PAYMENT_STATUS,
 } from '@/app/modules/orders/orders.constant';
 import {
   assertOrderAccess,
+  assertOrderStatusTransition,
   applyHasRiderAssignedFilter,
   applyAdminOrderListFilters,
   applyMyOrdersListFilter,
@@ -253,12 +258,14 @@ const getAuthorOrders = async (
 const getOrdersById = async (
   traceId: string,
   orderId: string,
-  _requester: TOrderRequester
+  requester: TOrderRequester
 ) => {
   const order = await buildOrderDetailById(orderId);
   if (!order) {
     throw new ApiError(HttpStatusCode.NotFound, 'Order not found', traceId);
   }
+
+  assertOrderAccess(traceId, order, requester);
 
   return order;
 };
@@ -277,6 +284,24 @@ const changeOrderStatus = async (
   assertOrderAccess(traceId, order, requester);
 
   const previousStatus = order.status;
+  // This service backs the staff-only REST status route (admin/agent).
+  // Rider steps are set by the assigned rider over the job socket flow only.
+  const RIDER_ONLY_STATUSES: string[] = [
+    ORDER_STATUS.collected,
+    ORDER_STATUS.picked_up,
+    ORDER_STATUS.on_the_way,
+    ORDER_STATUS.delivered,
+  ];
+  if (payload.status && RIDER_ONLY_STATUSES.includes(payload.status)) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'Rider steps can only be set by the assigned rider',
+      traceId
+    );
+  }
+  if (payload.status) {
+    assertOrderStatusTransition(traceId, previousStatus, payload.status);
+  }
   const shouldAwardPurchaseCoins =
     payload.paymentStatus === PAYMENT_STATUS.paid &&
     order.paymentStatus !== PAYMENT_STATUS.paid;
@@ -300,8 +325,21 @@ const changeOrderStatus = async (
 
   await invalidateOrderCaches();
 
-  if (payload.status === ORDER_STATUS.cancelled) {
+  if (
+    payload.status === ORDER_STATUS.cancelled ||
+    payload.status === ORDER_STATUS.rejected
+  ) {
     await stopJobMatchingForOrder(orderId);
+    await cancelOpenJobsForOrder(orderId);
+  }
+
+  if (
+    payload.status &&
+    payload.status !== previousStatus &&
+    (payload.status === ORDER_STATUS.preparing ||
+      payload.status === ORDER_STATUS.processing)
+  ) {
+    await JobService.startJobMatching(traceId, orderId);
   }
 
   if (payload.status && payload.status !== previousStatus) {
@@ -341,16 +379,16 @@ const confirmOrder = async (
   if (order.status !== ORDER_STATUS.pending) {
     throw new ApiError(
       HttpStatusCode.BadRequest,
-      'Only pending orders can be confirmed',
+      'Only pending orders can be accepted',
       traceId
     );
   }
 
-  order.status = ORDER_STATUS.confirmed;
+  order.status = ORDER_STATUS.accepted;
   order.confirmedAt = new Date();
   await order.save();
 
-  await notifyOrderUser(order, 'confirmed');
+  await notifyOrderUser(order, 'accepted');
   await invalidateOrderCaches();
 
   const confirmedOrder = await Orders.findById(orderId)
@@ -358,7 +396,7 @@ const confirmOrder = async (
     .select('-__v')
     .lean();
 
-  await emitOrderUpdated(orderId, 'confirmed', {
+  await emitOrderUpdated(orderId, 'accepted', {
     previousStatus: ORDER_STATUS.pending,
   });
 
@@ -377,20 +415,23 @@ const processOrder = async (
 
   assertOrderAccess(traceId, order, requester);
 
-  if (order.status !== ORDER_STATUS.confirmed) {
+  if (
+    !(ORDER_VENDOR_ACCEPTED_STATUSES as readonly string[]).includes(order.status)
+  ) {
     throw new ApiError(
       HttpStatusCode.BadRequest,
-      'Only confirmed orders can be moved to processing',
+      'Only accepted orders can be moved to preparing',
       traceId
     );
   }
 
-  order.status = ORDER_STATUS.processing;
+  const previousStatus = order.status;
+  order.status = ORDER_STATUS.preparing;
   order.processedAt = new Date();
   await order.save();
 
   const job = await JobService.startJobMatching(traceId, orderId);
-  await notifyOrderUser(order, 'processing');
+  await notifyOrderUser(order, 'preparing');
   await invalidateOrderCaches();
 
   const processedOrder = await Orders.findById(orderId)
@@ -398,11 +439,36 @@ const processOrder = async (
     .select('-__v')
     .lean();
 
-  await emitOrderUpdated(orderId, 'processing', {
-    previousStatus: ORDER_STATUS.confirmed,
+  await emitOrderUpdated(orderId, 'preparing', {
+    previousStatus,
   });
 
   return { order: processedOrder, job };
+};
+
+/** Vendor marks the order ready for the rider to leave the brand. */
+const markOutForDelivery = async (
+  traceId: string,
+  orderId: string,
+  requester: TOrderRequester
+) => {
+  const order = await Orders.findOne({ _id: orderId, isDeleted: false });
+  if (!order) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Order not found', traceId);
+  }
+
+  assertOrderAccess(traceId, order, requester);
+  assertOrderStatusTransition(traceId, order.status, ORDER_STATUS.out_for_delivery);
+
+  const previousStatus = order.status;
+  order.status = ORDER_STATUS.out_for_delivery;
+  order.outForDeliveryAt = new Date();
+  await order.save();
+  await notifyOrderUser(order, 'out_for_delivery');
+  await invalidateOrderCaches();
+  await emitOrderUpdated(orderId, 'out_for_delivery', { previousStatus });
+
+  return Orders.findById(orderId).populate(orderPopulate).select('-__v').lean();
 };
 
 const deleteOrder = async (
@@ -437,5 +503,6 @@ export const OrdersService = {
   changeOrderStatus,
   confirmOrder,
   processOrder,
+  markOutForDelivery,
   deleteOrder,
 };

@@ -121,6 +121,19 @@ router
     UserControllers.getShopDetails
   );
 
+router.get(
+  '/me',
+  auth(...AUTHENTICATED_ROLES),
+  UserControllers.getMe
+);
+
+router.patch(
+  '/fcm-token',
+  auth(...AUTHENTICATED_ROLES),
+  validateRequest(UserValidation.fcmTokenValidationSchema),
+  UserControllers.updateFcmToken
+);
+
 router
   .route('/:userId')
   .get(auth(...AUTHENTICATED_ROLES), UserControllers.getAUser)

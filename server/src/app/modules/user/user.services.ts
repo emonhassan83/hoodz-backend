@@ -3,6 +3,7 @@ import { hash } from 'bcrypt';
 import mongoose from 'mongoose';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
+import { getRedisClient } from '@/app/configs/redis.config';
 import { SALT_ROUNDS } from '@/app/constant';
 import ApiError from '@/app/errors/ApiError';
 import { generateTokens } from '@/app/modules/auth/auth.helpers';
@@ -25,6 +26,7 @@ import {
   upsertShopToTypesense,
 } from '@/app/modules/search/search.typesense';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
+import { REDIS_KEYS } from '@/app/redis/keys';
 import { isShopWishlisted } from '@/app/modules/wishlist/wishlist.helpers';
 import {
   assertEmailNotTaken,
@@ -573,17 +575,45 @@ const verifySecurityCode = async (
     );
   }
 
+  const redis = getRedisClient();
+  const lockKey = REDIS_KEYS.SECURITY_CODE_LOCK(userId);
+  const attemptKey = REDIS_KEYS.SECURITY_CODE_ATTEMPTS(userId);
+  const lockTtl = await redis.ttl(lockKey);
+  if (lockTtl > 0) {
+    throw new ApiError(
+      HttpStatusCode.TooManyRequests,
+      `Security code is locked. Try again in ${Math.ceil(lockTtl / 60)} minutes.`,
+      traceId
+    );
+  }
+
   const isMatched = await User.isSecurityCodeMatched(
     payload.securityCode,
     user.securityCode
   );
   if (!isMatched) {
+    const attempts = await redis.incr(attemptKey);
+    if (attempts === 1) {
+      await redis.expire(attemptKey, 15 * 60);
+    }
+    const remaining = Math.max(0, 5 - attempts);
+    if (attempts >= 5) {
+      await redis.set(lockKey, '1', 'EX', 15 * 60);
+      await redis.del(attemptKey);
+      throw new ApiError(
+        HttpStatusCode.TooManyRequests,
+        'Too many wrong PIN attempts. Try again in 15 minutes.',
+        traceId
+      );
+    }
     throw new ApiError(
       HttpStatusCode.Forbidden,
-      'Security code is incorrect',
+      `Security code is incorrect. ${remaining} attempts remaining.`,
       traceId
     );
   }
+
+  await redis.del(attemptKey, lockKey);
 
   await User.findByIdAndUpdate(userId, { hasRiderActivateMode: true });
 

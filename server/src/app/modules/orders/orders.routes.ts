@@ -54,6 +54,22 @@ router
   );
 
 router
+  .route('/:orderId/preparing')
+  .patch(
+    auth(USER_ROLE.admin, USER_ROLE.vendor),
+    validateRequest(OrdersValidation.orderIdParamValidationSchema),
+    OrdersController.processOrder
+  );
+
+router
+  .route('/:orderId/out-for-delivery')
+  .patch(
+    auth(USER_ROLE.admin, USER_ROLE.agent, USER_ROLE.vendor),
+    validateRequest(OrdersValidation.orderIdParamValidationSchema),
+    OrdersController.markOutForDelivery
+  );
+
+router
   .route('/:orderId/status')
   .patch(
     auth(USER_ROLE.admin, USER_ROLE.agent),
