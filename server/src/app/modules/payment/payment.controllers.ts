@@ -88,30 +88,10 @@ const getUserTransactionHistory = asyncHandler(
   }
 );
 
-const paymobWebhook = asyncHandler(async (req: Request, res: Response) => {
-  sendResponse(res, {
-    success: false,
-    statusCode: 410,
-    message: 'Online payments are disabled. Orders are cash on delivery only.',
-    data: null,
-    traceId: getTraceId(),
-  });
-});
-
-const paymobReturnPage = asyncHandler(async (req: Request, res: Response) => {
-  res
-    .status(410)
-    .type('html')
-    .send('<p>Online payments are disabled. Pay the rider in cash.</p>');
-});
-
 export const PaymentController = {
   initiatePayment,
   confirmPayment,
-  paymobWebhook,
-  paymobReturnPage,
   getAllPayments,
   getAPayment,
   getUserTransactionHistory,
 };
-

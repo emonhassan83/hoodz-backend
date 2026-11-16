@@ -78,6 +78,14 @@ router
   );
 
 router
+  .route('/:orderId/reverse-delivery')
+  .post(
+    auth(USER_ROLE.admin),
+    validateRequest(OrdersValidation.orderIdParamValidationSchema),
+    OrdersController.reverseDelivery
+  );
+
+router
   .route('/:orderId')
   .get(
     auth(...AUTHENTICATED_ROLES),

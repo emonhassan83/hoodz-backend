@@ -23,11 +23,12 @@ import { PaymentRoutes } from '@/app/modules/payment/payment.routes';
 import { PosOrderRoutes } from '@/app/modules/posOrder/posOrder.routes';
 import { ProductRoutes } from '@/app/modules/product/product.routes';
 import { ReviewRoutes } from '@/app/modules/review/review.routes';
-import { SavedCardRoutes } from '@/app/modules/savedCard/savedCard.routes';
+// Cash-only: customer wallet top-up and saved cards are disabled (owner decision G1/G3).
+// import { SavedCardRoutes } from '@/app/modules/savedCard/savedCard.routes';
 import { SavedLocationRoutes } from '@/app/modules/savedLocation/savedLocation.routes';
 import { SearchRoutes } from '@/app/modules/search/search.routes';
 import { SettingsRoutes } from '@/app/modules/settings/settings.routes';
-import { TopUpRoutes } from '@/app/modules/topUp/topUp.routes';
+// import { TopUpRoutes } from '@/app/modules/topUp/topUp.routes';
 import { UploadRoutes } from '@/app/modules/upload/upload.routes';
 import { UserRoutes } from '@/app/modules/user/user.routes';
 import { VendorTransctionRoutes } from '@/app/modules/vendorTransction/vendorTransction.routes';
@@ -151,18 +152,20 @@ const apiRoutes = [
     path: '/withdraws',
     route: WithdrawRoutes,
   },
-  {
-    path: '/saved-cards',
-    route: SavedCardRoutes,
-  },
+  // Cash-only: saved cards disabled (owner decision G1/G3).
+  // {
+  //   path: '/saved-cards',
+  //   route: SavedCardRoutes,
+  // },
   {
     path: '/saved-locations',
     route: SavedLocationRoutes,
   },
-  {
-    path: '/top-up',
-    route: TopUpRoutes,
-  },
+  // Cash-only: customer wallet top-up disabled (owner decision G1/G3).
+  // {
+  //   path: '/top-up',
+  //   route: TopUpRoutes,
+  // },
 
   // ===============================
   //  Payment and order routes

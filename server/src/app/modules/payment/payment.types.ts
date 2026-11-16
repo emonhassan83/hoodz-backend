@@ -22,6 +22,3 @@ export type TInitiatePaymentPayload = {
   savedCardId?: string;
   saveCard?: boolean;
 };
-
-export type TPaymobWebhookPayload = Record<string, any>;
-

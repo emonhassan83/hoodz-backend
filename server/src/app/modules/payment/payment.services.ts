@@ -11,25 +11,16 @@ import { emitOrdersPaidUpdated } from '@/app/modules/orders/orders.socket';
 import { Orders } from '@/app/modules/orders/orders.model';
 import { PAYMENT_METHOD, PAYMENT_STATUS } from '@/app/modules/payment/payment.constant';
 import {
-  assertPaymobConfig,
-  getPayableOrdersOrThrow,
-  getPaymobAuthToken,
-  getPaymobTransaction,
-  initiateCodPayment,
-  normalizePaymobCallbackPayload,
   formatPaymentTransaction,
+  getPayableOrdersOrThrow,
+  initiateCodPayment,
   paymentPopulate,
-  resolvePaymentStatusFromPaymob,
-  verifyPaymobWebhookHmac,
 } from '@/app/modules/payment/payment.helpers';
 import { Payment } from '@/app/modules/payment/payment.model';
 import {
   TConfirmPaymentPayload,
   TInitiatePaymentPayload,
-  TPaymobWebhookPayload,
 } from '@/app/modules/payment/payment.types';
-import { SavedCardService } from '@/app/modules/savedCard/savedCard.services';
-import { TopUpService } from '@/app/modules/topUp/topUp.services';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { User } from '@/app/modules/user/user.model';
 
@@ -78,16 +69,10 @@ const confirmPayment = async (
     );
   }
 
-  let status = payload.success ? PAYMENT_STATUS.paid : PAYMENT_STATUS.failed;
-  let transactionId = payload.transactionId ?? null;
-
-  if (payload.transactionId) {
-    assertPaymobConfig(traceId);
-    const authToken = await getPaymobAuthToken();
-    const transaction = await getPaymobTransaction(authToken, payload.transactionId);
-    status = resolvePaymentStatusFromPaymob(transaction);
-    transactionId = String(transaction.id ?? payload.transactionId);
-  }
+  // Cash on delivery only: the collected-cash result is recorded directly.
+  // There is no online gateway to verify the transaction against.
+  const status = payload.success ? PAYMENT_STATUS.paid : PAYMENT_STATUS.failed;
+  const transactionId = payload.transactionId ?? null;
 
   const alreadyPaid = payment.isPaid;
 
@@ -119,103 +104,6 @@ const confirmPayment = async (
   }
 
   return payment.populate(paymentPopulate);
-};
-
-const confirmPaymentByWebhook = async (
-  traceId: string,
-  payload: TPaymobWebhookPayload,
-  hmac?: string
-) => {
-  const normalizedPayload = normalizePaymobCallbackPayload(payload.obj ?? payload);
-  if (!verifyPaymobWebhookHmac(normalizedPayload, hmac)) {
-    throw new ApiError(HttpStatusCode.Forbidden, 'Invalid Paymob webhook signature', traceId);
-  }
-
-  const transaction = normalizedPayload;
-  const setupResult = await SavedCardService.processSetupWebhook(
-    traceId,
-    transaction
-  );
-  if (setupResult?.handled) {
-    return setupResult;
-  }
-
-  const topUpResult = await TopUpService.processTopUpWebhook(traceId, transaction);
-  if (topUpResult?.handled) {
-    return topUpResult;
-  }
-
-  const paymentIntentId =
-    typeof transaction?.order === 'object' && transaction.order?.id
-      ? String(transaction.order.id)
-      : transaction?.order
-        ? String(transaction.order)
-        : undefined;
-  const transactionId = transaction?.id ? String(transaction.id) : undefined;
-
-  const payments = await Payment.find({
-    ...(paymentIntentId ? { paymentIntentId } : {}),
-    isDeleted: false,
-  });
-
-  if (!payments.length) {
-    throw new ApiError(HttpStatusCode.NotFound, 'Payment not found', traceId);
-  }
-
-  const status = resolvePaymentStatusFromPaymob(transaction);
-  const unpaidPayments = payments.filter((payment) => !payment.isPaid);
-  await Payment.updateMany(
-    { _id: { $in: payments.map((payment) => payment._id) } },
-    {
-      status,
-      isPaid: status === PAYMENT_STATUS.paid,
-      transactionId,
-    }
-  );
-
-  const firstPayment = payments[0];
-  if (status === PAYMENT_STATUS.paid && firstPayment.saveCardRequested) {
-    try {
-      await SavedCardService.saveCardFromPaymobTransaction(
-        traceId,
-        firstPayment.account.toString(),
-        transaction
-      );
-    } catch {
-      // Payment confirmation must remain source-of-truth even if tokenization
-      // metadata is missing or card saving fails.
-    }
-  }
-
-  const orderUpdate =
-    status === PAYMENT_STATUS.paid
-      ? {
-          paymentStatus: ORDER_PAYMENT_STATUS.paid,
-          transactionId,
-        }
-      : {
-          paymentStatus: ORDER_PAYMENT_STATUS.failed,
-          transactionId,
-        };
-
-  await Orders.updateMany(
-    { _id: { $in: payments.map((payment) => payment.order) } },
-    orderUpdate
-  );
-
-  if (status === PAYMENT_STATUS.paid && unpaidPayments.length > 0) {
-    await CoinService.processPaidOrderRewards(
-      unpaidPayments.map((payment) => payment.order)
-    );
-    await notifyOrdersPaid(unpaidPayments.map((payment) => payment.order));
-    await emitOrdersPaidUpdated(unpaidPayments.map((payment) => payment.order));
-  }
-
-  return {
-    received: true,
-    paymentIds: payments.map((payment) => payment._id),
-    status,
-  };
 };
 
 const getAllPayments = async (
@@ -317,7 +205,6 @@ const getUserTransactionHistory = async (
 export const PaymentService = {
   initiatePayment,
   confirmPayment,
-  confirmPaymentByWebhook,
   getAllPayments,
   getAPayment,
   getUserTransactionHistory,

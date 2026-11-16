@@ -24,7 +24,7 @@ router
     PaymentController.confirmPayment
   );
 
-// Cash on delivery only: Paymob webhook and return routes are not mounted.
+// Cash on delivery only: online payment webhook and return routes are not mounted.
 
 router
   .route('/user/transctions')

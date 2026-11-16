@@ -166,6 +166,24 @@ const changeOrderStatus = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+const reverseDelivery = asyncHandler(async (req: Request, res: Response) => {
+  const traceId = getTraceId();
+  const data = await OrdersService.reverseDelivery(
+    traceId,
+    req.params.orderId as string,
+    req.user,
+    typeof req.body?.reason === 'string' ? req.body.reason : undefined
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Order delivery reversed successfully',
+    data,
+    traceId,
+  });
+});
+
 const deleteOrder = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
   const data = await OrdersService.deleteOrder(
@@ -194,6 +212,7 @@ export const OrdersController = {
   processOrder,
   markOutForDelivery,
   changeOrderStatus,
+  reverseDelivery,
   deleteOrder,
 };
 

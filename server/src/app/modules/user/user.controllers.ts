@@ -1,6 +1,10 @@
 import { Request, Response } from 'express';
 
+import { HttpStatusCode } from 'axios';
+
 import { getTraceId } from '@/app/configs/requestContext.configs';
+import ApiError from '@/app/errors/ApiError';
+import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { updateUserFcmToken } from '@/app/modules/user/user.helpers';
 import { UserService } from '@/app/modules/user/user.services';
 import { TUpdateAgentSchedulePayload } from '@/app/modules/user/user.types';
@@ -306,7 +310,19 @@ const verifySecurityCode = asyncHandler(async (req: Request, res: Response) => {
 
 const deleteUserProfile = asyncHandler(async (req: Request, res: Response) => {
   const traceId = getTraceId();
-  const data = await UserService.deleteUserProfile(traceId, req.params.userId as string);
+  const targetUserId = req.params.userId as string;
+
+  // Account deletion is owner-only (admins excepted): a signed-in user
+  // must never be able to delete someone else's account.
+  if (req.user.userId !== targetUserId && req.user.role !== USER_ROLE.admin) {
+    throw new ApiError(
+      HttpStatusCode.Forbidden,
+      'You can only delete your own account',
+      traceId
+    );
+  }
+
+  const data = await UserService.deleteUserProfile(traceId, targetUserId);
 
   sendResponse(res, {
     success: true,

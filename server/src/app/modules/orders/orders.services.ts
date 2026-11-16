@@ -12,6 +12,11 @@ import {
   stopJobMatchingForOrder,
 } from '@/app/modules/job/job.helpers';
 import {
+  JOB_DEPOSIT_STATUS,
+  JOB_STATUS,
+} from '@/app/modules/job/job.constant';
+import { Job } from '@/app/modules/job/job.model';
+import {
   ORDER_STATUS,
   ORDER_VENDOR_ACCEPTED_STATUSES,
   PAYMENT_STATUS,
@@ -40,12 +45,18 @@ import {
   stripOrderListQueryParams,
 } from '@/app/modules/orders/orders.helpers';
 import { Orders } from '@/app/modules/orders/orders.model';
+import { logDeliveredOrderChange } from '@/app/modules/orders/orderAuditLog.services';
 import { User } from '@/app/modules/user/user.model';
 import {
   TChangeOrderStatusPayload,
   TCreateOrderPayload,
   TOrderRequester,
 } from '@/app/modules/orders/orders.types';
+import {
+  PAYMENT_METHOD,
+  PAYMENT_STATUS as PAYMENT_ROW_STATUS,
+} from '@/app/modules/payment/payment.constant';
+import { Payment } from '@/app/modules/payment/payment.model';
 import {
   emitOrderUpdated,
   resolveOrderSocketNotice,
@@ -319,6 +330,26 @@ const changeOrderStatus = async (
     .populate(orderPopulate)
     .select('-__v');
 
+  // Any staff change to an already-delivered order is written to the audit
+  // log (client doc F3). The helper never throws, so auditing cannot break
+  // the order flow.
+  if (previousStatus === ORDER_STATUS.delivered) {
+    await logDeliveredOrderChange({
+      orderId: order._id,
+      action:
+        payload.status && payload.status !== previousStatus
+          ? 'status_change'
+          : 'amount_change',
+      fromStatus: previousStatus,
+      toStatus: payload.status ?? previousStatus,
+      fromAmount: order.totalAmount,
+      toAmount: updatedOrder?.totalAmount ?? order.totalAmount,
+      performedBy: requester.userId,
+      performerRole: requester.role,
+      reason: null,
+    });
+  }
+
   if (shouldAwardPurchaseCoins) {
     await CoinService.processPaidOrderRewards([order._id]);
   }
@@ -493,6 +524,90 @@ const deleteOrder = async (
   return deletedOrder;
 };
 
+/**
+ * Admin-only reversal of a delivered order (client doc F3): moves the order
+ * back to on_the_way, reverts the COD payment rows, and reverses the rider
+ * cash-in-hand effect (cash-in-hand is aggregated from delivered COD jobs,
+ * so returning the job to on_the_way with no collected money removes it).
+ * The shop balance credited at delivery is NOT auto-reversed — there is no
+ * debit helper for it — and that is recorded in the audit entry.
+ */
+const reverseDelivery = async (
+  traceId: string,
+  orderId: string,
+  requester: TOrderRequester,
+  reason?: string
+) => {
+  const order = await Orders.findOne({ _id: orderId, isDeleted: false });
+  if (!order) {
+    throw new ApiError(HttpStatusCode.NotFound, 'Order not found', traceId);
+  }
+
+  if (order.status !== ORDER_STATUS.delivered) {
+    throw new ApiError(
+      HttpStatusCode.BadRequest,
+      'Only delivered orders can be reversed',
+      traceId
+    );
+  }
+
+  const fromAmount = order.totalAmount;
+
+  order.status = ORDER_STATUS.on_the_way;
+  order.onTheWayAt = new Date();
+  order.deliveredAt = null;
+  if (order.paymentStatus === PAYMENT_STATUS.paid) {
+    order.paymentStatus = PAYMENT_STATUS.unpaid;
+  }
+  await order.save();
+
+  await Job.updateMany(
+    { order: order._id, status: JOB_STATUS.delivered },
+    {
+      status: JOB_STATUS.on_the_way,
+      collectedMoney: 0,
+      depositStatus: JOB_DEPOSIT_STATUS.not_required,
+      completedAt: null,
+      deliveredLatitude: null,
+      deliveredLongitude: null,
+    }
+  );
+
+  await Payment.updateMany(
+    {
+      order: order._id,
+      paymentMethod: PAYMENT_METHOD.cod,
+      isDeleted: { $ne: true },
+    },
+    { status: PAYMENT_ROW_STATUS.pending, isPaid: false }
+  );
+
+  await logDeliveredOrderChange({
+    orderId: order._id,
+    action: 'reversal',
+    fromStatus: ORDER_STATUS.delivered,
+    toStatus: ORDER_STATUS.on_the_way,
+    fromAmount,
+    toAmount: order.totalAmount,
+    performedBy: requester.userId,
+    performerRole: requester.role,
+    reason:
+      [
+        reason?.trim(),
+        'Shop balance credited at delivery was not auto-reversed (no debit helper exists).',
+      ]
+        .filter(Boolean)
+        .join(' ') || null,
+  });
+
+  await invalidateOrderCaches();
+  await emitOrderUpdated(orderId, 'on_the_way', {
+    previousStatus: ORDER_STATUS.delivered,
+  });
+
+  return Orders.findById(orderId).populate(orderPopulate).select('-__v');
+};
+
 export const OrdersService = {
   getOrderSummary,
   createOrders,
@@ -504,5 +619,6 @@ export const OrdersService = {
   confirmOrder,
   processOrder,
   markOutForDelivery,
+  reverseDelivery,
   deleteOrder,
 };
