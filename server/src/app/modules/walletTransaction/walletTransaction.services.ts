@@ -1,24 +1,10 @@
 import { HttpStatusCode } from 'axios';
-import mongoose from 'mongoose';
 
 import QueryBuilder from '@/app/builder/QueryBuilder';
 import ApiError from '@/app/errors/ApiError';
-import {
-  assertPaymobConfig,
-  getPaymobAuthToken,
-  refundPaymobTransaction,
-  toPaymobCents,
-} from '@/app/modules/payment/payment.helpers';
-import { SavedCardService } from '@/app/modules/savedCard/savedCard.services';
-import { TopUp } from '@/app/modules/topUp/topUp.model';
 import { User } from '@/app/modules/user/user.model';
 import { USER_ROLE } from '@/app/modules/user/user.constant';
-import {
-  WALLET_TRANSACTION_DIRECTION,
-  WALLET_TRANSACTION_REFERENCE_TYPE,
-  WALLET_TRANSACTION_STATUS,
-  WALLET_TRANSACTION_TYPE,
-} from '@/app/modules/walletTransaction/walletTransaction.constant';
+import { WALLET_TRANSACTION_STATUS } from '@/app/modules/walletTransaction/walletTransaction.constant';
 import { assertWalletTransactionAccess } from '@/app/modules/walletTransaction/walletTransaction.helpers';
 import { WalletTransaction } from '@/app/modules/walletTransaction/walletTransaction.model';
 import {
@@ -141,130 +127,17 @@ const getAIntoDB = async (
   return formatWalletTransaction(transaction);
 };
 
-/** Refunds wallet credit only to a user-owned saved card via Paymob. */
+/** Card refunds are off while orders are cash on delivery only. */
 const refundToCard = async (
   traceId: string,
-  userId: string,
-  payload: TRefundToCardPayload
+  _userId: string,
+  _payload: TRefundToCardPayload
 ) => {
-  assertPaymobConfig(traceId);
-
-  await SavedCardService.getUsableCardById(
-    traceId,
-    userId,
-    payload.savedCardId
+  throw new ApiError(
+    HttpStatusCode.Gone,
+    'Refund to card is disabled. Orders are cash on delivery only.',
+    traceId
   );
-
-  const sourceTopUp = await TopUp.findOne({
-    user: userId,
-    savedCard: payload.savedCardId,
-    isPaid: true,
-    transactionId: { $ne: null },
-    isDeleted: false,
-  }).sort({ createdAt: -1 });
-  if (!sourceTopUp?.transactionId) {
-    throw new ApiError(
-      HttpStatusCode.BadRequest,
-      'Refund to card requires a paid top-up on this saved card. Random or unsaved cards are not supported',
-      traceId
-    );
-  }
-
-  const session = await mongoose.startSession();
-  let pendingTransactionId: mongoose.Types.ObjectId | null = null;
-  let sessionEnded = false;
-  try {
-    session.startTransaction();
-
-    const user = await User.findById(userId).session(session);
-    if (!user) {
-      throw new ApiError(HttpStatusCode.NotFound, 'User not found', traceId);
-    }
-
-    if ((user.walletBalance ?? 0) < payload.amount) {
-      throw new ApiError(
-        HttpStatusCode.BadRequest,
-        'Insufficient wallet balance',
-        traceId
-      );
-    }
-
-    const pendingTransaction = await WalletTransaction.create(
-      [
-        {
-          user: userId,
-          type: WALLET_TRANSACTION_TYPE.refund_to_card,
-          amount: payload.amount,
-          direction: WALLET_TRANSACTION_DIRECTION.debit,
-          status: WALLET_TRANSACTION_STATUS.pending,
-          referenceType: WALLET_TRANSACTION_REFERENCE_TYPE.TopUp,
-          reference: sourceTopUp._id,
-          savedCard: payload.savedCardId,
-          paymobTransactionId: sourceTopUp.transactionId,
-          note: 'Wallet refund to saved card requested',
-        },
-      ],
-      { session }
-    );
-    pendingTransactionId = pendingTransaction[0]._id;
-
-    await session.commitTransaction();
-    await session.endSession();
-    sessionEnded = true;
-
-    const authToken = await getPaymobAuthToken();
-    const refund = await refundPaymobTransaction(
-      authToken,
-      sourceTopUp.transactionId,
-      toPaymobCents(payload.amount)
-    );
-
-    const debitSession = await mongoose.startSession();
-    try {
-      debitSession.startTransaction();
-
-      const updatedUser = await User.findOneAndUpdate(
-        { _id: userId, walletBalance: { $gte: payload.amount } },
-        { $inc: { walletBalance: -payload.amount } },
-        { new: true, session: debitSession }
-      );
-      if (!updatedUser) {
-        throw new ApiError(
-          HttpStatusCode.BadRequest,
-          'Insufficient wallet balance',
-          traceId
-        );
-      }
-
-      const transaction = await WalletTransaction.findByIdAndUpdate(
-        pendingTransaction[0]._id,
-        {
-          status: WALLET_TRANSACTION_STATUS.completed,
-          paymobTransactionId: String(refund?.id ?? sourceTopUp.transactionId),
-          note: 'Wallet refund to card completed',
-        },
-        { new: true, session: debitSession }
-      ).populate(walletTransactionPopulate);
-
-      await debitSession.commitTransaction();
-      return { transaction, refund };
-    } catch (error) {
-      await debitSession.abortTransaction();
-      throw error;
-    } finally {
-      await debitSession.endSession();
-    }
-  } catch (error) {
-    if (session.inTransaction()) await session.abortTransaction();
-    if (!sessionEnded) await session.endSession();
-    if (pendingTransactionId) {
-      await WalletTransaction.findByIdAndUpdate(pendingTransactionId, {
-        status: WALLET_TRANSACTION_STATUS.failed,
-        note: error instanceof Error ? error.message : 'Wallet refund to card failed',
-      });
-    }
-    throw error;
-  }
 };
 
 export const WalletTransactionService = {
