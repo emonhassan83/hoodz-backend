@@ -40,7 +40,12 @@ app.use(
     },
   })
 );
-app.use(helmet());
+// Allow cross-origin embedding/loading of API resources (images, files) from any origin.
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 app.use(i18nextMiddleware.handle(i18next));
 
 app.get('/health', (_req: Request, res: Response) => {

@@ -11,7 +11,7 @@ let ioInstance: Server | null = null
 
 const initializeSocketIO = (server: HttpServer) => {
   ioInstance = new Server(server, {
-    cors: { origin: '*', credentials: true },
+    cors: { origin: true, credentials: true },
   })
 
   // Middleware

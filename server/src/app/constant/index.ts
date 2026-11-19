@@ -5,7 +5,7 @@ export const corsWhiteList = [
   'http://localhost:3000',
   'http://72.244.153.29:3000'
 ];
-export const corsAllowedHosts = ['10.10.10.27'];
+export const corsAllowedHosts = ['10.10.10.27', '10.10.28.227'];
 export const SALT_ROUNDS = 12;
 export const emailRegex = /^[\w.-]+@[a-zA-Z\d.-]+\.[a-zA-Z]{2,}$/;
 export const baseUrl = {
