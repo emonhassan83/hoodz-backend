@@ -10,6 +10,7 @@ import { applyOrderInventoryOrThrow } from '@/app/modules/orders/orders.helpers'
 import { Orders } from '@/app/modules/orders/orders.model';
 import { PAYMENT_METHOD, PAYMENT_STATUS } from '@/app/modules/payment/payment.constant';
 import { Payment } from '@/app/modules/payment/payment.model';
+import '@/app/modules/savedCard/savedCard.model';
 import { TInitiatePaymentPayload } from '@/app/modules/payment/payment.types';
 
 /*

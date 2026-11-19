@@ -4,6 +4,7 @@ import { Types } from 'mongoose';
 import ApiError from '@/app/errors/ApiError';
 import { TOP_UP_STATUS } from '@/app/modules/topUp/topUp.constant';
 import { TopUp } from '@/app/modules/topUp/topUp.model';
+import '@/app/modules/savedCard/savedCard.model';
 import { User } from '@/app/modules/user/user.model';
 
 /** Builds a merchant reference that identifies a wallet top-up webhook. */

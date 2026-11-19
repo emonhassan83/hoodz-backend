@@ -7,6 +7,7 @@ import { USER_ROLE } from '@/app/modules/user/user.constant';
 import { WALLET_TRANSACTION_STATUS } from '@/app/modules/walletTransaction/walletTransaction.constant';
 import { assertWalletTransactionAccess } from '@/app/modules/walletTransaction/walletTransaction.helpers';
 import { WalletTransaction } from '@/app/modules/walletTransaction/walletTransaction.model';
+import '@/app/modules/savedCard/savedCard.model';
 import {
   TCreateWalletTransactionPayload,
   TRefundToCardPayload,

@@ -21,6 +21,7 @@ import {
 } from '@/app/configs/morgan.configs';
 import { getTraceId } from '@/app/configs/requestContext.configs';
 import { baseUrl } from '@/app/constant';
+import '@/app/modules/savedCard/savedCard.model';
 import { globalErrorMiddleware } from '@/app/middlewares/globalError.middlewares';
 import { traceMiddleware } from '@/app/middlewares/trace.middlewares';
 import v1Routes from '@/app/routes/v1/index';
