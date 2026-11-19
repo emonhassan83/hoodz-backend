@@ -46,7 +46,7 @@
     "jsonwebtoken": "^9.0.3",
     "mime-types": "^3.0.2",
     "moment": "^2.31.0",
-    "mongoose": "^9.7.0",
+    "mongoose": "^9.11.4",
     "morgan": "^1.12.1",
     "multer": "^2.5.0",
     "node-cron": "^4.2.1",
